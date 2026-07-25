@@ -511,8 +511,7 @@
   },
   "shell": {
     "nav": {
-      "today": "Aujourd'hui",
-      "history": "Historique",
+      "today": "Transcriptions",
       "dictionary": "Dictionnaire",
       "vocabulary": "Vocabulaire",
       "tone": "Ton",

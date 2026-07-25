@@ -510,8 +510,7 @@
   },
   "shell": {
     "nav": {
-      "today": "Oggi",
-      "history": "Cronologia",
+      "today": "Trascrizioni",
       "dictionary": "Dizionario",
       "vocabulary": "Vocabolario",
       "tone": "Tono",

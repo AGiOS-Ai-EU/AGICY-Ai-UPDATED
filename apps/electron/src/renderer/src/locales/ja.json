@@ -511,8 +511,7 @@
   },
   "shell": {
     "nav": {
-      "today": "本日",
-      "history": "履歴",
+      "today": "文字起こし",
       "dictionary": "辞書",
       "vocabulary": "ボキャブラリー",
       "tone": "トーン",

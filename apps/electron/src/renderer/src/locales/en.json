@@ -116,7 +116,9 @@
       "launchAtStartup": "Launch at startup",
       "launchAtStartupDesc": "Automatically start Freestyle when you log in to your computer.",
       "showOnLaunch": "Show dashboard on launch",
-      "showOnLaunchDesc": "Open the dashboard window when Freestyle starts."
+      "showOnLaunchDesc": "Open the dashboard window when Freestyle starts.",
+      "advancedMode": "Advanced mode",
+      "advancedModeDesc": "Show the Models page for manual voice and cleanup model configuration."
     },
     "recording": {
       "hotkey": "Hotkey",
@@ -229,15 +231,13 @@
     }
   },
   "today": {
-    "readyWhenYouAre": "ready when you are…",
-    "inNumbers": "In numbers",
-    "wordsToday": "words today",
     "avgWpm": "avg wpm",
-    "minSpoken": "min spoken",
+    "wordsLabel": "words",
+    "sessionsLabel": "sessions",
+    "costLabel": "cost",
     "mostUsed": "Most used",
     "noModelsYet": "No models yet. Models will appear here as you dictate.",
-    "activity24h": "Activity · 24h",
-    "emptyTimeline": "your day is unwritten — your first session will land here."
+    "activity24h": "Activity · 24h"
   },
   "history": {
     "title": "History",
@@ -267,6 +267,11 @@
     "nerdCompute": "{{label}} compute",
     "done": "Done",
     "filtersBtn": "Filters",
+    "statsBtn": "Stats",
+    "statsTab": "Stats",
+    "filtersTab": "Filters",
+    "closePanel": "Close panel",
+    "dismissHero": "Dismiss",
     "timeLabelPast7": "past 7 days",
     "timeLabelToday": "today",
     "timeLabelPast30": "past 30 days",
@@ -560,6 +565,8 @@
   "models": {
     "title": "Models",
     "loading": "Loading models…",
+    "advancedModeBanner": "Advanced mode is off. Enable it in Settings › Application to keep the Models page in the sidebar.",
+    "advancedModeBannerAction": "Open settings",
     "apiKeys": "API keys",
     "noApiKeys": "No API keys yet — choose a cloud model above and you'll be prompted for a key.",
     "onDevice": "On-device",
@@ -634,8 +641,7 @@
   },
   "shell": {
     "nav": {
-      "today": "Today",
-      "history": "History",
+      "today": "Transcriptions",
       "dictionary": "Dictionary",
       "vocabulary": "Vocabulary",
       "tone": "Tone",
