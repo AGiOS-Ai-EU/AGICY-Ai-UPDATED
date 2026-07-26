@@ -35,6 +35,12 @@ interface AvailableModel {
   cost_output?: number;
   /** Surfaced in the default picker; non-curated models live behind "All models". */
   curated?: boolean;
+  /**
+   * Display name of the LLM gateway fronting this model (e.g. "OpenRouter"),
+   * when the provider is an aggregator rather than a first-party vendor. The
+   * picker shows this as a small badge next to the model.
+   */
+  gateway?: string;
 }
 
 const DEPRECATED_STATUS = "deprecated";
@@ -177,6 +183,17 @@ const BUILTIN_VOICE_MODELS: AvailableModel[] = [
   },
 ];
 
+// OpenAI-compatible LLM gateways (aggregators fronting many vendors' models).
+// Their catalogs live in models.dev under a single provider key, so they flow
+// through the same registry loop as first-party vendors — no key required to
+// list them. Models are tagged with the gateway's display name (badge in the
+// picker) and stay non-curated (behind "Show all models"). Add any future
+// gateway here and it works end to end with no further wiring.
+const LLM_GATEWAYS: Record<string, string> = {
+  openrouter: "OpenRouter",
+  vercel: "Vercel AI Gateway",
+};
+
 // Cleanup-LLM providers the app can actually run (see lib/providers.ts).
 const SUPPORTED_LLM_PROVIDERS = new Set([
   "openai",
@@ -184,6 +201,7 @@ const SUPPORTED_LLM_PROVIDERS = new Set([
   "google",
   "groq",
   "mistral",
+  ...Object.keys(LLM_GATEWAYS),
 ]);
 
 // One fast-tier cleanup model per provider, surfaced by default; everything
@@ -277,6 +295,7 @@ export async function isCleanupModelSupported(
   modelId: string,
 ): Promise<boolean> {
   if (providerId === "local-llm") return true;
+  if (providerId in LLM_GATEWAYS) return true;
   if (providerId === FREESTYLE_CLOUD_PROVIDER_ID) return true;
 
   try {
@@ -363,6 +382,7 @@ const models = new Hono()
               cost_input: model.cost?.input,
               cost_output: model.cost?.output,
               curated: CURATED_LLM_IDS.has(`${providerId}/${model.id}`),
+              gateway: LLM_GATEWAYS[providerId],
             });
           }
         }
