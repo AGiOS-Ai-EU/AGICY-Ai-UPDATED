@@ -1,4 +1,18 @@
 # Changelog
+## 0.6.1
+
+### New Features ✨
+
+- (Biasing) Get Soniox ASR biasing to work properly. by @matteo8p in [#504](https://github.com/freestyle-voice/freestyle/pull/504)
+- (cleanup) Fetch cleanup-prompt config from Freestyle Cloud with offline fallback by @MathurAditya724 in [#502](https://github.com/freestyle-voice/freestyle/pull/502)
+- (mobile) Resident keyboard dictation session by @MathurAditya724 in [#492](https://github.com/freestyle-voice/freestyle/pull/492)
+- (models) Add OpenRouter AI gateway for cleanup post-processing by @MathurAditya724 in [#501](https://github.com/freestyle-voice/freestyle/pull/501)
+- New sidebar stats experience and rename from dictionary to shortcuts by @matteo8p in [#505](https://github.com/freestyle-voice/freestyle/pull/505)
+
+### Bug Fixes 🐛
+
+- Fix diff mode on the electron app by @matteo8p in [#503](https://github.com/freestyle-voice/freestyle/pull/503)
+
 ## 0.6.0
 
 ### New Features ✨
