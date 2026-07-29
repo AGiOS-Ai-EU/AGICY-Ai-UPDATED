@@ -6,6 +6,10 @@ import type {
 } from "../shared/audio-playback";
 import { getDefaultHotkey } from "../shared/hotkey-defaults";
 import type { OpenAppCandidate } from "../shared/open-apps";
+import {
+  normalizePillCancelMode,
+  type PillCancelMode,
+} from "../shared/pill-cancel";
 import type { PluginViewBounds } from "../shared/plugins";
 
 // Custom APIs for renderer
@@ -29,6 +33,10 @@ const api = {
   setHotkeyMode: (mode: "hold" | "toggle"): void =>
     ipcRenderer.send("hotkey:set-mode", mode),
   hidePill: (): void => ipcRenderer.send("pill:hide"),
+  // Ask the pill window to grow around the capsule (or shrink back) so the
+  // expanded status card has somewhere to render.
+  setPillExpanded: (expanded: boolean): void =>
+    ipcRenderer.send("pill:set-expanded", expanded),
   showErrorDialog: (title: string, message: string): Promise<void> =>
     ipcRenderer.invoke("dialog:show-error", title, message),
   getServerPort: (): Promise<number> => ipcRenderer.invoke("server:port"),
@@ -199,6 +207,18 @@ const api = {
     ipcRenderer.on("settings:output-mode-changed", handler);
     return () =>
       ipcRenderer.removeListener("settings:output-mode-changed", handler);
+  },
+  // Pill cancel button
+  sendPillCancelModeChanged: (mode: PillCancelMode): void =>
+    ipcRenderer.send("settings:pill-cancel-mode-changed", mode),
+  onPillCancelModeChanged: (
+    callback: (mode: PillCancelMode) => void,
+  ): (() => void) => {
+    const handler = (_: unknown, mode: unknown): void =>
+      callback(normalizePillCancelMode(mode));
+    ipcRenderer.on("settings:pill-cancel-mode-changed", handler);
+    return () =>
+      ipcRenderer.removeListener("settings:pill-cancel-mode-changed", handler);
   },
   sendAudioDuckingChanged: (enabled: boolean): void =>
     ipcRenderer.send("settings:audio-ducking-changed", enabled),
