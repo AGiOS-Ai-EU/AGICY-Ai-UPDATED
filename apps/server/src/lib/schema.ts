@@ -1,7 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import { countFixes } from "./fixes.js";
 
-const SCHEMA_VERSION = 16;
+// Kept in sync with DEFAULT_CLOUD_URL in freestyle-cloud.ts. Duplicated here
+// (rather than imported) so this DB-init module — loaded very early via db.ts —
+// stays decoupled from the cloud module, which pulls in heavier dependencies
+// and would otherwise perturb test module-mock ordering.
+const DEFAULT_CLOUD_URL = "https://service.freestylevoice.com";
+
+const SCHEMA_VERSION = 18;
 
 // Legacy default format-rule patterns (used only by pre-v12 migrations below):
 // domain/phrase entries match as substrings of url+title+app; bare words match
@@ -459,6 +465,90 @@ function applyMigrations(db: DatabaseSync, currentVersion: number): void {
     for (const row of rows) {
       update.run(countFixes(row.raw_text, row.cleaned_text), row.id);
     }
+  }
+
+  if (currentVersion < 17) {
+    // Rebuild sessions table: replace singleton id=1 row with host-keyed rows
+    // so dev (localhost:8787) and prod sessions can coexist without clobbering
+    // each other.
+    //
+    // Backward compatibility: older released binaries still query this table by
+    // `WHERE id = 1` and `INSERT ... ON CONFLICT(id)`. Dropping `id` outright
+    // crashed those binaries with "no such column: id" whenever a user
+    // downgraded. So we keep a nullable UNIQUE `id`: the default/prod host row
+    // carries id=1 (what old binaries read/write), while `host` remains the
+    // real key. Other hosts (e.g. dev) get NULL — SQLite treats multiple NULLs
+    // as distinct, so the UNIQUE constraint still allows several host rows.
+    const hasOldSessions = !!(db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
+      )
+      .get() as { name: string } | undefined);
+
+    if (hasOldSessions) {
+      db.exec(`
+        CREATE TABLE sessions_new (
+          id INTEGER UNIQUE,
+          host TEXT PRIMARY KEY NOT NULL,
+          token TEXT NOT NULL,
+          refresh_token TEXT,
+          expires_at INTEGER,
+          issued_at INTEGER,
+          user_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          name TEXT,
+          image TEXT,
+          updated_at INTEGER NOT NULL
+        )
+      `);
+      // Preserve the existing session row (if any) under its stored host. The
+      // default/prod host keeps id=1 so old binaries keep finding it.
+      db.prepare(`
+        INSERT OR IGNORE INTO sessions_new
+          (id, host, token, refresh_token, expires_at, issued_at, user_id, email, name, image, updated_at)
+        SELECT
+          CASE WHEN COALESCE(NULLIF(host, ''), ?) = ? THEN 1 ELSE NULL END,
+          COALESCE(NULLIF(host, ''), ?),
+          token, refresh_token, expires_at, issued_at, user_id, email, name, image, updated_at
+        FROM sessions
+      `).run(DEFAULT_CLOUD_URL, DEFAULT_CLOUD_URL, DEFAULT_CLOUD_URL);
+      db.exec("DROP TABLE sessions");
+      db.exec("ALTER TABLE sessions_new RENAME TO sessions");
+    } else {
+      db.exec(`
+        CREATE TABLE sessions (
+          id INTEGER UNIQUE,
+          host TEXT PRIMARY KEY NOT NULL,
+          token TEXT NOT NULL,
+          refresh_token TEXT,
+          expires_at INTEGER,
+          issued_at INTEGER,
+          user_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          name TEXT,
+          image TEXT,
+          updated_at INTEGER NOT NULL
+        )
+      `);
+    }
+  }
+
+  if (currentVersion < 18) {
+    // Durable outbox for cloud preference syncs. Each cloud field has at most
+    // one pending row (PRIMARY KEY): since the cloud replaces a field wholesale
+    // on PUT, only the newest value per field needs to be sent, so a burst of
+    // offline edits collapses to a single row. `payload` is the JSON partial
+    // PUT patch; `next_attempt_at` gates retry backoff.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sync_outbox (
+        cloud_field     TEXT PRIMARY KEY,
+        payload         TEXT NOT NULL,
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        next_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
+        attempts        INTEGER NOT NULL DEFAULT 0,
+        last_error      TEXT
+      )
+    `);
   }
 
   // Upsert schema version
