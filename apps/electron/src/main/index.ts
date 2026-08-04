@@ -1285,10 +1285,7 @@ async function deliverOutput(
 
   try {
     if (mode === OutputMode.Paste) {
-      await pasteIntoFocusedApp(text, async () => {
-        hidePill();
-        await wait(0);
-      });
+      await pasteIntoFocusedApp(text);
     } else {
       clipboard.writeText(text);
     }
