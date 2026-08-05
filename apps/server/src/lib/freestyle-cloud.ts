@@ -9,6 +9,12 @@ import {
   CloudUsageError as FreestyleCloudUsageError,
 } from "@freestyle-voice/utils";
 import type {
+  CleanupAppAssignment,
+  CleanupEmailTone,
+  CleanupIntensity,
+  CleanupOverallTone,
+  CleanupPersonalTone,
+  CleanupWorkTone,
   CloudConfigResponse,
   CloudMemberPreferences,
   CloudProfile,
@@ -405,25 +411,41 @@ export async function postProcessWithFreestyleCloud(opts: {
   appContext?: string | null;
   /** Plugin-contributed system-prompt fragments (from `beforeCleanup` hook). */
   systemFragments?: string[];
+  languages?: string[];
+  intensity?: CleanupIntensity;
+  customPrompt?: string;
+  personalTone?: CleanupPersonalTone;
+  workTone?: CleanupWorkTone;
+  emailTone?: CleanupEmailTone;
+  overallTone?: CleanupOverallTone;
+  appAssignments?: CleanupAppAssignment[];
 }): Promise<{
   cleaned: string;
   usage?: { inputTokens?: number; outputTokens?: number };
 }> {
-  // The cloud reads the user's synced cleanup preferences (intensity, custom
-  // prompt, tones, app assignments, languages) from the member_preferences row
-  // and assembles the prompt server-side, so this body carries only the text
-  // to clean plus request-scoped context: `appContext` and plugin-derived
-  // `systemFragments` (never synced).
+  const payload: Record<string, unknown> = {
+    text: opts.text,
+    appContext: opts.appContext ?? null,
+  };
+  if (opts.systemFragments !== undefined && opts.systemFragments.length > 0) {
+    payload.systemFragments = opts.systemFragments;
+  }
+  if (opts.languages !== undefined) payload.languages = opts.languages;
+  if (opts.intensity !== undefined) payload.intensity = opts.intensity;
+  if (opts.customPrompt !== undefined) payload.customPrompt = opts.customPrompt;
+  if (opts.personalTone !== undefined) {
+    payload.personalTone = opts.personalTone;
+  }
+  if (opts.workTone !== undefined) payload.workTone = opts.workTone;
+  if (opts.emailTone !== undefined) payload.emailTone = opts.emailTone;
+  if (opts.overallTone !== undefined) payload.overallTone = opts.overallTone;
+  if (opts.appAssignments !== undefined) {
+    payload.appAssignments = opts.appAssignments;
+  }
   return cloudJson("/v2/post-process", opts.token, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      text: opts.text,
-      appContext: opts.appContext ?? null,
-      ...(opts.systemFragments && opts.systemFragments.length > 0
-        ? { systemFragments: opts.systemFragments }
-        : {}),
-    }),
+    body: JSON.stringify(payload),
   });
 }
 

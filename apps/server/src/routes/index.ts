@@ -21,6 +21,7 @@ import outputRoute from "./output.js";
 import pluginsRoute from "./plugins.js";
 import postProcessRoute from "./post-process-route.js";
 import pricing from "./pricing.js";
+import remixRoute from "./remix/index.js";
 import settings from "./settings.js";
 import streamRoute from "./stream.js";
 import transcribe, { transcribePreWarmRoute } from "./transcribe.js";
@@ -73,6 +74,7 @@ const apiRouter = new Hono()
   .route("/dismissed-notifications", dismissedNotifications)
   .route("/vocabulary", vocabulary)
   .route("/post-process", postProcessRoute)
+  .route("/remix", remixRoute)
   .route("/output", outputRoute)
   .route("/events", eventsRoute)
   .route("/usage", usage)

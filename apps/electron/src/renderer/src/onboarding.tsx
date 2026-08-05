@@ -4,15 +4,18 @@ import {
   normalizeLanguageList,
 } from "@freestyle-voice/validations";
 import { zodResolver } from "@hookform/resolvers/zod";
-import markDark from "@renderer/assets/mark-dark.svg";
-import markLight from "@renderer/assets/mark-light.svg";
 import { KeyComboDisplay } from "@renderer/components/key-combo";
 import {
   LanguageMultiPickerDialog,
   useLanguageOptions,
 } from "@renderer/components/language-combobox";
 import { ModelSetupPanel } from "@renderer/components/model-setup-panel";
-import { TutorialDemo } from "@renderer/components/tutorial-demo";
+import {
+  CoachStrip,
+  useCoachPress,
+} from "@renderer/components/onboarding/coach-strip";
+import { EmailDraft } from "@renderer/components/onboarding/email-draft";
+import { SignInButton, SignInSplit } from "@renderer/components/sign-in-split";
 import { Button } from "@renderer/components/ui/button";
 import {
   Dialog,
@@ -59,7 +62,6 @@ import {
   Check,
   ChevronLeft,
   ClipboardPaste,
-  ExternalLink,
   HardDrive,
   Key,
   Keyboard,
@@ -74,9 +76,11 @@ import { Trans, useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import type { CloudUser } from "../../shared/cloud-user";
 import { getDefaultHotkey } from "../../shared/hotkey-defaults";
+import { getDefaultRemixHotkey } from "../../shared/remix";
 import { SETTINGS_KEYS } from "../../shared/settings-keys";
+import type { ConfiguredModel } from "./pages/models/types";
 
-type Step = "permissions" | "cloud" | "language" | "tutorial";
+type Step = "permissions" | "cloud" | "language" | "draft" | "remix";
 
 const DEFAULT_HOTKEY =
   (typeof window !== "undefined" && window.api?.defaultHotkey) ||
@@ -113,7 +117,6 @@ export default function OnboardingPage(): React.JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("cloud");
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const {
     user: cloudUser,
@@ -164,8 +167,18 @@ export default function OnboardingPage(): React.JSX.Element {
   });
   const [showKey, setShowKey] = useState(false);
 
-  // Hotkey recorder state (tutorial step)
+  // Hotkey recorder state (draft step)
   const [hotkey, setHotkey] = useState(DEFAULT_HOTKEY);
+
+  // The practice email body, lifted so it survives the draft→remix step
+  // transition (and Back).
+  const [draftBody, setDraftBody] = useState("");
+  const draftDictated = useRef(false);
+  const onDraftDictated = useCallback(() => {
+    if (draftDictated.current) return;
+    draftDictated.current = true;
+    capture("onboarding_draft_dictated");
+  }, []);
 
   const handleHotkeyRecorded = useCallback((accelerator: string) => {
     setHotkey(accelerator);
@@ -220,10 +233,6 @@ export default function OnboardingPage(): React.JSX.Element {
     const value = settingsData?.[SETTINGS_KEYS.hotkey];
     if (value) setHotkey(value);
   }, [settingsData]);
-
-  useEffect(() => {
-    return window.api?.onFullscreenChanged(setIsFullscreen);
-  }, []);
 
   // Analytics: entry + per-step views (drives the drop-off funnel).
   const started = useRef(false);
@@ -733,120 +742,128 @@ export default function OnboardingPage(): React.JSX.Element {
 
   return (
     <div className="glass-window-shell glass-content flex h-screen flex-col">
-      {!isFullscreen && (
-        <div
-          className="h-9 shrink-0"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-        />
-      )}
-
       <div
-        className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto px-6 py-8"
-        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-      >
-        {step === "permissions" && (
-          <PermissionsStep
-            micStatus={micStatus}
-            accessibilityStatus={accessibilityStatus}
-            linuxSetup={linuxSetup}
-            onRequestMic={requestMic}
-            onOpenMicSettings={openMicSettings}
-            onOpenAccessibility={openAccessibility}
-            onRecheckLinuxSetup={recheckLinuxSetup}
-            onBack={() => {
-              capture("onboarding_permissions_back_clicked");
-              setStep("cloud");
-            }}
-            onContinue={() => {
-              capture("onboarding_permissions_completed");
-              setStep("language");
-            }}
-          />
-        )}
+        className="h-9 shrink-0"
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      />
 
-        {step === "cloud" && (
-          <CloudStep
-            user={cloudUser}
-            signingIn={cloudSigningIn}
-            error={cloudError}
-            onSignIn={() => {
-              capture("onboarding_cloud_signin_clicked");
-              void cloudSignIn().then((u) => {
-                if (u) capture("onboarding_cloud_signin_succeeded");
-              });
-            }}
-            onContinue={() => {
-              capture("onboarding_cloud_step_completed", {
-                signed_in: true,
-                skipped: false,
-              });
-              setStep("permissions");
-            }}
-            onSkip={() => {
-              capture("onboarding_cloud_step_completed", {
-                signed_in: false,
-                skipped: true,
-              });
-              setStep("permissions");
-            }}
-          />
-        )}
+      {step === "cloud" ? (
+        <CloudStep
+          user={cloudUser}
+          signingIn={cloudSigningIn}
+          error={cloudError}
+          onSignIn={() => {
+            capture("onboarding_cloud_signin_clicked");
+            void cloudSignIn().then((u) => {
+              if (u) capture("onboarding_cloud_signin_succeeded");
+            });
+          }}
+          onContinue={() => {
+            capture("onboarding_cloud_step_completed", {
+              signed_in: true,
+              skipped: false,
+            });
+            setStep("permissions");
+          }}
+          onSkip={() => {
+            capture("onboarding_cloud_step_completed", {
+              signed_in: false,
+              skipped: true,
+            });
+            setStep("permissions");
+          }}
+        />
+      ) : (
+        <div
+          className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto px-6 py-8"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        >
+          {step === "permissions" && (
+            <PermissionsStep
+              micStatus={micStatus}
+              accessibilityStatus={accessibilityStatus}
+              linuxSetup={linuxSetup}
+              onRequestMic={requestMic}
+              onOpenMicSettings={openMicSettings}
+              onOpenAccessibility={openAccessibility}
+              onRecheckLinuxSetup={recheckLinuxSetup}
+              onBack={() => {
+                capture("onboarding_permissions_back_clicked");
+                setStep("cloud");
+              }}
+              onContinue={() => {
+                capture("onboarding_permissions_completed");
+                setStep("language");
+              }}
+            />
+          )}
 
-        {step === "language" && (
-          <LanguageStep
-            languages={languages}
-            onToggle={toggleLanguage}
-            onClear={clearLanguages}
-            localModel={showLocalSetupPanel ? localSetupModel : undefined}
-            onDownloadLocal={startLocalDownload}
-            onRetryLocal={retryLocalDownload}
-            onBack={() => {
-              capture("onboarding_language_back_clicked");
-              setStep("permissions");
-            }}
-            onContinue={() => {
-              // Persist even when the pre-selected locale was never toggled.
-              persistLanguages(languages);
-              capture("onboarding_language_completed", { languages });
-              setStep("tutorial");
-            }}
-          />
-        )}
+          {step === "language" && (
+            <LanguageStep
+              languages={languages}
+              onToggle={toggleLanguage}
+              onClear={clearLanguages}
+              localModel={showLocalSetupPanel ? localSetupModel : undefined}
+              onDownloadLocal={startLocalDownload}
+              onRetryLocal={retryLocalDownload}
+              onBack={() => {
+                capture("onboarding_language_back_clicked");
+                setStep("permissions");
+              }}
+              onContinue={() => {
+                // Persist even when the pre-selected locale was never toggled.
+                persistLanguages(languages);
+                capture("onboarding_language_completed", { languages });
+                setStep("draft");
+              }}
+            />
+          )}
 
-        {step === "tutorial" && (
-          <TutorialStep
-            hotkey={hotkey}
-            recorderState={recorderState}
-            draftKeys={draftKeys}
-            captureHint={captureHint}
-            modelReady={chosenReady}
-            localModel={showLocalSetupPanel ? localSetupModel : undefined}
-            onDownloadLocal={startLocalDownload}
-            onRetryLocal={retryLocalDownload}
-            canFinish={!mustHaveLocalReady}
-            finishBlockedReason={
-              mustHaveLocalReady
-                ? localSetupActive
-                  ? "downloading"
-                  : "notReady"
-                : null
-            }
-            onStartRecording={() => {
-              capture("onboarding_hotkey_change_started");
-              startHotkeyRecording();
-            }}
-            onCancelRecording={cancelHotkeyRecording}
-            onDictation={() => capture("onboarding_dictation_tried")}
-            onBack={() => {
-              capture("onboarding_tutorial_back_clicked");
-              setStep("language");
-            }}
-            onFinish={finishSetup}
-          />
-        )}
-      </div>
+          {step === "draft" && (
+            <DraftStep
+              hotkey={hotkey}
+              recorderState={recorderState}
+              draftKeys={draftKeys}
+              captureHint={captureHint}
+              modelReady={chosenReady}
+              localModel={showLocalSetupPanel ? localSetupModel : undefined}
+              onDownloadLocal={startLocalDownload}
+              onRetryLocal={retryLocalDownload}
+              canContinue={!mustHaveLocalReady || !!window.api?.isE2E}
+              continueBlockedReason={
+                mustHaveLocalReady
+                  ? localSetupActive
+                    ? "downloading"
+                    : "notReady"
+                  : null
+              }
+              body={draftBody}
+              onBodyChange={setDraftBody}
+              onDraftDictated={onDraftDictated}
+              onStartRecording={() => {
+                capture("onboarding_hotkey_change_started");
+                startHotkeyRecording();
+              }}
+              onCancelRecording={cancelHotkeyRecording}
+              onDictation={() => capture("onboarding_dictation_tried")}
+              onBack={() => {
+                capture("onboarding_tutorial_back_clicked");
+                setStep("language");
+              }}
+              onContinue={() => setStep("remix")}
+            />
+          )}
 
-      {step === "cloud" && <CloudTermsFooter />}
+          {step === "remix" && (
+            <RemixStep
+              body={draftBody}
+              onBodyChange={setDraftBody}
+              onBack={() => setStep("draft")}
+              onFinish={finishSetup}
+            />
+          )}
+        </div>
+      )}
 
       {showSelector && (
         <ModelSelectorOverlay
@@ -922,8 +939,10 @@ function PermissionsStep({
   // works (toggle mode), so the card only warns.
   const linuxBlocked = !!linuxSetup?.wayland && !linuxSetup.inputAccess;
   // Accessibility is macOS-only; elsewhere the mic alone unblocks.
+  // E2E runs on machines that can't grant OS permissions.
   const allGranted =
-    micGranted && (!IS_MAC || accessibilityStatus) && !linuxBlocked;
+    (micGranted && (!IS_MAC || accessibilityStatus) && !linuxBlocked) ||
+    !!window.api?.isE2E;
   // macOS and Windows can deep-link to the OS mic privacy settings.
   const canOpenMicSettings = IS_MAC || IS_WINDOWS;
 
@@ -1117,127 +1136,62 @@ function CloudStep({
   onSkip: () => void;
 }): React.JSX.Element {
   return (
-    <div className="flex w-full max-w-[420px] flex-col items-center text-center">
-      <img
-        src={markLight}
-        alt="Freestyle"
-        className="block h-14 w-14 dark:hidden"
-      />
-      <img
-        src={markDark}
-        alt="Freestyle"
-        className="hidden h-14 w-14 dark:block"
-      />
-
-      <h1 className="serif text-foreground mt-6 mb-0 text-[44px] leading-[1.0] font-normal tracking-[-0.025em]">
-        <span>Welcome to </span>
-        <span className="serif-italic text-primary">Freestyle</span>
-      </h1>
-
-      {user ? (
-        <div className="border-border bg-card mt-6 flex w-full items-center gap-3 rounded-[12px] border p-4 text-left">
-          {user.image ? (
-            <img
-              src={user.image}
-              alt=""
-              className="size-9 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="bg-accent border-primary/20 flex size-9 shrink-0 items-center justify-center rounded-full border">
-              <Check className="text-accent-foreground size-4" />
-            </div>
-          )}
-          <div className="min-w-0 flex-1 leading-tight">
-            <div className="text-foreground truncate text-[14px] font-medium">
-              {user.name || user.email}
-            </div>
-            <div className="text-muted-foreground truncate text-[12px]">
-              {user.name ? `Signed in · ${user.email}` : "Signed in"}
-            </div>
-          </div>
-          <Check className="text-accent-foreground size-4 shrink-0" />
-        </div>
-      ) : (
-        <>
-          <p className="text-muted-foreground mt-3 max-w-[340px] text-[14px] leading-relaxed">
-            Do work 4X faster with voice. Sign in to get started.
-          </p>
-
-          <button
-            type="button"
-            onClick={onSignIn}
-            disabled={signingIn}
-            className="mt-7 flex w-full items-center justify-center gap-2.5 rounded-[11px] bg-primary px-5 py-3 text-[14px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-60"
-          >
-            {signingIn ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Opening browser…
-              </>
-            ) : (
-              <>
-                Sign in via browser
-                <ExternalLink className="size-4 opacity-70" />
-              </>
-            )}
-          </button>
-        </>
-      )}
-
-      {error && (
-        <p className="text-destructive mt-3 text-[12px] leading-snug">
-          {error}
-        </p>
-      )}
-
-      {user ? (
-        <Button variant="ink" onClick={onContinue} className="mt-6 w-full">
-          Continue
-          <ArrowRight data-icon="inline-end" />
-        </Button>
-      ) : (
-        // Skipping sign-in is a local-development affordance only — in
+    <SignInSplit
+      titlePrefix="Welcome to "
+      subtitle="Write with intelligence at your cursor"
+      error={error}
+      footer={
+        !user &&
+        // Skipping sign-in is a local-development/E2E affordance only — in
         // production the browser sign-in is the sole way past this step.
-        import.meta.env.DEV && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onSkip}
-            disabled={signingIn}
-            className="text-muted-foreground mt-2 h-auto px-2 py-1 text-[12px]"
-          >
-            Skip for now (dev)
-          </Button>
+        (import.meta.env.DEV || window.api?.isE2E) && (
+          <div className="mt-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSkip}
+              disabled={signingIn}
+              className="text-muted-foreground -ml-2 h-auto px-2 py-1 text-[12px]"
+            >
+              Skip for now (dev)
+            </Button>
+          </div>
         )
+      }
+    >
+      {user ? (
+        <>
+          <div className="border-border bg-card mt-9 flex w-full items-center gap-3 rounded-[12px] border p-4 text-left">
+            {user.image ? (
+              <img
+                src={user.image}
+                alt=""
+                className="size-9 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="bg-accent border-primary/20 flex size-9 shrink-0 items-center justify-center rounded-full border">
+                <Check className="text-accent-foreground size-4" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="text-foreground truncate text-[14px] font-medium">
+                {user.name || user.email}
+              </div>
+              <div className="text-muted-foreground truncate text-[12px]">
+                {user.name ? `Signed in · ${user.email}` : "Signed in"}
+              </div>
+            </div>
+            <Check className="text-accent-foreground size-4 shrink-0" />
+          </div>
+          <Button variant="ink" onClick={onContinue} className="mt-5 w-full">
+            Continue
+            <ArrowRight data-icon="inline-end" />
+          </Button>
+        </>
+      ) : (
+        <SignInButton signingIn={signingIn} onClick={onSignIn} />
       )}
-    </div>
-  );
-}
-
-function CloudTermsFooter(): React.JSX.Element {
-  return (
-    <p className="text-muted-foreground shrink-0 px-6 pb-8 text-center text-[11px] leading-[1.7]">
-      By continuing, you agree to our{" "}
-      <a
-        href="https://freestylevoice.com/terms"
-        target="_blank"
-        rel="noreferrer"
-        className="text-foreground underline underline-offset-2"
-      >
-        Terms of Service
-      </a>
-      <br />
-      and{" "}
-      <a
-        href="https://freestylevoice.com/privacy"
-        target="_blank"
-        rel="noreferrer"
-        className="text-foreground underline underline-offset-2"
-      >
-        Privacy Policy
-      </a>
-      .
-    </p>
+    </SignInSplit>
   );
 }
 
@@ -1679,10 +1633,19 @@ function ModelSelectorOverlay({
   );
 }
 
+function StepHeading({ title }: { title: string }): React.JSX.Element {
+  return (
+    <h1 className="text-foreground m-0 mb-6 text-[30px] leading-[1.15] font-semibold tracking-[-0.01em]">
+      {title}
+    </h1>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Step 3 — How to use (live tutorial + hotkey rebind)
+// Step 4 — Dictate into the Gmail draft (replaces the old tutorial step:
+// same model setup + hotkey rebind, new practice surface).
 // ---------------------------------------------------------------------------
-function TutorialStep({
+function DraftStep({
   hotkey,
   recorderState,
   draftKeys,
@@ -1691,13 +1654,16 @@ function TutorialStep({
   localModel,
   onDownloadLocal,
   onRetryLocal,
-  canFinish,
-  finishBlockedReason,
+  canContinue,
+  continueBlockedReason,
+  body,
+  onBodyChange,
+  onDraftDictated,
   onStartRecording,
   onCancelRecording,
   onDictation,
   onBack,
-  onFinish,
+  onContinue,
 }: {
   hotkey: string;
   recorderState: string;
@@ -1707,31 +1673,82 @@ function TutorialStep({
   localModel: VoiceItem | undefined;
   onDownloadLocal: () => void;
   onRetryLocal: () => void;
-  canFinish: boolean;
-  finishBlockedReason: "downloading" | "notReady" | null;
+  canContinue: boolean;
+  continueBlockedReason: "downloading" | "notReady" | null;
+  body: string;
+  onBodyChange: (text: string) => void;
+  onDraftDictated: () => void;
   onStartRecording: () => void;
   onCancelRecording: () => void;
   onDictation: () => void;
   onBack: () => void;
-  onFinish: () => void;
+  onContinue: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  return (
-    <div className="w-full max-w-[600px]">
-      <TutorialDemo
-        hotkey={hotkey}
-        interactive={modelReady}
-        onDictation={onDictation}
-      />
+  const onDictationRef = useRef(onDictation);
+  onDictationRef.current = onDictation;
+  const { phase, getLiveLevel } = useCoachPress("dictation", {
+    onDown: () => {
+      if (modelReady) onDictationRef.current();
+    },
+  });
 
-      <ModelSetupPanel
-        model={localModel}
-        onDownload={onDownloadLocal}
-        onRetry={onRetryLocal}
-      />
+  // A dictation counts as such only when the paste is corroborated by the
+  // pill's transcription:done ping — manual typing still enables Continue,
+  // it just isn't counted as a dictation.
+  const bodyRef = useRef(body);
+  bodyRef.current = body;
+  const transcribedRef = useRef(false);
+  const onDraftDictatedRef = useRef(onDraftDictated);
+  onDraftDictatedRef.current = onDraftDictated;
+  useEffect(() => {
+    return window.api?.onTranscriptionDone(() => {
+      transcribedRef.current = true;
+      if (bodyRef.current.trim()) onDraftDictatedRef.current();
+    });
+  }, []);
+  useEffect(() => {
+    if (body.trim() && transcribedRef.current) onDraftDictatedRef.current();
+  }, [body]);
+
+  const statusLabel =
+    phase === "pressed"
+      ? t("onboarding.draft.statusListening")
+      : phase === "result"
+        ? t("onboarding.draft.statusLanded")
+        : t("onboarding.draft.statusReady");
+
+  return (
+    <div className="w-full max-w-[1100px]">
+      <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)]">
+        <div>
+          <StepHeading title={t("onboarding.draft.title")} />
+
+          <CoachStrip
+            keys={formatAcceleratorKeys(hotkey)}
+            phase={phase}
+            instructionPrefix={t("onboarding.draft.instructionPrefix")}
+            instructionSuffix={t("onboarding.draft.instructionSuffix")}
+            sayText={t("onboarding.draft.sayText")}
+            statusLabel={statusLabel}
+            statusEmphasis={phase !== "idle"}
+            getLiveLevel={getLiveLevel}
+          />
+
+          <ModelSetupPanel
+            model={localModel}
+            onDownload={onDownloadLocal}
+            onRetry={onRetryLocal}
+          />
+        </div>
+
+        <div className="flex justify-center lg:justify-end">
+          <EmailDraft body={body} onBodyChange={onBodyChange} stage="dictate" />
+        </div>
+      </div>
 
       {/* Hotkey rebind — a single minimal control */}
-      <div className="mt-5 flex justify-center">
+      <div className="mt-5 flex justify-start">
         {recorderState === "idle" ? (
           <Button
             variant="outline"
@@ -1770,18 +1787,342 @@ function TutorialStep({
           {t("common.back")}
         </Button>
         <div className="flex flex-col items-end gap-1.5">
-          {!canFinish && finishBlockedReason && (
+          {!canContinue && continueBlockedReason && (
             <p className="text-muted-foreground text-[11px]">
-              {finishBlockedReason === "downloading"
+              {continueBlockedReason === "downloading"
                 ? t("onboarding.modelSetup.waitingWhileDownloading")
                 : t("onboarding.modelSetup.waitingToFinish")}
             </p>
           )}
-          <Button variant="default" onClick={onFinish} disabled={!canFinish}>
-            {t("onboarding.tutorial.finish")}
-            <ArrowRight data-icon="inline-end" />
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onContinue}
+              disabled={!canContinue}
+              className="text-muted-foreground h-auto px-2 py-1 text-[12px]"
+            >
+              {t("onboarding.draft.skip")}
+            </Button>
+            <Button
+              variant="ink"
+              onClick={onContinue}
+              disabled={!canContinue || !body.trim()}
+            >
+              {t("common.continue")}
+              <ArrowRight data-icon="inline-end" />
+            </Button>
+          </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 5 — Remix the draft. Interactive when an LLM default exists: the real
+// Remix pipeline runs against our own window via main's practice-target mode.
+// Otherwise a scripted preview of a remix pass.
+// ---------------------------------------------------------------------------
+const REMIX_IN_FLIGHT_GRACE_MS = 30_000;
+
+function RemixStep({
+  body,
+  onBodyChange,
+  onBack,
+  onFinish,
+}: {
+  body: string;
+  onBodyChange: (text: string) => void;
+  onBack: () => void;
+  onFinish: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const { user: cloudUser } = useCloudAuth();
+  const { data: settingsData, isFetched: settingsFetched } = useQuery(
+    settingsQueryOptions(),
+  );
+  const configuredQuery = useQuery({
+    queryKey: ["models", "configured"],
+    queryFn: async () => {
+      const res = await getClient().api.models.configured.$get();
+      if (!res.ok) throw new Error("Failed to load configured models");
+      return (await res.json()) as ConfiguredModel[];
+    },
+  });
+
+  // The agent only hears what the user says, so the suggested instruction
+  // must carry a concrete name: the signed-in user's first name, or a stand-in.
+  const signoffName =
+    cloudUser?.name?.trim().split(/\s+/)[0] ||
+    t("onboarding.remix.fallbackName");
+
+  const llmDefault = (configuredQuery.data ?? []).find(
+    (m) => m.type === "llm" && m.is_default === 1,
+  );
+  const ready = settingsFetched && configuredQuery.isFetched;
+  const interactive = ready && !!llmDefault && !window.api?.isE2E;
+  // Server tools (web/image search) exist only behind the cloud proxy; the
+  // BYOK loop declares client tools only.
+  const searchCapable = llmDefault?.provider === FREESTYLE_CLOUD_PROVIDER_ID;
+
+  const remixHotkey =
+    settingsData?.[SETTINGS_KEYS.remixHotkey] ||
+    window.api?.defaultRemixHotkey ||
+    getDefaultRemixHotkey();
+
+  const [remixed, setRemixed] = useState(false);
+  const [extraDone, setExtraDone] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [deliveredCount, setDeliveredCount] = useState(0);
+  const remixedRef = useRef(false);
+  const extraDoneRef = useRef(false);
+  const triedRef = useRef(false);
+  const extraTriedRef = useRef(false);
+  const chipShownRef = useRef(false);
+  const chipVisibleRef = useRef(false);
+  const viewedRef = useRef(false);
+  const inFlightUntilRef = useRef(0);
+  const lastDeliveredAtRef = useRef(0);
+  const workingTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!ready || viewedRef.current) return;
+    viewedRef.current = true;
+    capture("onboarding_remix_step_viewed", { interactive });
+  }, [ready, interactive]);
+
+  // The one gate this feature opens: while this step is interactive, main
+  // treats our own window as a legal Remix target. Unmount is the primary
+  // off-switch; main clears it defensively too.
+  useEffect(() => {
+    if (!interactive) return;
+    window.api?.setRemixPracticeTarget(true);
+    return () => window.api?.setRemixPracticeTarget(false);
+  }, [interactive]);
+
+  const handleDelivered = useCallback(() => {
+    // One paste can signal twice (IPC + the body-change fallback) — dedupe.
+    const now = Date.now();
+    if (now - lastDeliveredAtRef.current < 1500) return;
+    lastDeliveredAtRef.current = now;
+    inFlightUntilRef.current = 0;
+    setDeliveredCount((count) => count + 1);
+    setWorking(false);
+    if (workingTimerRef.current !== null) {
+      window.clearTimeout(workingTimerRef.current);
+      workingTimerRef.current = null;
+    }
+    if (!remixedRef.current) {
+      remixedRef.current = true;
+      setRemixed(true);
+      capture("onboarding_remix_completed");
+      return;
+    }
+    // A late second paste from beat one must not count as the third beat —
+    // require a session started while the chip was showing.
+    if (
+      chipVisibleRef.current &&
+      extraTriedRef.current &&
+      !extraDoneRef.current
+    ) {
+      extraDoneRef.current = true;
+      setExtraDone(true);
+      capture("onboarding_remix_extra_completed");
+    }
+  }, []);
+  const handleDeliveredRef = useRef(handleDelivered);
+  handleDeliveredRef.current = handleDelivered;
+
+  useEffect(() => {
+    if (!interactive) return;
+    return window.api?.onRemixPracticeDelivered(() =>
+      handleDeliveredRef.current(),
+    );
+  }, [interactive]);
+
+  const { phase, getLiveLevel } = useCoachPress("remix", {
+    onDown: () => {
+      inFlightUntilRef.current = Number.MAX_SAFE_INTEGER;
+      if (!triedRef.current) {
+        triedRef.current = true;
+        capture("onboarding_remix_tried");
+      }
+      if (chipVisibleRef.current && !extraTriedRef.current) {
+        extraTriedRef.current = true;
+        capture("onboarding_remix_extra_tried");
+      }
+    },
+    onUp: () => {
+      inFlightUntilRef.current = Date.now() + REMIX_IN_FLIGHT_GRACE_MS;
+      setWorking(true);
+      if (workingTimerRef.current !== null) {
+        window.clearTimeout(workingTimerRef.current);
+      }
+      workingTimerRef.current = window.setTimeout(() => {
+        setWorking(false);
+      }, REMIX_IN_FLIGHT_GRACE_MS);
+    },
+  });
+
+  // Belt-and-braces success detection: a body change while a remix session is
+  // in flight counts as delivery even if a future path bypasses the two paste
+  // handlers.
+  useEffect(() => {
+    if (!interactive || !body.trim()) return;
+    if (Date.now() <= inFlightUntilRef.current) handleDeliveredRef.current();
+  }, [body, interactive]);
+
+  const chipVisible = interactive && remixed && searchCapable;
+  useEffect(() => {
+    chipVisibleRef.current = chipVisible;
+    if (chipVisible && !chipShownRef.current) {
+      chipShownRef.current = true;
+      capture("onboarding_remix_extra_shown");
+    }
+  }, [chipVisible]);
+
+  const handleFinish = useCallback(() => {
+    if (!remixedRef.current) capture("onboarding_remix_skipped");
+    onFinish();
+  }, [onFinish]);
+
+  // Scripted fallback: an automated remix pass over the user's actual text.
+  const [scriptPhase, setScriptPhase] = useState<"idle" | "pressed" | "result">(
+    "idle",
+  );
+  const scripted = ready && !interactive;
+  useEffect(() => {
+    if (!scripted) return;
+    const steps: ReadonlyArray<
+      readonly ["idle" | "pressed" | "result", number]
+    > = [
+      ["idle", 2000],
+      ["pressed", 3200],
+      ["result", 3600],
+    ];
+    let index = 0;
+    let timeout = 0;
+    const tick = (): void => {
+      const [name, dur] = steps[index % steps.length];
+      setScriptPhase(name);
+      index += 1;
+      timeout = window.setTimeout(tick, dur);
+    };
+    tick();
+    return () => window.clearTimeout(timeout);
+  }, [scripted]);
+
+  const scriptedBase = body.trim() || t("onboarding.remix.sampleDraft");
+  const scriptedBody = scripted
+    ? scriptPhase === "result"
+      ? `${scriptedBase}\n\n${t("onboarding.remix.sampleSignoff", {
+          name: signoffName,
+        })}`
+      : scriptedBase
+    : null;
+
+  const statusLabel =
+    phase === "pressed"
+      ? t("onboarding.remix.statusListening")
+      : working
+        ? t("onboarding.remix.statusWorking")
+        : remixed
+          ? t("onboarding.remix.statusRemixed")
+          : t("onboarding.remix.statusReady");
+
+  const keys = formatAcceleratorKeys(remixHotkey);
+
+  return (
+    <div className="w-full max-w-[1100px]">
+      <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)]">
+        <div>
+          <StepHeading title={t("onboarding.remix.title")} />
+
+          {!ready ? (
+            <div className="flex justify-start">
+              <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+            </div>
+          ) : interactive ? (
+            <CoachStrip
+              keys={keys}
+              phase={phase}
+              lead={
+                !remixed ? (
+                  t("onboarding.remix.highlightNote")
+                ) : chipVisible ? (
+                  extraDone ? (
+                    <span className="text-accent-foreground">
+                      {t("onboarding.remix.extraDone")}
+                    </span>
+                  ) : (
+                    t("onboarding.remix.extraLead")
+                  )
+                ) : (
+                  t("onboarding.remix.doneNote")
+                )
+              }
+              instructionPrefix={t("onboarding.remix.instructionPrefix")}
+              instructionSuffix={t("onboarding.remix.instructionSuffix")}
+              sayText={
+                chipVisible
+                  ? t("onboarding.remix.extraSay")
+                  : t("onboarding.remix.sayText", { name: signoffName })
+              }
+              statusLabel={statusLabel}
+              statusEmphasis={phase === "pressed" || working || remixed}
+              getLiveLevel={getLiveLevel}
+            >
+              {chipVisible && !extraDone && (
+                <p className="text-muted-foreground/80 text-[13px] leading-relaxed">
+                  {t("onboarding.remix.extraCaption")}
+                </p>
+              )}
+            </CoachStrip>
+          ) : (
+            <CoachStrip
+              keys={keys}
+              phase={scriptPhase}
+              instructionPrefix={t("onboarding.remix.instructionPrefix")}
+              instructionSuffix={t("onboarding.remix.instructionSuffix")}
+              sayText={t("onboarding.remix.sayText", { name: signoffName })}
+              statusLabel={
+                scriptPhase === "pressed"
+                  ? t("onboarding.remix.statusListening")
+                  : scriptPhase === "result"
+                    ? t("onboarding.remix.statusRemixed")
+                    : t("onboarding.remix.statusReady")
+              }
+              statusEmphasis={scriptPhase !== "idle"}
+              getLiveLevel={() => null}
+            >
+              <p className="text-muted-foreground text-[14px] leading-relaxed">
+                {t("onboarding.remix.fallbackNote")}
+              </p>
+            </CoachStrip>
+          )}
+        </div>
+
+        <div className="flex justify-center lg:justify-end">
+          <EmailDraft
+            body={body}
+            onBodyChange={onBodyChange}
+            stage="remix"
+            scriptedBody={scriptedBody}
+            highlightBody={interactive}
+            highlightSignal={deliveredCount}
+          />
+        </div>
+      </div>
+
+      <div className="mt-7 flex items-center justify-between">
+        <Button variant="outline" onClick={onBack}>
+          {t("common.back")}
+        </Button>
+        <Button variant="ink" onClick={handleFinish}>
+          {t("onboarding.tutorial.finish")}
+          <ArrowRight data-icon="inline-end" />
+        </Button>
       </div>
     </div>
   );

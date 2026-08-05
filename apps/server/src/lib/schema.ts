@@ -7,7 +7,7 @@ import { countFixes } from "./fixes.js";
 // and would otherwise perturb test module-mock ordering.
 const DEFAULT_CLOUD_URL = "https://service.freestylevoice.com";
 
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 20;
 
 // Legacy default format-rule patterns (used only by pre-v12 migrations below):
 // domain/phrase entries match as substrings of url+title+app; bare words match
@@ -173,6 +173,77 @@ export function initSchema(db: DatabaseSync): void {
   } catch (err) {
     db.exec("ROLLBACK");
     throw err;
+  }
+}
+
+/**
+ * Main's v17: replace the singleton sessions row with host-keyed rows so dev
+ * and prod sessions coexist. Also invoked as a v19 repair for databases the
+ * Remix prototype stamped v17 before this migration existed.
+ */
+function applyHostKeyedSessions(db: DatabaseSync): void {
+  // Rebuild sessions table: replace singleton id=1 row with host-keyed rows
+  // so dev (localhost:8787) and prod sessions can coexist without clobbering
+  // each other.
+  //
+  // Backward compatibility: older released binaries still query this table by
+  // `WHERE id = 1` and `INSERT ... ON CONFLICT(id)`. Dropping `id` outright
+  // crashed those binaries with "no such column: id" whenever a user
+  // downgraded. So we keep a nullable UNIQUE `id`: the default/prod host row
+  // carries id=1 (what old binaries read/write), while `host` remains the
+  // real key. Other hosts (e.g. dev) get NULL — SQLite treats multiple NULLs
+  // as distinct, so the UNIQUE constraint still allows several host rows.
+  const hasOldSessions = !!(db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
+    )
+    .get() as { name: string } | undefined);
+
+  if (hasOldSessions) {
+    db.exec(`
+      CREATE TABLE sessions_new (
+        id INTEGER UNIQUE,
+        host TEXT PRIMARY KEY NOT NULL,
+        token TEXT NOT NULL,
+        refresh_token TEXT,
+        expires_at INTEGER,
+        issued_at INTEGER,
+        user_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        name TEXT,
+        image TEXT,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+    // Preserve the existing session row (if any) under its stored host. The
+    // default/prod host keeps id=1 so old binaries keep finding it.
+    db.prepare(`
+      INSERT OR IGNORE INTO sessions_new
+        (id, host, token, refresh_token, expires_at, issued_at, user_id, email, name, image, updated_at)
+      SELECT
+        CASE WHEN COALESCE(NULLIF(host, ''), ?) = ? THEN 1 ELSE NULL END,
+        COALESCE(NULLIF(host, ''), ?),
+        token, refresh_token, expires_at, issued_at, user_id, email, name, image, updated_at
+      FROM sessions
+    `).run(DEFAULT_CLOUD_URL, DEFAULT_CLOUD_URL, DEFAULT_CLOUD_URL);
+    db.exec("DROP TABLE sessions");
+    db.exec("ALTER TABLE sessions_new RENAME TO sessions");
+  } else {
+    db.exec(`
+      CREATE TABLE sessions (
+        id INTEGER UNIQUE,
+        host TEXT PRIMARY KEY NOT NULL,
+        token TEXT NOT NULL,
+        refresh_token TEXT,
+        expires_at INTEGER,
+        issued_at INTEGER,
+        user_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        name TEXT,
+        image TEXT,
+        updated_at INTEGER NOT NULL
+      )
+    `);
   }
 }
 
@@ -468,69 +539,7 @@ function applyMigrations(db: DatabaseSync, currentVersion: number): void {
   }
 
   if (currentVersion < 17) {
-    // Rebuild sessions table: replace singleton id=1 row with host-keyed rows
-    // so dev (localhost:8787) and prod sessions can coexist without clobbering
-    // each other.
-    //
-    // Backward compatibility: older released binaries still query this table by
-    // `WHERE id = 1` and `INSERT ... ON CONFLICT(id)`. Dropping `id` outright
-    // crashed those binaries with "no such column: id" whenever a user
-    // downgraded. So we keep a nullable UNIQUE `id`: the default/prod host row
-    // carries id=1 (what old binaries read/write), while `host` remains the
-    // real key. Other hosts (e.g. dev) get NULL — SQLite treats multiple NULLs
-    // as distinct, so the UNIQUE constraint still allows several host rows.
-    const hasOldSessions = !!(db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
-      )
-      .get() as { name: string } | undefined);
-
-    if (hasOldSessions) {
-      db.exec(`
-        CREATE TABLE sessions_new (
-          id INTEGER UNIQUE,
-          host TEXT PRIMARY KEY NOT NULL,
-          token TEXT NOT NULL,
-          refresh_token TEXT,
-          expires_at INTEGER,
-          issued_at INTEGER,
-          user_id TEXT NOT NULL,
-          email TEXT NOT NULL,
-          name TEXT,
-          image TEXT,
-          updated_at INTEGER NOT NULL
-        )
-      `);
-      // Preserve the existing session row (if any) under its stored host. The
-      // default/prod host keeps id=1 so old binaries keep finding it.
-      db.prepare(`
-        INSERT OR IGNORE INTO sessions_new
-          (id, host, token, refresh_token, expires_at, issued_at, user_id, email, name, image, updated_at)
-        SELECT
-          CASE WHEN COALESCE(NULLIF(host, ''), ?) = ? THEN 1 ELSE NULL END,
-          COALESCE(NULLIF(host, ''), ?),
-          token, refresh_token, expires_at, issued_at, user_id, email, name, image, updated_at
-        FROM sessions
-      `).run(DEFAULT_CLOUD_URL, DEFAULT_CLOUD_URL, DEFAULT_CLOUD_URL);
-      db.exec("DROP TABLE sessions");
-      db.exec("ALTER TABLE sessions_new RENAME TO sessions");
-    } else {
-      db.exec(`
-        CREATE TABLE sessions (
-          id INTEGER UNIQUE,
-          host TEXT PRIMARY KEY NOT NULL,
-          token TEXT NOT NULL,
-          refresh_token TEXT,
-          expires_at INTEGER,
-          issued_at INTEGER,
-          user_id TEXT NOT NULL,
-          email TEXT NOT NULL,
-          name TEXT,
-          image TEXT,
-          updated_at INTEGER NOT NULL
-        )
-      `);
-    }
+    applyHostKeyedSessions(db);
   }
 
   if (currentVersion < 18) {
@@ -551,7 +560,70 @@ function applyMigrations(db: DatabaseSync, currentVersion: number): void {
     `);
   }
 
-  if (currentVersion < 19) {
+  if (currentVersion < 20) {
+    const sessionsCols = db.prepare("PRAGMA table_info(sessions)").all() as {
+      name: string;
+      pk: number;
+    }[];
+    if (
+      sessionsCols.length > 0 &&
+      !sessionsCols.some((col) => col.name === "host" && col.pk > 0)
+    ) {
+      applyHostKeyedSessions(db);
+    }
+
+    // Remix: chat threads (UIMessage JSON verbatim — the AI SDK owns the
+    // shape) and one row per write into the user's document, which powers
+    // Revert and the history view. The cloud stores none of this.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS remix_threads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        last_active_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS remix_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        thread_id INTEGER NOT NULL REFERENCES remix_threads(id) ON DELETE CASCADE,
+        message_id TEXT NOT NULL,
+        ui_message TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(thread_id, message_id)
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS remix_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        thread_id INTEGER REFERENCES remix_threads(id) ON DELETE SET NULL,
+        lane TEXT NOT NULL CHECK(lane IN ('transform','agent')),
+        instruction TEXT NOT NULL,
+        before_text TEXT,
+        after_text TEXT NOT NULL,
+        app_name TEXT,
+        llm_provider TEXT,
+        llm_model TEXT,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        cost_usd REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    // The feature shipped briefly under "commands"; carry those settings over
+    // so nobody loses a configured hotkey to the rename.
+    db.exec(`
+      INSERT INTO settings (key, value, updated_at)
+        SELECT 'remix_hotkey', value, datetime('now') FROM settings WHERE key = 'command_hotkey'
+        ON CONFLICT(key) DO NOTHING
+    `);
+    db.exec(`
+      INSERT INTO settings (key, value, updated_at)
+        SELECT 'remix_enabled', value, datetime('now') FROM settings WHERE key = 'commands_enabled'
+        ON CONFLICT(key) DO NOTHING
+    `);
+    db.exec(
+      "DELETE FROM settings WHERE key IN ('command_hotkey', 'commands_enabled')",
+    );
     // Dismissals for in-app dialogs/banners (changelogs, feature prompts,
     // profile nudges). Presence of a key means the corresponding UI has been
     // dismissed and should not be shown again. Not synced to Freestyle Cloud —

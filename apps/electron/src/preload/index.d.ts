@@ -6,6 +6,15 @@ import type {
 import type { OpenAppCandidate } from "../shared/open-apps";
 import type { PillCancelMode } from "../shared/pill-cancel";
 import type { PluginViewBounds } from "../shared/plugins";
+import type {
+  RemixContextResult,
+  RemixCopyResult,
+  RemixPrimitiveResult,
+  RemixReadDocumentResult,
+  RemixRecapturePayload,
+  RemixSelectionPayload,
+  RemixSelectResult,
+} from "../shared/remix";
 
 declare global {
   interface Window {
@@ -14,6 +23,7 @@ declare global {
       platform: string;
       isE2E: boolean;
       defaultHotkey: string;
+      defaultRemixHotkey: string;
       pasteText: (text: string, appContext?: string | null) => Promise<void>;
       copyText: (text: string, appContext?: string | null) => Promise<void>;
       prepareSystemAudio: (mode: ActiveAudioPlaybackMode) => Promise<void>;
@@ -23,7 +33,14 @@ declare global {
       reloadHotkey: () => void;
       setHotkeyMode: (mode: "hold" | "toggle") => void;
       hidePill: () => void;
-      setPillExpanded: (expanded: boolean) => void;
+      setPillExpanded: (
+        expanded: boolean,
+        expansion?: "card" | "remix-chat",
+      ) => void;
+      setPillHotRect: (
+        rect: { x: number; y: number; width: number; height: number } | null,
+      ) => void;
+      onPillHotEnter: (callback: () => void) => () => void;
       showErrorDialog: (title: string, message: string) => Promise<void>;
       getServerPort: () => Promise<number>;
       getServerUrl: () => Promise<string>;
@@ -38,6 +55,42 @@ declare global {
       onHotkeyDown: (callback: () => void) => () => void;
       onHotkeyUp: (callback: () => void) => () => void;
       onPillCancel: (callback: () => void) => () => void;
+      reloadRemixHotkey: () => void;
+      pasteRemixResult: (text: string) => Promise<boolean>;
+      onRemixDown: (callback: () => void) => () => void;
+      onRemixUp: (callback: () => void) => () => void;
+      onRemixSelection: (
+        callback: (payload: RemixSelectionPayload) => void,
+      ) => () => void;
+      onRemixRoute: (callback: (index: number) => void) => () => void;
+      onRemixSupersede: (callback: () => void) => () => void;
+      remixRecapture: () => Promise<RemixRecapturePayload>;
+      remixGetContext: () => Promise<RemixContextResult>;
+      remixReadDocument: () => Promise<RemixReadDocumentResult>;
+      remixSelectAll: () => Promise<RemixPrimitiveResult>;
+      remixSelectText: (
+        text: string,
+        occurrence?: number,
+      ) => Promise<RemixSelectResult>;
+      remixCollapseSelection: () => Promise<RemixPrimitiveResult>;
+      remixCopy: () => Promise<RemixCopyResult>;
+      remixSetClipboard: (text: string) => Promise<RemixPrimitiveResult>;
+      remixSetClipboardImage: (url: string) => Promise<RemixPrimitiveResult>;
+      remixPasteClipboard: () => Promise<RemixPrimitiveResult>;
+      remixUndo: () => Promise<RemixPrimitiveResult>;
+      remixRedo: () => Promise<RemixPrimitiveResult>;
+      remixPressKey: (
+        key: string,
+        times?: number,
+      ) => Promise<RemixPrimitiveResult>;
+      remixGetClipboard: () => Promise<RemixCopyResult>;
+      remixPasteText: (text: string) => Promise<RemixPrimitiveResult>;
+      setRemixChatFocus: (focus: boolean) => void;
+      setRemixRouteKeys: (open: boolean) => void;
+      remixBarHover: () => void;
+      setRemixPracticeTarget: (active: boolean) => void;
+      onRemixPracticeDelivered: (callback: () => void) => () => void;
+      onRemixOpenChat: (callback: () => void) => () => void;
       checkMicPermission: () => Promise<string>;
       requestMicPermission: () => Promise<string>;
       checkAccessibilityPermission: () => Promise<boolean>;

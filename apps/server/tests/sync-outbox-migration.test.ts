@@ -40,7 +40,8 @@ describe("sync_outbox migration (v18)", () => {
       .get();
     expect(table).toBeDefined();
 
-    // Version was bumped.
+    // Version was bumped at least past this migration (later migrations —
+    // e.g. v19 Remix — move the final stamp further).
     const version = db
       .prepare("SELECT version FROM schema_version WHERE id = 1")
       .get() as { version: number };

@@ -1,3 +1,10 @@
+import { REMIX_PRESETS } from "@freestyle-voice/validations";
+import { FreestyleMark } from "@renderer/components/freestyle-mark";
+import {
+  REMIX_CHAT_STRIP,
+  REMIX_CHAT_SURFACE,
+  RemixChat,
+} from "@renderer/components/remix-chat";
 import { capture } from "@renderer/lib/analytics";
 import {
   apiFetch,
@@ -11,7 +18,7 @@ import {
   applyNeedsAppContextForCleanup,
   refreshNeedsAppContextForCleanup,
 } from "@renderer/lib/cleanup-app-context";
-import { Recorder } from "@renderer/lib/recorder";
+import { Recorder, RecorderSupersededError } from "@renderer/lib/recorder";
 import { Streamer, type StreamerConnectionState } from "@renderer/lib/streamer";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -22,6 +29,10 @@ import {
   normalizePillCancelMode,
   type PillCancelMode,
 } from "../../../shared/pill-cancel";
+import {
+  REMIX_HOLD_THRESHOLD_MS,
+  type RemixSelectionPayload,
+} from "../../../shared/remix";
 import { SETTINGS_KEYS } from "../../../shared/settings-keys";
 
 const BARS = 10;
@@ -180,10 +191,6 @@ const DELIVERED_TOTAL_MS = CHECK_LEAVE_AT_MS + CHECK_LEAVE_MS;
 const CANCELLED_MS = 140;
 const QUIET_MS = 120;
 
-const ENTER_MS = 260;
-const ENTER_BAR_STEP_MS = 12;
-const ENTER_BAR_DUR_MS = 180;
-
 const SILENCE_MS = 1600;
 const FLAT_EASE = 0.14;
 const ELAPSED_AFTER_MS = 60_000;
@@ -287,6 +294,14 @@ const PILL_CORE_WIDTH = 96;
 /** The expanded card, in the space `window.api.setPillExpanded` opens up. */
 const PILL_CARD_WIDTH = 300;
 /**
+ * How long a warning stays up before dismissing itself. The remix warning
+ * is a dead end — nothing to do but read it — so it leaves quickly. The
+ * dictation failure card can carry a Retry, and a button that vanishes while
+ * you are deciding is worse than one that lingers.
+ */
+const REMIX_WARNING_MS = 4500;
+const FAILURE_CARD_MS = 9000;
+/**
  * The cancel button lives at the left end of the capsule, and its space is
  * only taken while it's on screen. Opening it widens its slot to CANCEL_SLOT
  * (the disc plus a gap) and narrows the waveform's viewport by exactly
@@ -314,13 +329,11 @@ const STATUS_SLOT = STATUS_SIZE + STATUS_GAP;
 /**
  * The pill floats over arbitrary application windows, so it commits to a
  * single dark treatment in both themes rather than following the app theme —
- * a light pill reads as a blown-out blob over dark editors. The tint is the
- * brand's dark surface, translucent over a blur so it picks up a hint of
- * whatever is behind it.
+ * a light pill reads as a blown-out blob over dark editors.
  */
-const SURFACE = "rgba(22, 20, 15, 0.92)";
+const SURFACE = "rgba(22, 20, 15, 0.98)";
 const SURFACE_BORDER = "1px solid rgba(255, 255, 255, 0.10)";
-const BLUR = "blur(20px) saturate(180%)";
+const BLUR = "blur(20px) saturate(120%)";
 /** Cream ink, and the terracotta the palette reserves for failures. */
 const INK = "#F5F1E4";
 const ALERT = "#E0805F";
@@ -331,7 +344,9 @@ const ALERT = "#E0805F";
  */
 const BAR_COLOR = "#FFFFFF";
 
-const PILL_SHADOW = "0 2px 10px rgba(0, 0, 0, 0.22)";
+// No drop shadow: the capsule and cards sit flush on whatever is behind
+// them, separated by their hairline border alone.
+const PILL_SHADOW = "none";
 
 const pillInnerStyle: React.CSSProperties = {
   height: PILL_HEIGHT,
@@ -384,6 +399,55 @@ interface QueueEntry {
   promise: Promise<TranscribeResult>;
 }
 
+// ---------------------------------------------------------------------------
+// Remix
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a remix run has got to.
+ *
+ * The two ways in share a single hotkey and therefore a single opening state:
+ * the moment it goes down we don't yet know whether this is a tap (show the
+ * list) or a hold (record an instruction), so `capturing` optimistically does
+ * both — the card is up and the mic is running — and the key going up decides
+ * which of the two the user meant.
+ */
+type RemixPhase = "capturing" | "listening" | "running" | "chat" | "error";
+
+interface RemixSession {
+  id: number;
+  phase: RemixPhase;
+  /** The captured selection; null until the copy comes back. */
+  selection: string | null;
+  /** What is being applied, shown while `running`. */
+  label?: string;
+  transcript?: string;
+  title?: string;
+  body?: string;
+  /** A spoken or typed instruction the chat card sends on open. */
+  initialInstruction?: string | null;
+  /**
+   * The chat collapsed to its one-line activity strip. Voice runs start here
+   * — the user asked for something to happen, not for a chat window — and
+   * hovering the strip is what opens the full conversation.
+   */
+  minimized?: boolean;
+}
+
+/** A promise that something else resolves. Used to await the selection. */
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 export default function AppPage(): React.JSX.Element {
   const [state, setState] = useState<PillState>("idle");
   const stateRef = useRef<PillState>("idle");
@@ -413,6 +477,36 @@ export default function AppPage(): React.JSX.Element {
   const lastRecordingDurationRef = useRef(0);
 
   const [pendingCount, setPendingCount] = useState(0);
+
+  // ---- Remix ----
+  const [remix, setRemixState] = useState<RemixSession | null>(null);
+  const remixRef = useRef<RemixSession | null>(null);
+  const setRemix = useCallback((next: RemixSession | null) => {
+    remixRef.current = next;
+    setRemixState(next);
+  }, []);
+  /** Patch the live session, ignoring the call if it has since been torn down. */
+  const patchRemix = useCallback((patch: Partial<RemixSession>) => {
+    const current = remixRef.current;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    remixRef.current = next;
+    setRemixState(next);
+  }, []);
+  const remixDownAtRef = useRef(0);
+  const remixSeqRef = useRef(0);
+  const remixMicGenRef = useRef<number | null>(null);
+  /** Resolved by the `remix:selection` IPC, awaited by whatever runs. */
+  const remixSelectionRef = useRef<Deferred<string | null> | null>(null);
+  /** The full capture — selection plus the anchor the edit belongs to. */
+  const remixContextRef = useRef<RemixSelectionPayload | null>(null);
+  /** Guards against a second run being kicked off from the same session. */
+  const remixRunningRef = useRef(false);
+  /** Flips the card from "capturing" to "listening" once a press is a hold. */
+  const remixHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const remixStreamerRef = useRef<Streamer | null>(null);
+  const remixTransportRef = useRef(false);
+  const remixFinalRef = useRef<Deferred<string> | null>(null);
 
   const recorderRef = useRef(new Recorder());
   const streamerRef = useRef<Streamer | null>(null);
@@ -943,9 +1037,17 @@ export default function AppPage(): React.JSX.Element {
   // iterate a plain array instead of querying the DOM 60 times a second.
   // The flatline is not part of the bar buffer.
   const captureBarLines = useCallback((svg: SVGSVGElement | null) => {
-    barLinesRef.current = svg
-      ? Array.from(svg.querySelectorAll<SVGLineElement>("[data-bars] line"))
-      : [];
+    // Only ever *set* on attach, never cleared on detach. The waveform moves
+    // between two surfaces — the capsule and the remix card — and a detach
+    // that ran after the new element's attach would blank this and leave the
+    // visible row frozen. Holding a detached element instead is harmless: the
+    // draw loop writes attributes nobody renders until the next attach lands.
+    // Scope to `[data-bars] line` so the sibling flatline is left out of the
+    // buffer the draw loop iterates.
+    if (svg)
+      barLinesRef.current = Array.from(
+        svg.querySelectorAll<SVGLineElement>("[data-bars] line"),
+      );
   }, []);
 
   // One frame: work out what the bars should be aiming at, ease them toward
@@ -1274,7 +1376,14 @@ export default function AppPage(): React.JSX.Element {
   }, []);
 
   // ---- Hide pill ----
-  const hidePill = useCallback(() => {
+  /**
+   * Put every scrap of dictation state back to rest, without touching the pill
+   * window itself. Split out of `hidePill` for the one caller that needs the
+   * window left standing: the remix chord taking over a dictation that the
+   * shared home key started a few milliseconds earlier, where the pill is
+   * about to be reused for the remix card.
+   */
+  const resetDictation = useCallback(() => {
     setPillNotice(null);
     setCanRetry(false);
     setPillState("idle");
@@ -1302,8 +1411,12 @@ export default function AppPage(): React.JSX.Element {
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
     exitTimerRef.current = null;
     stopVisualization();
-    window.api.hidePill();
   }, [setPillNotice, stopVisualization, setPillState]);
+
+  const hidePill = useCallback(() => {
+    resetDictation();
+    window.api.hidePill();
+  }, [resetDictation]);
 
   /** Hide after the selected exit; modal/error paths still call hidePill(). */
   const dismissPill = useCallback(
@@ -1439,13 +1552,16 @@ export default function AppPage(): React.JSX.Element {
         // When session transport is active the streamer handles audio capture
         // directly — we only need the raw mic stream for the analyser. When
         // it's not (batch path), start the MediaRecorder so we get a WAV.
-        const stream = recordingSessionUsesTransportRef.current
-          ? await recorderRef.current.acquireStream()
-          : await recorderRef.current.start();
+        const rec = recorderRef.current;
+        const acquirePromise = recordingSessionUsesTransportRef.current
+          ? rec.acquireStream()
+          : rec.start();
+        const micGen = rec.generation();
+        const stream = await acquirePromise;
 
         if (!wantsMicRef.current) {
-          recorderRef.current.cancel();
-          recorderRef.current.releaseStream();
+          rec.cancel(micGen);
+          rec.releaseStream(micGen);
           void restoreSystemAudioSafely();
           streamerRef.current?.cancel();
           if (forReRecord) {
@@ -1456,8 +1572,8 @@ export default function AppPage(): React.JSX.Element {
         if (pendingCommitRef.current) {
           pendingCommitRef.current = false;
           wantsMicRef.current = false;
-          recorderRef.current.cancel();
-          recorderRef.current.releaseStream();
+          rec.cancel(micGen);
+          rec.releaseStream(micGen);
           void restoreSystemAudioSafely();
           streamerRef.current?.cancel();
           if (forReRecord) {
@@ -1477,6 +1593,7 @@ export default function AppPage(): React.JSX.Element {
           await getStreamer().startCapture(stream);
         } catch {}
       } catch (err) {
+        if (err instanceof RecorderSupersededError) return;
         pendingCommitRef.current = false;
         recorderRef.current.releaseStream();
         void restoreSystemAudioSafely();
@@ -1766,6 +1883,468 @@ export default function AppPage(): React.JSX.Element {
     dismissPill("cancelled");
   }, [dismissPill, restoreSystemAudioSafely]);
 
+  // ---- Remix ----
+  // A remix is not a dictation: it never enters the transcription queue,
+  // never reaches the plugin output pipeline, and its result replaces a
+  // selection rather than being inserted at a cursor. What it does share is the
+  // pill — the surface, the waveform, and the mic behind it.
+
+  const clearRemixHoldTimer = useCallback(() => {
+    if (remixHoldTimerRef.current) {
+      clearTimeout(remixHoldTimerRef.current);
+      remixHoldTimerRef.current = null;
+    }
+  }, []);
+
+  /** Tear the session down. `hide` is false only when an error card stays up. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: singleton
+  const getRemixStreamer = useCallback((): Streamer => {
+    if (!remixStreamerRef.current) {
+      remixStreamerRef.current = new Streamer(getApiBase(), getServerToken(), {
+        onConfig: (config) => {
+          remixTransportRef.current = config.sessionTransport;
+        },
+        onReady: () => {},
+        onPartial: (text) => {
+          if (remixRef.current && text) patchRemix({ transcript: text });
+        },
+        onFinal: (text) => {
+          if (remixRef.current && text.trim()) {
+            patchRemix({ transcript: text });
+          }
+          remixFinalRef.current?.resolve(text);
+          remixFinalRef.current = null;
+        },
+        onError: () => {
+          remixFinalRef.current?.resolve("");
+          remixFinalRef.current = null;
+        },
+      });
+    }
+    return remixStreamerRef.current;
+  }, []);
+
+  const endRemix = useCallback(
+    (options: { hide?: boolean } = {}) => {
+      if (!remixRef.current) return;
+      clearRemixHoldTimer();
+      remixRunningRef.current = false;
+      // Resolve any pending await so a run blocked on the selection unwinds
+      // instead of hanging on a session that no longer exists.
+      remixSelectionRef.current?.resolve(null);
+      remixSelectionRef.current = null;
+      remixFinalRef.current?.resolve("");
+      remixFinalRef.current = null;
+      remixContextRef.current = null;
+      if (remixMicGenRef.current !== null) {
+        recorderRef.current.cancel(remixMicGenRef.current);
+        recorderRef.current.releaseStream(remixMicGenRef.current);
+        remixMicGenRef.current = null;
+      }
+      remixStreamerRef.current?.cancel();
+      window.api?.setRemixRouteKeys(false);
+      setRemix(null);
+      stopVisualization();
+      if (options.hide !== false) window.api?.hidePill();
+    },
+    [clearRemixHoldTimer, setRemix, stopVisualization],
+  );
+
+  const closeRemix = useCallback(() => endRemix(), [endRemix]);
+  const expandRemixChat = useCallback(() => {
+    if (remixRef.current?.minimized !== false) {
+      patchRemix({ minimized: false });
+    }
+  }, [patchRemix]);
+  const minimizeRemixChat = useCallback(() => {
+    if (remixRef.current && remixRef.current.minimized !== true) {
+      patchRemix({ minimized: true });
+    }
+  }, [patchRemix]);
+
+  /**
+   * Show a failure and leave the card up. Unlike the phases above this one
+   * outlives the keypress: it waits for Escape, the Dismiss button, another
+   * press of the hotkey — or the REMIX_WARNING_MS timeout, whichever lands
+   * first.
+   */
+  const failRemix = useCallback(
+    (title: string, body: string) => {
+      clearRemixHoldTimer();
+      remixRunningRef.current = false;
+      if (remixMicGenRef.current !== null) {
+        recorderRef.current.cancel(remixMicGenRef.current);
+        recorderRef.current.releaseStream(remixMicGenRef.current);
+        remixMicGenRef.current = null;
+      }
+      remixStreamerRef.current?.cancel();
+      window.api?.setRemixRouteKeys(false);
+      stopVisualization();
+      setRemix({
+        id: remixRef.current?.id ?? ++remixSeqRef.current,
+        phase: "error",
+        selection: null,
+        title,
+        body,
+      });
+    },
+    [clearRemixHoldTimer, setRemix, stopVisualization],
+  );
+
+  /**
+   * Send the edited text back to the app the selection came from.
+   *
+   * The paste is the commit point: main hides the pill from inside it, so the
+   * card is gone by the time the text lands and the user never sees the pill
+   * sitting over their own document mid-replace.
+   */
+  const deliverRemixResult = useCallback(
+    async (text: string) => {
+      const sessionId = remixRef.current?.id;
+      const pasted = await window.api.pasteRemixResult(text);
+      if (remixRef.current?.id !== sessionId) return;
+      if (!pasted) {
+        failRemix(
+          "Couldn't replace the text",
+          "The edit is on your clipboard — paste it yourself.",
+        );
+        return;
+      }
+      endRemix({ hide: false });
+    },
+    [endRemix, failRemix],
+  );
+
+  /**
+   * Run one remix over the captured selection.
+   *
+   * Waits on the selection rather than requiring it: the copy is still in
+   * flight for the first ~100ms of every session, which is well inside the
+   * time it takes to tap a number key.
+   */
+  /**
+   * The selection, once the copy has answered — or null, having already put
+   * the refusal on screen.
+   *
+   * Every path into a remix goes through here, because a remix without a
+   * selection has no subject: there is nothing to edit, nothing to paste over,
+   * and nothing worth spending a transcription or a model call on. Waiting
+   * rather than requiring is deliberate — the copy is still in flight for the
+   * first fraction of a second of every session.
+   */
+  const requireSelection = useCallback(
+    async (sessionId: number): Promise<string | null> => {
+      const selection = await (remixSelectionRef.current?.promise ??
+        Promise.resolve(remixRef.current?.selection ?? null));
+      if (remixRef.current?.id !== sessionId) return null;
+      if (!selection) {
+        failRemix(
+          "Nothing selected",
+          "Highlight some text in any app first, then press the hotkey.",
+        );
+        return null;
+      }
+      return selection;
+    },
+    [failRemix],
+  );
+
+  const runRemix = useCallback(
+    async (options: {
+      remixId?: string;
+      instruction?: string;
+      label: string;
+    }) => {
+      if (remixRunningRef.current) return;
+      const session = remixRef.current;
+      if (!session) return;
+      remixRunningRef.current = true;
+      capture("remix_message_sent", {
+        source: "preset",
+        preset: options.remixId ?? null,
+      });
+      patchRemix({ phase: "running", label: options.label });
+      startBarAnimation("speaking");
+
+      const selection = await requireSelection(session.id);
+      if (!selection) return;
+
+      try {
+        const res = await apiFetch("/api/remix/transform", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: selection,
+            remixId: options.remixId,
+            instruction: options.instruction,
+            appName: remixContextRef.current?.appName ?? null,
+          }),
+        });
+        if (remixRef.current?.id !== session.id) return;
+
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as {
+            error?: string;
+            detail?: string;
+          } | null;
+          // Cloud auth and usage limits have their own interactive prompts in
+          // the main process; the card would only be a worse version of them.
+          if (res.status === 401 && body?.error === "cloud_auth_required") {
+            endRemix();
+            void window.api.cloudPromptSignIn();
+            return;
+          }
+          if (res.status === 429 && body?.error === "usage_exceeded") {
+            endRemix();
+            void window.api.cloudPromptUpgrade();
+            return;
+          }
+          failRemix(
+            "Remix failed",
+            body?.detail || `The model couldn't run that (${res.status}).`,
+          );
+          return;
+        }
+
+        const data = (await res.json()) as { text?: string };
+        const edited = (data.text ?? "").trim();
+        if (remixRef.current?.id !== session.id) return;
+        if (!edited) {
+          failRemix("Remix failed", "The model returned nothing.");
+          return;
+        }
+        await deliverRemixResult(edited);
+      } catch (err) {
+        if (remixRef.current?.id !== session.id) return;
+        failRemix(
+          "Remix failed",
+          err instanceof Error ? err.message : "Something went wrong.",
+        );
+      }
+    },
+    [
+      deliverRemixResult,
+      endRemix,
+      failRemix,
+      patchRemix,
+      requireSelection,
+      startBarAnimation,
+    ],
+  );
+
+  /**
+   * Hand the session over to the chat card (the agent lane). Everything the
+   * glanceable card was doing stops — mic, waveform, idle timers, the claimed
+   * route digits — because the card is now a conversation, not a prompt.
+   */
+  const openRemixChat = useCallback(
+    (instruction: string | null, options: { minimized?: boolean } = {}) => {
+      clearRemixHoldTimer();
+      remixRunningRef.current = false;
+      if (remixMicGenRef.current !== null) {
+        recorderRef.current.cancel(remixMicGenRef.current);
+        recorderRef.current.releaseStream(remixMicGenRef.current);
+        remixMicGenRef.current = null;
+      }
+      stopVisualization();
+      window.api?.setRemixRouteKeys(false);
+      patchRemix({
+        phase: "chat",
+        initialInstruction: instruction,
+        minimized: options.minimized === true,
+      });
+    },
+    [clearRemixHoldTimer, patchRemix, stopVisualization],
+  );
+
+  /**
+   * Transcribe the held instruction, then hand it to the agent lane.
+   *
+   * This goes through the one-shot REST path rather than the streaming session
+   * the dictation flow uses. An instruction is a second or two of speech whose
+   * text is never pasted anywhere — partials buy nothing, and the streaming
+   * session belongs to dictation, which may well have one in flight.
+   *
+   * Unlike a preset, a spoken instruction does not require a selection: with
+   * nothing highlighted the agent writes at the cursor, answers in chat, or
+   * uses the clipboard.
+   */
+  const runSpokenRemix = useCallback(async () => {
+    const session = remixRef.current;
+    if (!session) return;
+    const micGen = remixMicGenRef.current;
+    const durationMs = Math.round(performance.now() - remixDownAtRef.current);
+    patchRemix({ phase: "running", label: "Transcribing…" });
+    startBarAnimation("speaking");
+    // The dictation stop cue, at the same moment: the held instruction has
+    // been committed. Remix never ducks system audio, so no restore first.
+    void playTone("stop");
+
+    const streamer = remixStreamerRef.current;
+    let finalPromise: Promise<string> | null = null;
+    let final: Deferred<string> | null = null;
+    if (streamer?.isConnected() && remixTransportRef.current) {
+      final = deferred<string>();
+      remixFinalRef.current = final;
+      streamer.commit();
+      finalPromise = Promise.race([
+        final.promise,
+        new Promise<string>((resolve) => setTimeout(() => resolve(""), 8000)),
+      ]);
+    } else {
+      streamer?.cancel();
+    }
+
+    // Wait for the capture to land — the chat card needs the anchor even
+    // when the selection itself comes back empty.
+    await (remixSelectionRef.current?.promise ?? Promise.resolve(null));
+    if (remixRef.current?.id !== session.id) return;
+
+    let wav: Blob | null = null;
+    try {
+      wav = recorderRef.current.isRecording()
+        ? await recorderRef.current.stop(micGen ?? undefined)
+        : null;
+    } catch {
+      wav = null;
+    }
+    recorderRef.current.releaseStream(micGen ?? undefined);
+    if (remixRef.current?.id !== session.id) return;
+
+    let instruction = "";
+    if (finalPromise) {
+      instruction = (await finalPromise).trim();
+      if (remixFinalRef.current === final) remixFinalRef.current = null;
+      if (remixRef.current?.id !== session.id) return;
+    }
+
+    if (!instruction && wav) {
+      try {
+        const res = await apiFetch("/api/transcribe", {
+          method: "POST",
+          body: wav,
+          headers: {
+            "Content-Type": "audio/wav",
+            "x-audio-duration-ms": String(durationMs),
+            "x-skip-post-process": "true",
+          },
+        });
+        if (remixRef.current?.id !== session.id) return;
+        if (res.ok) {
+          const data = (await res.json()) as { raw?: string; cleaned?: string };
+          instruction = (data.raw || data.cleaned || "").trim();
+        }
+      } catch {
+        instruction = "";
+      }
+    }
+
+    if (remixRef.current?.id !== session.id) return;
+    if (!instruction) {
+      failRemix(
+        "Didn't catch that",
+        "Nothing came through — hold the hotkey and say what to do.",
+      );
+      return;
+    }
+    // A spoken run opens minimized: the user asked for something to be done,
+    // not for a window. The strip narrates the run; hovering it opens the
+    // full conversation.
+    openRemixChat(instruction, { minimized: true });
+  }, [failRemix, openRemixChat, patchRemix, startBarAnimation]);
+
+  const beginRemix = useCallback(() => {
+    // A dictation owns the pill while it is up. Rather than fight over it,
+    // remix stands down — the user can press again a moment later.
+    if (stateRef.current !== "idle" || pillActiveRef.current) {
+      window.api?.setRemixRouteKeys(false);
+      return;
+    }
+    // A second press while an error card is up means "try again", so tear the
+    // old session down first rather than merging into it.
+    if (remixRef.current) endRemix({ hide: false });
+
+    remixDownAtRef.current = performance.now();
+    remixSelectionRef.current = deferred<string | null>();
+    setRemix({
+      id: ++remixSeqRef.current,
+      phase: "capturing",
+      selection: null,
+    });
+
+    // Once the press has outlived the tap threshold it can only be a hold, so
+    // the card commits to that reading rather than waiting for the release —
+    // the user is already talking by then and should be able to see it.
+    clearRemixHoldTimer();
+    remixHoldTimerRef.current = setTimeout(() => {
+      remixHoldTimerRef.current = null;
+      if (remixRef.current?.phase === "capturing") {
+        patchRemix({ phase: "listening" });
+        // The same audio cue dictation gives on recording start — played at
+        // the hold threshold so a tap (which opens the chat) stays silent.
+        void playTone("start");
+      }
+    }, REMIX_HOLD_THRESHOLD_MS);
+
+    // The mic starts now, before we know this is a hold: a recording that only
+    // began once the threshold had passed would clip the first syllable off
+    // every spoken remix.
+    const rec = recorderRef.current;
+    const startPromise = rec.start();
+    const micGen = rec.generation();
+    remixMicGenRef.current = micGen;
+    void startPromise
+      .then((stream) => {
+        const session = remixRef.current;
+        const owned =
+          session &&
+          remixMicGenRef.current === micGen &&
+          micGen === rec.generation();
+        if (!owned) {
+          rec.cancel(micGen);
+          rec.releaseStream(micGen);
+          if (remixMicGenRef.current === micGen) remixMicGenRef.current = null;
+          return;
+        }
+        if (session.phase === "capturing" || session.phase === "listening") {
+          startListening(stream);
+          void getRemixStreamer().startCapture(stream);
+        }
+      })
+      .catch((err) => {
+        if (err instanceof RecorderSupersededError) return;
+        // No mic is survivable — the preset list doesn't need one. Show the
+        // idle bars so the card doesn't look broken, and let the footer's own
+        // copy be the only thing that mentions speaking.
+        if (remixRef.current) startBarAnimation("listening");
+      });
+  }, [
+    clearRemixHoldTimer,
+    endRemix,
+    getRemixStreamer,
+    patchRemix,
+    setRemix,
+    startBarAnimation,
+    startListening,
+  ]);
+
+  const finishRemixPress = useCallback(() => {
+    clearRemixHoldTimer();
+    const session = remixRef.current;
+    if (!session) return;
+    if (session.phase !== "capturing" && session.phase !== "listening") return;
+
+    const heldMs = performance.now() - remixDownAtRef.current;
+    if (heldMs < REMIX_HOLD_THRESHOLD_MS) {
+      // A tap. Throw the fragment of audio away and open the chat card — the
+      // ChatGPT-style input, with the presets as chips inside it.
+      remixStreamerRef.current?.cancel();
+      openRemixChat(null);
+      return;
+    }
+    void runSpokenRemix();
+  }, [clearRemixHoldTimer, openRemixChat, runSpokenRemix]);
+
   // ---- Preferences ----
   const applyPillPosition = useCallback((pos: string | null | undefined) => {
     const isTop =
@@ -1850,6 +2429,9 @@ export default function AppPage(): React.JSX.Element {
         streamerRef.current = null;
         supportsSessionTransportRef.current = false;
         getStreamer();
+        remixStreamerRef.current?.destroy();
+        remixStreamerRef.current = null;
+        remixTransportRef.current = false;
       });
     });
     return () => {
@@ -1882,6 +2464,10 @@ export default function AppPage(): React.JSX.Element {
   // ---- Hotkey handlers ----
   useEffect(() => {
     const removeDown = window.api.onHotkeyDown(() => {
+      // Dictation is the primary use of this pill; a remix card sitting in
+      // front of it (most likely one the user has already read and moved on
+      // from) gets out of the way rather than blocking the press.
+      if (remixRef.current) endRemix({ hide: false });
       // hidePill() clears pillActiveRef before React re-renders idle state.
       if (!pillActiveRef.current) {
         stateRef.current = "idle";
@@ -1927,6 +2513,12 @@ export default function AppPage(): React.JSX.Element {
       }
     });
     const removeCancel = window.api.onPillCancel(() => {
+      // Escape reaches whichever surface is up. A remix owns the pill only
+      // when there is no dictation, so there is never a question of which.
+      if (remixRef.current) {
+        endRemix();
+        return;
+      }
       if (stateRef.current !== "idle") cancelRecording();
     });
     return () => {
@@ -1938,10 +2530,113 @@ export default function AppPage(): React.JSX.Element {
     startRecording,
     commitRecording,
     cancelRecording,
+    endRemix,
     dismissPill,
     isTranscriptionIdle,
     setPillNotice,
   ]);
+
+  // ---- Remix hotkey handlers ----
+  useEffect(() => {
+    const removeDown = window.api.onRemixDown(beginRemix);
+    const removeUp = window.api.onRemixUp(finishRemixPress);
+    const removeSelection = window.api.onRemixSelection((payload) => {
+      if (!remixRef.current) return;
+      remixContextRef.current = payload;
+      remixSelectionRef.current?.resolve(payload.text);
+      // A null selection is no longer a dead end: presets still require one
+      // (and say so when picked), but a spoken or typed request goes to the
+      // agent, which can write at the cursor or answer in chat instead.
+      patchRemix({ selection: payload.text });
+    });
+    // A route shortcut: the chord plus a digit. It answers the question the
+    // microphone was open to ask, so the recording is dropped on the spot.
+    // The selection may still be in flight — the copy waits for the chord to
+    // be released — and `runRemix` waits for it, which is why pressing a
+    // digit mid-hold works without the card having to say anything.
+    const removeRoute = window.api.onRemixRoute((index) => {
+      const preset = REMIX_PRESETS[index];
+      const phase = remixRef.current?.phase;
+      if (
+        !preset ||
+        !phase ||
+        phase === "running" ||
+        phase === "chat" ||
+        phase === "error"
+      ) {
+        return;
+      }
+      if (remixMicGenRef.current !== null) {
+        recorderRef.current.cancel(remixMicGenRef.current);
+        recorderRef.current.releaseStream(remixMicGenRef.current);
+        remixMicGenRef.current = null;
+      }
+      void runRemix({ remixId: preset.id, label: preset.label });
+    });
+
+    // The persistent bar was hovered: open the chat card fresh. The capture
+    // is already in flight (main kicked it off before sending this).
+    const removeOpenChat = window.api.onRemixOpenChat(() => {
+      if (stateRef.current !== "idle" || pillActiveRef.current) return;
+      if (remixRef.current) {
+        patchRemix({ phase: "chat", minimized: false });
+        return;
+      }
+      remixSelectionRef.current = deferred<string | null>();
+      setRemix({
+        id: ++remixSeqRef.current,
+        phase: "chat",
+        selection: null,
+        initialInstruction: null,
+        minimized: false,
+      });
+    });
+
+    // A dictation began on the shared home key and this chord is taking over.
+    const removeSupersede = window.api.onRemixSupersede(() => {
+      if (stateRef.current === "idle" && !pillActiveRef.current) return;
+      recorderRef.current.cancel();
+      recorderRef.current.releaseStream();
+      void restoreSystemAudioSafely();
+      streamerRef.current?.cancel();
+      window.api?.sendRecordingCancelled();
+      resetDictation();
+    });
+    return () => {
+      removeDown();
+      removeUp();
+      removeSelection();
+      removeRoute();
+      removeOpenChat();
+      removeSupersede();
+    };
+  }, [
+    beginRemix,
+    finishRemixPress,
+    patchRemix,
+    resetDictation,
+    restoreSystemAudioSafely,
+    runRemix,
+    setRemix,
+  ]);
+
+  // ---- Warnings see themselves out ----
+  // A warning has said everything it has to say the moment it is read. Leaving
+  // it up turns the pill into something the user has to go and clear, on top
+  // of whatever they were doing — so both cards time out. The remix warning
+  // carries no action and goes sooner; the dictation failure can offer a Retry,
+  // so it waits long enough for that to be a real choice.
+  useEffect(() => {
+    if (remix?.phase !== "error") return;
+    const timer = setTimeout(() => endRemix(), REMIX_WARNING_MS);
+    return () => clearTimeout(timer);
+  }, [remix?.phase, endRemix]);
+
+  useEffect(() => {
+    if (state !== "error") return;
+    const timer = setTimeout(hidePill, FAILURE_CARD_MS);
+    return () => clearTimeout(timer);
+  }, [state, hidePill]);
 
   // ---- Cleanup on unmount ----
   const mountedRef = useRef(true);
@@ -1955,6 +2650,8 @@ export default function AppPage(): React.JSX.Element {
           recorderRef.current.destroy();
           streamerRef.current?.destroy();
           streamerRef.current = null;
+          remixStreamerRef.current?.destroy();
+          remixStreamerRef.current = null;
         }
       }, 0);
     };
@@ -1970,8 +2667,24 @@ export default function AppPage(): React.JSX.Element {
   // sits over whatever the user is actually doing, so it only ever earns a
   // glyph, and the words behind it are in the tooltip and to screen readers.
   const isFreestyleCloud = providerCategoryRef.current === "freestyle_cloud";
-  const showCard = state === "error";
-  const active = state !== "idle";
+  const showErrorCard = state === "error";
+  // A remix replaces the capsule outright: its own card carries the waveform,
+  // so there is nothing left for the capsule to say while one is up.
+  const showRemixCard = remix !== null;
+  const showRemixChat = remix?.phase === "chat";
+  const remixChatMini = showRemixChat && remix?.minimized === true;
+  const showCard = showErrorCard || showRemixCard;
+  const active = state !== "idle" || showRemixCard;
+
+  // The minimized chat strip's current height: the one-line default while the
+  // agent narrates, grown by RemixChat to fit the final message once a run
+  // settles. The surface below sizes the strip from this.
+  const [remixMiniHeight, setRemixMiniHeight] = useState<number>(
+    REMIX_CHAT_STRIP.height,
+  );
+  useEffect(() => {
+    if (!showRemixChat) setRemixMiniHeight(REMIX_CHAT_STRIP.height);
+  }, [showRemixChat]);
 
   // Hold the initial hidden state for one frame so the enter transition runs.
   const [entered, setEntered] = useState(false);
@@ -2066,20 +2779,34 @@ export default function AppPage(): React.JSX.Element {
   };
   const card = { title: cardTitle, body: cardBody, canRetry };
 
-  const accessibleStatus = showCard
-    ? `${cardTitle}. ${cardBody}`
-    : exiting === "delivered"
-      ? "Dictation delivered"
-      : (statusLabel ??
-        (micSilent
-          ? "No audio from your microphone"
-          : state === "initializing"
-            ? "Preparing microphone"
-            : state === "recording"
-              ? "Listening"
-              : state === "transcribing"
-                ? "Transcribing"
-                : ""));
+  const remixStatus = !remix
+    ? null
+    : remix.phase === "error"
+      ? `${remix.title}. ${remix.body}`
+      : remix.phase === "running"
+        ? `Applying ${remix.label ?? "remix"}`
+        : remix.phase === "listening" || remix.phase === "capturing"
+          ? "Listening for a remix"
+          : remix?.phase === "chat"
+            ? "Remix chat"
+            : "Remix";
+
+  const accessibleStatus = remixStatus
+    ? remixStatus
+    : showErrorCard
+      ? `${cardTitle}. ${cardBody}`
+      : exiting === "delivered"
+        ? "Dictation delivered"
+        : (statusLabel ??
+          (micSilent
+            ? "No audio from your microphone"
+            : state === "initializing"
+              ? "Preparing microphone"
+              : state === "recording"
+                ? "Listening"
+                : state === "transcribing"
+                  ? "Transcribing"
+                  : ""));
 
   // ---- Room for the card ----
   // The capsule, status mark and all, fits the pill window as it is; only the
@@ -2088,37 +2815,54 @@ export default function AppPage(): React.JSX.Element {
   // `roomReady` is that handshake; giving the room back waits for the card to
   // finish leaving.
   const [roomReady, setRoomReady] = useState(false);
+  const chatSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const cardSurfaceRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!showCard) {
       setRoomReady(false);
       const timer = setTimeout(() => window.api?.setPillExpanded(false), 300);
       return () => clearTimeout(timer);
     }
-    window.api?.setPillExpanded(true);
+    // A remix session takes the full chat-sized room for its whole life and
+    // gives it back only once everything has animated away. Resizing the
+    // window mid-session (card to chat, chat to strip) paints at least one
+    // stale compositor frame at the new origin — a visible blink — so every
+    // in-session size change is DOM animation inside room that already
+    // exists, and the two resizes that remain happen while the surfaces are
+    // invisible.
+    window.api?.setPillExpanded(true, showRemixCard ? "remix-chat" : "card");
     // Two frames: one for the resize to land, one for the browser to lay the
     // card out at its start values so the transition has something to run
     // from. Setting both in the same frame would jump straight to the end.
     //
     // Both ids are held, because a dismiss (or an unmount) landing in the
     // ~16ms between them would otherwise leave the inner frame uncancelled
-    // and still writing state.
+    // and still writing state. The timer backstops a throttled window whose
+    // rAF callbacks never fire.
     let inner = 0;
     const outer = requestAnimationFrame(() => {
       inner = requestAnimationFrame(() => setRoomReady(true));
     });
+    const fallback = window.setTimeout(() => setRoomReady(true), 120);
     return () => {
       cancelAnimationFrame(outer);
       cancelAnimationFrame(inner);
+      clearTimeout(fallback);
     };
-  }, [showCard]);
+  }, [showCard, showRemixCard]);
 
   const cardOpen = showCard && roomReady;
+  const errorCardOpen = showErrorCard && roomReady;
 
+  // The failure card can sit there for as long as the user takes to answer it,
+  // and the waveform underneath is neither visible nor meaningful by then —
+  // park the draw loop once the capsule has finished fading out. The remix
+  // card is the opposite case: the bars move *into* it, so leave them running.
   useEffect(() => {
-    if (!showCard) return;
+    if (!showErrorCard || showRemixCard) return;
     const timer = setTimeout(stopVisualization, 260);
     return () => clearTimeout(timer);
-  }, [showCard, stopVisualization]);
+  }, [showErrorCard, showRemixCard, stopVisualization]);
 
   // Grow the card out of the capsule it replaces, not out of thin air.
   const transformOrigin = `${pillSide === "right" ? "right" : "center"} ${
@@ -2185,7 +2929,6 @@ export default function AppPage(): React.JSX.Element {
                 strokeLinecap="round"
                 style={
                   {
-                    "--enter-delay": `${(BARS - 1 - index) * ENTER_BAR_STEP_MS}ms`,
                     "--close-delay": `${closeDelay}ms`,
                   } as React.CSSProperties
                 }
@@ -2201,6 +2944,161 @@ export default function AppPage(): React.JSX.Element {
     pillAlign === "start" ? "items-start" : "items-end"
   } ${pillSide === "right" ? "justify-end pr-3" : "justify-center"}`;
 
+  // Surfaces rise off the edge they are anchored to, so the motion always
+  // reads as coming from the screen edge rather than from an arbitrary
+  // direction: negative (downward) when the pill lives at the top.
+  const riseBy = (distance: number): React.CSSProperties =>
+    ({
+      "--pill-rise": `${pillAlign === "start" ? -distance : distance}px`,
+    }) as React.CSSProperties;
+
+  // The card surface both the failure and the remix card are cut from.
+  //
+  // Note what is deliberately *not* here: `WebkitAppRegion`. Both cards stay
+  // mounted while hidden so they have something to animate out of, and a
+  // draggable region is carved out of the window by the compositor from the
+  // element geometry alone — `pointer-events: none` and `opacity: 0` do not
+  // exempt it. A hidden card is laid out directly over the capsule, so
+  // declaring the region here made it swallow every mouse event the pill
+  // should have seen: no hover to reveal the cancel button, and no click
+  // landing on it. Each card claims the region only while it is really up.
+  const cardSurfaceStyle: React.CSSProperties = {
+    // The card travels a little further than the capsule, being bigger.
+    ...riseBy(14),
+    width: PILL_CARD_WIDTH,
+    borderRadius: 20,
+    background: SURFACE,
+    border: SURFACE_BORDER,
+    backdropFilter: BLUR,
+    WebkitBackdropFilter: BLUR,
+    transformOrigin,
+    marginBottom: pillAlign === "end" ? 8 : 0,
+    marginTop: pillAlign === "start" ? 8 : 0,
+    cursor: "grab",
+  } as React.CSSProperties;
+
+  // ---- Remix card content ----
+  // Latched for the same reason the failure card's is: the session is cleared
+  // the instant a remix lands, and re-rendering an empty card would blank it
+  // a beat before it has finished animating away.
+  const [remixView, setRemixView] = useState<RemixSession | null>(null);
+  if (remix && remix !== remixView) setRemixView(remix);
+  useEffect(() => {
+    if (remix || !remixView) return;
+    const timer = setTimeout(() => setRemixView(null), 320);
+    return () => clearTimeout(timer);
+  }, [remix, remixView]);
+  const remixOpen = showRemixCard && roomReady;
+
+  const viewIsChat = remixView?.phase === "chat";
+
+  // The dictation card and the chat are separate surface layers, each
+  // latching the last content it showed: a phase flip animates the old
+  // surface out underneath the new one rising — a handover, never an
+  // instant restyle of one box.
+  const [cardView, setCardView] = useState<RemixSession | null>(null);
+  const liveCardView =
+    remixView && remixView.phase !== "chat" ? remixView : null;
+  if (liveCardView && liveCardView !== cardView) setCardView(liveCardView);
+  useEffect(() => {
+    if (liveCardView || !cardView) return;
+    const timer = setTimeout(() => setCardView(null), 320);
+    return () => clearTimeout(timer);
+  }, [liveCardView, cardView]);
+
+  const [chatView, setChatView] = useState<RemixSession | null>(null);
+  const liveChatView = remixView?.phase === "chat" ? remixView : null;
+  if (liveChatView && liveChatView !== chatView) setChatView(liveChatView);
+  useEffect(() => {
+    if (liveChatView || !chatView) return;
+    const timer = setTimeout(() => setChatView(null), 320);
+    return () => clearTimeout(timer);
+  }, [liveChatView, chatView]);
+
+  const [chatMiniVisual, setChatMiniVisual] = useState(true);
+  const chatWasLiveRef = useRef(false);
+  useEffect(() => {
+    const wasLive = chatWasLiveRef.current;
+    chatWasLiveRef.current = showRemixChat;
+    if (!viewIsChat) {
+      setChatMiniVisual(true);
+      return;
+    }
+    if (!showRemixChat) return;
+    if (!wasLive || remixChatMini) {
+      setChatMiniVisual(remixChatMini);
+      return;
+    }
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setChatMiniVisual(false));
+    });
+    // rAF only fires while the compositor produces frames; a throttled or
+    // occluded window would otherwise never finish the morph.
+    const fallback = window.setTimeout(() => setChatMiniVisual(false), 120);
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+      clearTimeout(fallback);
+    };
+  }, [viewIsChat, showRemixChat, remixChatMini]);
+
+  const remixTranscript = cardView?.transcript?.trim() ?? "";
+  const remixHint =
+    cardView?.phase === "running"
+      ? (cardView.label ?? "Working…")
+      : "Listening…";
+
+  // ---- Hot-rect pass-through ----
+  // The held remix room is mostly empty when only the strip or the dictation
+  // card is showing; report the surface the pointer can land on, and main
+  // keeps the rest of the window click-through. The fully open chat owns the
+  // whole window, matching the old chat-sized window exactly.
+  const chatFullyOpen = remixOpen && viewIsChat && !chatMiniVisual;
+  const reportHotRectRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!showRemixCard) return;
+    if (chatFullyOpen) {
+      reportHotRectRef.current = () => {};
+      window.api?.setPillHotRect?.(null);
+      return;
+    }
+    const el = viewIsChat ? chatSurfaceRef.current : cardSurfaceRef.current;
+    if (!el) return;
+    const report = (): void => {
+      const rect = el.getBoundingClientRect();
+      // A little forgiveness around the edges so a pointer aiming for the
+      // surface doesn't fall through just short of it.
+      window.api?.setPillHotRect?.({
+        x: Math.floor(rect.x) - 8,
+        y: Math.floor(rect.y) - 8,
+        width: Math.ceil(rect.width) + 16,
+        height: Math.ceil(rect.height) + 16,
+      });
+    };
+    reportHotRectRef.current = report;
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showRemixCard, chatFullyOpen, viewIsChat]);
+
+  // The pointer arriving flips the window interactive (forwarded events on
+  // macOS/Windows, the main-process cursor poll everywhere); leaving hands
+  // the empty room back to whatever is underneath.
+  const disarmHotRect = useCallback(
+    () => window.api?.setPillHotRect?.(null),
+    [],
+  );
+  const rearmHotRect = useCallback(() => reportHotRectRef.current(), []);
+  useEffect(() => {
+    return window.api?.onPillHotEnter?.(() => {
+      if (remixRef.current?.phase === "chat" && remixRef.current.minimized) {
+        expandRemixChat();
+      }
+    });
+  }, [expandRemixChat]);
+
   return (
     <div className="relative h-screen w-screen select-none overflow-hidden">
       <style>
@@ -2212,34 +3110,135 @@ export default function AppPage(): React.JSX.Element {
              a crossfade of two equals. */
           .pill-layer { pointer-events: none; }
 
+          /* The summon.
+             A surface arrives by rising off the screen edge it is anchored to,
+             coming up to size with a little overshoot and resolving out of a
+             soft blur — three cheap things that together read as the pill
+             being conjured rather than switched on. --pill-rise carries the
+             direction, so a top-anchored pill drops in and a bottom-anchored
+             one lifts.
+
+             Leaving retraces it: back toward the edge, back into the blur,
+             but over a shorter distance and a shorter time and with no
+             overshoot. Something on its way out shouldn't ask for the
+             attention that something arriving does — the exit should be over
+             before you have finished looking away from it. */
           .pill-surface {
             opacity: 0;
-            transform: scale(0.96);
-            transition: opacity 140ms ease, transform 140ms cubic-bezier(0.4, 0, 1, 1);
+            transform: scale(0.93)
+              translateY(calc(var(--pill-rise, 10px) * 0.55));
+            filter: blur(3px);
+            transition: opacity 130ms ease,
+              transform 170ms cubic-bezier(0.36, 0, 0.66, -0.2),
+              filter 130ms ease;
             pointer-events: none;
           }
           .pill-surface[data-show="true"] {
             opacity: 1;
             transform: none;
-            transition: opacity ${ENTER_MS - 100}ms ease,
-                        transform ${ENTER_MS}ms cubic-bezier(0.22, 1, 0.36, 1);
+            filter: blur(0);
+            /* An overshoot curve on transform only. Opacity and blur land
+               sooner, so the surface is already readable while it is still
+               settling — the motion is felt more than watched. */
+            transition: opacity 180ms ease,
+              transform 380ms cubic-bezier(0.22, 1.12, 0.36, 1),
+              filter 220ms ease;
             pointer-events: auto;
           }
+          /* Contents follow the surface in, a beat behind and staggered, so
+             the card assembles rather than appearing whole. Small distances
+             only: this should register as depth, not as a sequence. */
+          .pill-rise {
+            opacity: 0;
+            transform: translateY(5px);
+            transition: opacity 160ms ease, transform 160ms ease;
+          }
+          .pill-surface[data-show="true"] .pill-rise {
+            opacity: 1;
+            transform: none;
+            transition: opacity 240ms ease,
+              transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+          }
+          .pill-surface[data-show="true"] .pill-rise-1 { transition-delay: 50ms; }
+          .pill-surface[data-show="true"] .pill-rise-2 { transition-delay: 95ms; }
 
+          /* The chat surface morphs between the one-line strip and the full
+             card, so size and shape join the transition — hover-expand should
+             read as the strip growing into the conversation, not as one
+             surface being swapped for another. */
+          .pill-card.pill-chat-morph,
+          .pill-card.pill-chat-morph[data-show="true"] {
+            transition: opacity 180ms ease,
+              transform 380ms cubic-bezier(0.22, 1.12, 0.36, 1),
+              filter 220ms ease,
+              width 320ms cubic-bezier(0.3, 0.9, 0.3, 1),
+              height 320ms cubic-bezier(0.3, 0.9, 0.3, 1),
+              border-radius 320ms cubic-bezier(0.3, 0.9, 0.3, 1);
+          }
+
+          /* ---- Remix card ---- */
+
+          /* A column whose order follows the anchored edge, so the waveform
+             always ends up against the edge that stays still while the window
+             grows — which is what lets the bars hold their position on screen
+             as the capsule becomes the box. */
+          .pill-remix-body {
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+          }
+          .pill-remix-body[data-anchor="start"] {
+            flex-direction: column-reverse;
+          }
+
+          /* The bars keep the capsule's own width and height. Only the room
+             around them changes. */
+          .pill-remix-wave {
+            display: flex;
+            justify-content: center;
+            height: ${SVG_HEIGHT}px;
+          }
+
+          .pill-remix-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 12.5px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            color: rgba(245, 241, 228, 0.92);
+          }
+          .pill-remix-brand svg { color: rgba(245, 241, 228, 0.85); }
+
+          .pill-remix-transcript {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            overflow: hidden;
+            min-height: 16px;
+            max-height: 47px;
+            font-size: 11.5px;
+            line-height: 1.35;
+            color: rgba(245, 241, 228, 0.72);
+          }
+          .pill-remix-transcript span {
+            white-space: normal;
+            overflow-wrap: break-word;
+          }
+          .pill-remix-transcript[data-empty="true"] {
+            justify-content: center;
+            align-items: center;
+            color: rgba(245, 241, 228, 0.42);
+          }
+
+          /* The capsule keeps its enter/exit motion on the shared .pill-surface
+             summon above; .pill-capsule only carries the completion states
+             (delivered / cancelled / quiet) and the hover lift, so it must not
+             set an enter transform of its own — that would fight the summon. */
           .pill-capsule {
             position: relative;
             box-shadow: ${PILL_SHADOW};
-            transform: scale(0.88) translateY(var(--enter-dy, 6px));
-          }
-
-          @keyframes pill-bar-enter {
-            from { transform: scaleY(0); }
-            to { transform: scaleY(1); }
-          }
-          .pill-capsule[data-show="true"] [data-bars] line {
-            transform-origin: 50% 50%;
-            animation: pill-bar-enter ${ENTER_BAR_DUR_MS}ms cubic-bezier(0.22, 1, 0.36, 1)
-              var(--enter-delay) both;
           }
 
           .pill-capsule[data-exit="cancelled"],
@@ -2284,10 +3283,8 @@ export default function AppPage(): React.JSX.Element {
             .pill-capsule[data-show="true"]:not([data-exit]):hover {
               transform: translateY(-1px);
               border-color: rgba(255, 255, 255, 0.16);
-              box-shadow: 0 5px 16px rgba(0, 0, 0, 0.26);
               transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
-                          border-color 140ms ease,
-                          box-shadow 140ms ease;
+                          border-color 140ms ease;
             }
           }
 
@@ -2401,8 +3398,21 @@ export default function AppPage(): React.JSX.Element {
           }
 
           @media (prefers-reduced-motion: reduce) {
+            /* Keep the fade, drop the travel, the overshoot and the blur —
+               those are the parts that provoke. */
+            .pill-surface,
+            .pill-surface[data-show="true"] {
+              transform: none !important;
+              filter: none !important;
+            }
+            .pill-rise,
+            .pill-surface[data-show="true"] .pill-rise {
+              transform: none !important;
+              transition-delay: 0ms !important;
+            }
             .pill-surface,
             .pill-surface[data-show="true"],
+            .pill-rise,
             .pill-capsule[data-exit],
             .pill-card,
             .pill-card[data-show="true"],
@@ -2427,7 +3437,7 @@ export default function AppPage(): React.JSX.Element {
         `}
       </style>
 
-      {state !== "idle" && (
+      {(state !== "idle" || showRemixCard) && (
         <>
           <span className="sr-only" role="status" aria-live="polite">
             {accessibleStatus}
@@ -2447,16 +3457,13 @@ export default function AppPage(): React.JSX.Element {
               data-exit={exiting ?? undefined}
               onMouseEnter={handlePillEnter}
               onMouseLeave={handlePillLeave}
-              style={
-                {
-                  ...pillInnerStyle,
-                  transformOrigin,
-                  marginBottom: pillAlign === "end" ? 8 : 0,
-                  marginTop: pillAlign === "start" ? 8 : 0,
-                  // Arrive from the edge the pill is anchored to.
-                  "--enter-dy": pillAlign === "start" ? "-6px" : "6px",
-                } as React.CSSProperties
-              }
+              style={{
+                ...pillInnerStyle,
+                ...riseBy(10),
+                transformOrigin,
+                marginBottom: pillAlign === "end" ? 8 : 0,
+                marginTop: pillAlign === "start" ? 8 : 0,
+              }}
             >
               {/* The fixed core: the cancel slot's width is driven by the draw
                   loop, from zero (closed) to CANCEL_SLOT — the disc plus the
@@ -2523,7 +3530,7 @@ export default function AppPage(): React.JSX.Element {
                   </button>
                 </span>
 
-                {waveform}
+                {!showRemixCard && waveform}
               </span>
 
               {/* The delivered mark, centred on the capsule rather than inside
@@ -2649,29 +3656,15 @@ export default function AppPage(): React.JSX.Element {
           </div>
 
           {/* ---- Failure card ---- */}
-          <div className={layerClass} aria-hidden={!cardOpen}>
+          <div className={layerClass} aria-hidden={!errorCardOpen}>
             <div
               className="pill-surface pill-card"
-              data-show={cardOpen && !exiting}
-              style={
-                {
-                  width: PILL_CARD_WIDTH,
-                  padding: "13px 15px 12px",
-                  // The corner radius is animated (see `.pill-card`), so it
-                  // has to live in the stylesheet — an inline value would
-                  // outrank the rule and freeze it at the open size.
-                  background: SURFACE,
-                  border: SURFACE_BORDER,
-                  backdropFilter: BLUR,
-                  WebkitBackdropFilter: BLUR,
-                  boxShadow: "0 8px 28px rgba(0, 0, 0, 0.3)",
-                  transformOrigin,
-                  marginBottom: pillAlign === "end" ? 8 : 0,
-                  marginTop: pillAlign === "start" ? 8 : 0,
-                  cursor: "grab",
-                  WebkitAppRegion: "drag",
-                } as React.CSSProperties
-              }
+              data-show={errorCardOpen && !exiting}
+              style={{
+                ...cardSurfaceStyle,
+                padding: "13px 15px 12px",
+                ...(errorCardOpen ? { WebkitAppRegion: "drag" } : {}),
+              }}
             >
               <div className="flex items-start" style={{ gap: 10 }}>
                 <span
@@ -2757,6 +3750,198 @@ export default function AppPage(): React.JSX.Element {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* ---- Remix card ---- */}
+          {/* Same surface and the same place on screen as the failure card, so
+              the two read as one object the pill can turn into rather than as
+              two unrelated popups. The dictation card and the chat are
+              separate layers: a phase flip animates one out while the other
+              rises, and each holds its last content while it leaves. */}
+          <div className={layerClass} aria-hidden={!(remixOpen && !viewIsChat)}>
+            <div
+              ref={cardSurfaceRef}
+              className="pill-surface pill-card"
+              data-show={remixOpen && !viewIsChat}
+              onMouseEnter={disarmHotRect}
+              onMouseLeave={rearmHotRect}
+              style={{
+                ...cardSurfaceStyle,
+                // The anchored edge gets the capsule's inset — (PILL_HEIGHT -
+                // SVG_HEIGHT) / 2 — so the waveform lands exactly where it sat
+                // a moment ago. The far edge is free to be roomier.
+                padding:
+                  pillAlign === "start"
+                    ? `${(PILL_HEIGHT - SVG_HEIGHT) / 2}px 14px 13px`
+                    : `13px 14px ${(PILL_HEIGHT - SVG_HEIGHT) / 2}px`,
+                ...(remixOpen && !viewIsChat
+                  ? { WebkitAppRegion: "drag" }
+                  : {}),
+              }}
+            >
+              {cardView?.phase === "error" ? (
+                <>
+                  <div className="flex items-start" style={{ gap: 10 }}>
+                    <span
+                      className="inline-flex items-center justify-center"
+                      style={{
+                        width: 20,
+                        height: 20,
+                        marginTop: 1,
+                        borderRadius: "50%",
+                        background: "rgba(224, 128, 95, 0.16)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M6 3.1v3.3"
+                          stroke={ALERT}
+                          strokeWidth={1.6}
+                          strokeLinecap="round"
+                        />
+                        <circle cx="6" cy="8.7" r="0.85" fill={ALERT} />
+                      </svg>
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          lineHeight: 1.2,
+                          color: INK,
+                        }}
+                      >
+                        {cardView.title}
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 3,
+                          fontSize: 11.5,
+                          lineHeight: 1.35,
+                          color: "rgba(245, 241, 228, 0.58)",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {cardView.body}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className="flex items-center justify-end"
+                    style={
+                      {
+                        marginTop: 11,
+                        WebkitAppRegion: "no-drag",
+                      } as React.CSSProperties
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="pill-action pill-action-ghost"
+                      onClick={() => endRemix()}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="pill-remix-body" data-anchor={pillAlign}>
+                  <div
+                    className="pill-remix-brand pill-rise pill-rise-1"
+                    aria-hidden="true"
+                  >
+                    <FreestyleMark size={15} />
+                    <span>Remix</span>
+                  </div>
+
+                  <div
+                    className="pill-remix-transcript pill-rise pill-rise-2"
+                    data-empty={!remixTranscript}
+                  >
+                    <span>{remixTranscript || remixHint}</span>
+                  </div>
+
+                  {/* The waveform, at the size and the spot it occupies in the
+                      capsule — the box grows around it rather than replacing
+                      it, so the bars never jump when the card takes over. Only
+                      ever mounted here while a remix is up: a second copy in
+                      the tree would take the ref the draw loop writes through,
+                      and the visible row would sit still. */}
+                  <div className="pill-remix-wave">
+                    {showRemixCard && waveform}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ---- Remix chat ---- */}
+          {/* Its own object: either the one-line activity strip (a capsule)
+              or the full conversation (a tall card holding an input and a
+              scroll area), morphing between the two under the pointer —
+              always inside room the window already holds, so the morph is
+              never clipped or resized mid-flight. */}
+          <div className={layerClass} aria-hidden={!(remixOpen && viewIsChat)}>
+            <div
+              ref={chatSurfaceRef}
+              className="pill-surface pill-card pill-chat-morph"
+              data-show={remixOpen && viewIsChat}
+              onMouseEnter={disarmHotRect}
+              onMouseLeave={rearmHotRect}
+              style={{
+                ...cardSurfaceStyle,
+                ...(chatMiniVisual
+                  ? {
+                      width: REMIX_CHAT_STRIP.width,
+                      height: remixMiniHeight,
+                      // A grown strip is a card, not a capsule — a 999px
+                      // radius on a tall box reads as a lozenge.
+                      borderRadius:
+                        remixMiniHeight > REMIX_CHAT_STRIP.height ? 18 : 999,
+                      padding: 0,
+                      overflow: "hidden",
+                    }
+                  : {
+                      width: REMIX_CHAT_SURFACE.width,
+                      height: REMIX_CHAT_SURFACE.height,
+                      borderRadius: 18,
+                      padding: 0,
+                      overflow: "hidden",
+                    }),
+              }}
+            >
+              {chatView && (
+                <RemixChat
+                  context={
+                    remixContextRef.current ?? {
+                      text: chatView.selection,
+                      appName: null,
+                      windowTitle: null,
+                      capturedAt: Date.now(),
+                    }
+                  }
+                  initialInstruction={chatView.initialInstruction ?? null}
+                  minimized={chatMiniVisual}
+                  anchor={{
+                    v: pillAlign === "start" ? "top" : "bottom",
+                    h: pillSide === "right" ? "right" : "center",
+                  }}
+                  onExpand={expandRemixChat}
+                  onMinimize={minimizeRemixChat}
+                  onClose={closeRemix}
+                  onMiniHeightChange={setRemixMiniHeight}
+                />
+              )}
             </div>
           </div>
         </>

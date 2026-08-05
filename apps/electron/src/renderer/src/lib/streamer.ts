@@ -28,6 +28,8 @@ export interface StreamerCallbacks {
   onFinal: (text: string) => void;
   onError: (message: string, code?: string) => void;
   onReady: () => void;
+  /** Live partial transcript. Only the remix card consumes this today. */
+  onPartial?: (text: string) => void;
   onConnectionState?: (state: StreamerConnectionState) => void;
   onConfig: (config: {
     streaming: boolean;
@@ -361,6 +363,7 @@ export class Streamer {
           this.callbacks.onReady();
           break;
         case "partial":
+          this.callbacks.onPartial?.(msg.text ?? "");
           break;
         case "final":
           this.callbacks.onFinal(msg.text ?? "");

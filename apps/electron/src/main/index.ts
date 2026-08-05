@@ -58,7 +58,10 @@ import {
   stopWhisperServer,
 } from "@freestyle-voice/server";
 import { createAppLogger, enableFileLogging } from "@freestyle-voice/utils";
-import { serverUrlSchema } from "@freestyle-voice/validations";
+import {
+  REMIX_CLIPBOARD_LIMIT,
+  serverUrlSchema,
+} from "@freestyle-voice/validations";
 import {
   app,
   BrowserWindow,
@@ -85,6 +88,10 @@ import { isActiveAudioPlaybackMode } from "../shared/audio-playback";
 import { getDefaultHotkey } from "../shared/hotkey-defaults";
 import type { OpenAppCandidate } from "../shared/open-apps";
 import { normalizePillCancelMode } from "../shared/pill-cancel";
+import {
+  getDefaultRemixHotkey,
+  REMIX_CLIPBOARD_PREVIEW_LIMIT,
+} from "../shared/remix";
 import { bearerAuthHeaders } from "../shared/server-auth";
 import { SETTINGS_KEYS } from "../shared/settings-keys";
 import { AudioPlaybackController } from "./audio-control/controller";
@@ -95,8 +102,11 @@ import { NativeKeyListener } from "./key-listener";
 import * as linuxAutostart from "./linux-autostart";
 import { checkLinuxSetup } from "./linux-setup";
 import { MicListener } from "./mic-listener";
+import { getNativeBinaryPath } from "./native-binary";
 import {
+  copySelectionFromFocusedApp,
   isWaylandSession,
+  pasteClipboardIntoFocusedApp,
   pasteIntoFocusedApp,
   startLinuxPasteHelper,
   stopLinuxPasteHelper,
@@ -115,6 +125,14 @@ import {
   relayEvent,
 } from "./plugins/index";
 import { initPluginUiHost, invalidatePluginViews } from "./plugins/ui-host";
+import { isRemixTargetAllowed } from "./remix-target";
+
+// Test isolation: E2E/probe runs in the unpackaged dev binary would otherwise
+// share the real "Electron" userData (settings.json included) with a running
+// dev instance. Must be set before anything reads app.getPath("userData").
+if (process.env.FREESTYLE_USER_DATA) {
+  app.setPath("userData", process.env.FREESTYLE_USER_DATA);
+}
 
 const log = createAppLogger("electron");
 const hotkeyLog = createAppLogger("hotkey");
@@ -198,6 +216,85 @@ const APP_HEIGHT = 60;
  */
 const PILL_CARD_WIDTH = 340;
 const PILL_CARD_HEIGHT = 144;
+/**
+ * The room a remix session lives in, held for the session's whole life. The
+ * remix surfaces (the dictation card, the chat thread, the minimized strip)
+ * morph into each other in the renderer, and a `setBounds` mid-morph paints
+ * at least one stale compositor frame at the new origin — a visible blink.
+ * So the window takes all the room it could ever need up front and only
+ * gives it back once nothing is showing; every in-session size change is
+ * pure DOM animation. The empty area is kept from eating clicks by the
+ * hot-rect pass-through below.
+ */
+const PILL_CHAT_WIDTH = 440;
+const PILL_CHAT_HEIGHT = 600;
+
+type PillExpansion = "card" | "remix-chat";
+
+function pillExpansionSize(expansion: PillExpansion): {
+  width: number;
+  height: number;
+} {
+  if (expansion === "remix-chat") {
+    return { width: PILL_CHAT_WIDTH, height: PILL_CHAT_HEIGHT };
+  }
+  return { width: PILL_CARD_WIDTH, height: PILL_CARD_HEIGHT };
+}
+
+// ---------------------------------------------------------------------------
+// Hot-rect pass-through — while the held remix room shows only a small
+// surface (the minimized strip, or the dictation card), the rest of the
+// window must not block clicks to whatever is underneath. The renderer
+// reports the surface's rect; the window goes click-through and the cursor
+// is polled against that rect. When the pointer arrives, the window turns
+// interactive again and the renderer is told, so a hover can expand the
+// strip. Forwarded mouse events cover hover styling on the platforms that
+// support them; the poll is what flips interactivity everywhere.
+// ---------------------------------------------------------------------------
+
+type PillHotRect = { x: number; y: number; width: number; height: number };
+let pillHotRect: PillHotRect | null = null;
+let pillHotPollTimer: NodeJS.Timeout | null = null;
+
+function stopPillHotPoll(): void {
+  if (pillHotPollTimer) {
+    clearInterval(pillHotPollTimer);
+    pillHotPollTimer = null;
+  }
+}
+
+function setPillHotRect(rect: PillHotRect | null): void {
+  // Tests drive the surfaces with synthetic DOM events; the machine's real
+  // cursor must not be able to flip interactivity under them.
+  if (process.env.FREESTYLE_E2E === "1") return;
+  pillHotRect = rect;
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  if (!rect) {
+    stopPillHotPoll();
+    win.setIgnoreMouseEvents(false);
+    return;
+  }
+  win.setIgnoreMouseEvents(true, { forward: process.platform !== "linux" });
+  if (pillHotPollTimer) return;
+  pillHotPollTimer = setInterval(() => {
+    const w = mainWindow;
+    const hot = pillHotRect;
+    if (!w || w.isDestroyed() || !hot || !w.isVisible()) return;
+    const bounds = w.getBounds();
+    const cursor = screen.getCursorScreenPoint();
+    const inside =
+      cursor.x >= bounds.x + hot.x &&
+      cursor.x <= bounds.x + hot.x + hot.width &&
+      cursor.y >= bounds.y + hot.y &&
+      cursor.y <= bounds.y + hot.y + hot.height;
+    if (!inside) return;
+    pillHotRect = null;
+    stopPillHotPoll();
+    w.setIgnoreMouseEvents(false);
+    w.webContents.send("pill:hot-enter");
+  }, 120);
+}
 
 // ---------------------------------------------------------------------------
 // settings.json helpers — single source for read/write of the lightweight
@@ -319,6 +416,37 @@ let currentHotkeyAccel: string | null = null;
 let hotkeyActivationMode: "hold" | "toggle" = "hold";
 let micListener: MicListener | null = null;
 let hotkeyRecorder: HotkeyRecorder | null = null;
+/**
+ * The remix hotkey runs on its own listener process rather than sharing
+ * dictation's. The native binaries take one accelerator and suppress that
+ * chord; teaching them a second would mean changing three platforms' native
+ * code, where a second instance costs one small process and no new protocol.
+ */
+let remixKeyListener: NativeKeyListener | null = null;
+let remixPressed = false;
+/**
+ * The accelerator the user configured, as opposed to the one currently
+ * listening: they differ while remix are off, or parked because the
+ * dictation hotkey took the same chord. Kept so re-registering (after the
+ * dictation hotkey moves, or hotkey recording ends) can restore the user's
+ * choice rather than the default.
+ */
+let remixHotkeyPreference: string | undefined;
+/** The accelerator actually being listened for, or null when remix are off. */
+let currentRemixAccel: string | null = null;
+/**
+ * False until the server's settings have been read once. Guards the
+ * re-registration hook in `registerHotkey` from spawning a listener off
+ * defaults before we know whether remix are even switched on.
+ */
+let remixInitialized = false;
+/**
+ * True while the onboarding remix step is live: the self-exclusion that
+ * normally keeps Remix out of Freestyle's own windows is suspended so the
+ * agent can drive the practice draft. Flipped only by the dashboard window;
+ * cleared defensively on onboarding completion, window close, and navigation.
+ */
+let remixPracticeTarget = false;
 const audioPlaybackController = new AudioPlaybackController();
 
 function stopHotkeyRecorderProcess(): void {
@@ -334,6 +462,9 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       supportFetchAPI: true,
       corsEnabled: true,
+      // Without this, Chromium's media stack refuses to play <video>/<audio>
+      // served from the scheme (the sign-in demo video, for one).
+      stream: true,
     },
   },
 ]);
@@ -362,6 +493,13 @@ function getPillURL(): string {
     return `${process.env.ELECTRON_RENDERER_URL}/pill.html`;
   }
   return "app://renderer/pill.html";
+}
+
+function getRemixBarURL(): string {
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    return `${process.env.ELECTRON_RENDERER_URL}/bar.html`;
+  }
+  return "app://renderer/bar.html";
 }
 
 function getDashboardURL(path = "/"): string {
@@ -399,6 +537,8 @@ function markProgrammaticTarget(x: number, y: number): void {
  * the expand started, even if the anchor preference changed in between.
  */
 let pillExpandOffset = { dx: 0, dy: 0 };
+/** Which expanded size `pillExpandOffset` was computed for. */
+let pillExpansion: PillExpansion = "card";
 
 function setProgrammaticPosition(
   win: BrowserWindow,
@@ -433,29 +573,50 @@ function getPillAnchor(): { side: "center" | "right"; edge: "top" | "bottom" } {
  * edge fixed on screen. The renderer drives this: it asks for the room a beat
  * before it animates the card in, and gives it back once the card is gone.
  */
-function setPillExpanded(expanded: boolean): void {
+function setPillExpanded(
+  expanded: boolean,
+  expansion: PillExpansion = "card",
+): void {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
   const isExpanded = pillExpandOffset.dx !== 0 || pillExpandOffset.dy !== 0;
-  if (expanded === isExpanded) return;
+  // Both a collapse-when-collapsed and a re-expand at the size already in
+  // effect are no-ops; a *change* of size while expanded is not, and has to
+  // re-run so the anchored edge stays put across the resize. Size is compared
+  // too: the same expansion can change height (the strip growing around the
+  // agent's final message).
+  if (expanded === isExpanded && !expanded) return;
+  if (expanded && isExpanded && expansion === pillExpansion) {
+    const size = pillExpansionSize(expansion);
+    const bounds = win.getBounds();
+    if (bounds.width === size.width && bounds.height === size.height) return;
+  }
+  if (expanded) pillExpansion = expansion;
 
+  const previousOffset = pillExpandOffset;
   const [x, y] = win.getPosition();
   let target: { x: number; y: number; width: number; height: number };
 
   if (expanded) {
     const { side, edge } = getPillAnchor();
+    const { width, height } = pillExpansionSize(expansion);
     pillExpandOffset = {
       dx:
         side === "right"
-          ? PILL_CARD_WIDTH - APP_WIDTH
-          : Math.round((PILL_CARD_WIDTH - APP_WIDTH) / 2),
-      dy: edge === "top" ? 0 : PILL_CARD_HEIGHT - APP_HEIGHT,
+          ? width - APP_WIDTH
+          : Math.round((width - APP_WIDTH) / 2),
+      dy: edge === "top" ? 0 : height - APP_HEIGHT,
     };
+    // The offset above is measured from the *collapsed* slot, but `x`/`y` are
+    // wherever the window is right now — which, when growing from one card
+    // size to another, is already offset. Rebase onto the slot first.
+    const slotX = x + previousOffset.dx;
+    const slotY = y + previousOffset.dy;
     target = {
-      x: x - pillExpandOffset.dx,
-      y: y - pillExpandOffset.dy,
-      width: PILL_CARD_WIDTH,
-      height: PILL_CARD_HEIGHT,
+      x: slotX - pillExpandOffset.dx,
+      y: slotY - pillExpandOffset.dy,
+      width,
+      height,
     };
   } else {
     target = {
@@ -465,6 +626,8 @@ function setPillExpanded(expanded: boolean): void {
       height: APP_HEIGHT,
     };
     pillExpandOffset = { dx: 0, dy: 0 };
+    // The collapsed capsule is a plain interactive window again.
+    setPillHotRect(null);
   }
 
   markProgrammaticTarget(target.x, target.y);
@@ -473,6 +636,7 @@ function setPillExpanded(expanded: boolean): void {
   win.setResizable(true);
   win.setBounds(target);
   win.setResizable(false);
+  updatePillEscape();
 }
 
 // Returns the pill alignment token for a custom position, using the actual
@@ -554,7 +718,29 @@ function getAppWindowPosition(): { x: number; y: number } {
         custom.y >= wa.y &&
         custom.y <= wa.y + wa.height
       ) {
-        return custom;
+        // A custom slot is the user's *offset*, not an absolute point on one
+        // monitor: when the cursor is on a different display, carry the same
+        // fractional position over so the pill follows them there.
+        if (display.id === activeDisplay.id) return custom;
+        const activeWa = activeDisplay.workArea;
+        const fx =
+          wa.width > APP_WIDTH
+            ? (custom.x - wa.x) / (wa.width - APP_WIDTH)
+            : 0.5;
+        const fy =
+          wa.height > APP_HEIGHT
+            ? (custom.y - wa.y) / (wa.height - APP_HEIGHT)
+            : 1;
+        return {
+          x: Math.round(
+            activeWa.x +
+              Math.min(1, Math.max(0, fx)) * (activeWa.width - APP_WIDTH),
+          ),
+          y: Math.round(
+            activeWa.y +
+              Math.min(1, Math.max(0, fy)) * (activeWa.height - APP_HEIGHT),
+          ),
+        };
       }
       // Saved position is off-screen; reset to default.
       writeSettings({
@@ -594,6 +780,10 @@ function createAppWindow(): void {
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: false,
+      // The pill is a transparent always-on-top overlay; Chromium's occlusion
+      // tracker misreads it (notably under Xvfb) and stops producing frames,
+      // freezing rAF-driven morphs mid-animation. Keep its renderer ticking.
+      backgroundThrottling: false,
     },
   });
 
@@ -694,6 +884,28 @@ function createAppWindow(): void {
   });
 
   mainWindow.loadURL(getPillURL());
+
+  // Dev-only debugging for the Remix agent: the tool executor console.logs
+  // every tool call with its raw arguments and result. Mirror those lines
+  // into the main log (and so the terminal), and open the pill's devtools
+  // when explicitly asked for.
+  if (is.dev) {
+    // Electron has shipped this event with both positional args and a
+    // details object across versions; accept either shape.
+    mainWindow.webContents.on("console-message", (_event, level, message) => {
+      const second = level as unknown;
+      const text =
+        typeof message === "string"
+          ? message
+          : second !== null && typeof second === "object" && "message" in second
+            ? String((second as { message: unknown }).message)
+            : null;
+      if (text?.startsWith("[remix]")) hotkeyLog.info(text);
+    });
+    if (process.env.FREESTYLE_PILL_DEVTOOLS === "1") {
+      mainWindow.webContents.openDevTools({ mode: "detach" });
+    }
+  }
 }
 
 function createSettingsWindow(initialPath?: string): Promise<void> {
@@ -755,7 +967,14 @@ async function buildSettingsWindow(initialPath?: string): Promise<void> {
       stopHotkeyRecorderProcess();
       scheduleHotkeyRegistration(currentHotkeyAccel ?? undefined);
     }
+    remixPracticeTarget = false;
     settingsWindow = null;
+  });
+
+  // Backstop: a full-page navigation tears the onboarding renderer down
+  // without running its unmount cleanup.
+  settingsWindow.webContents.on("did-navigate", () => {
+    remixPracticeTarget = false;
   });
 
   settingsWindow.on("enter-full-screen", () => {
@@ -820,6 +1039,8 @@ function showPill(): void {
   // Already waiting for a freshly-created pill to finish loading.
   if (pillReadyPromise) return;
 
+  remixBarWindow?.hide();
+
   if (!mainWindow) {
     createAppWindow();
     // createAppWindow() synchronously assigns mainWindow, but TypeScript
@@ -851,7 +1072,8 @@ function showPill(): void {
         const { x, y } = getAppWindowPosition();
         setProgrammaticPosition(mainWindow, x, y);
         mainWindow.showInactive();
-        registerPillEscape();
+        updateRemixBar();
+        updatePillEscape();
         resolve();
       });
     });
@@ -862,18 +1084,26 @@ function showPill(): void {
     const { x, y } = getAppWindowPosition();
     setProgrammaticPosition(mainWindow, x, y);
     mainWindow.showInactive();
+    updateRemixBar();
   }
-
-  registerPillEscape();
+  updatePillEscape();
 }
 
-function registerPillEscape(): void {
-  if (!globalShortcut.isRegistered("Escape")) {
-    globalShortcut.register("Escape", () => {
-      if (mainWindow?.isVisible()) {
-        mainWindow.webContents.send("pill:cancel");
-      }
-    });
+function updatePillEscape(): void {
+  const chatLike = pillExpansion === "remix-chat";
+  const isExpanded = pillExpandOffset.dx !== 0 || pillExpandOffset.dy !== 0;
+  if (mainWindow?.isVisible() && !(chatLike && isExpanded)) {
+    if (!globalShortcut.isRegistered("Escape")) {
+      globalShortcut.register("Escape", () => {
+        if (mainWindow?.isVisible()) {
+          mainWindow.webContents.send("pill:cancel");
+        }
+      });
+    }
+  } else {
+    try {
+      globalShortcut.unregister("Escape");
+    } catch {}
   }
 }
 
@@ -882,12 +1112,17 @@ function execAsync(
   cmd: string,
   args: string[],
   timeoutMs: number,
+  maxBuffer?: number,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       cmd,
       args,
-      { encoding: "utf-8", timeout: timeoutMs },
+      {
+        encoding: "utf-8",
+        timeout: timeoutMs,
+        ...(maxBuffer ? { maxBuffer } : {}),
+      },
       (err, stdout) => {
         if (err) reject(err);
         else resolve((stdout as string).trim());
@@ -1243,6 +1478,7 @@ async function getOpenAppCandidates(): Promise<OpenAppCandidate[]> {
 function hidePill(): void {
   if (mainWindow?.isVisible()) {
     mainWindow.hide();
+    lastPillHideAt = Date.now();
   }
   // The next session starts as a bare capsule, so give the extra room back
   // now — the renderer's own collapse only runs when it animates a card away.
@@ -1252,6 +1488,15 @@ function hidePill(): void {
   // holding the dictation key.
   hotkeyPressed = false;
   clearHotkeyStuckWatchdog();
+  remixPressed = false;
+  clearRemixStuckWatchdog();
+  setRemixRouteKeys(false);
+  // The chat card may have made the pill focusable so its input could be
+  // typed into; a hidden pill must never hold that.
+  try {
+    mainWindow?.setFocusable(false);
+  } catch {}
+  updateRemixBar();
   // Unregister Escape shortcut when pill is hidden
   try {
     globalShortcut.unregister("Escape");
@@ -1310,6 +1555,8 @@ async function deliverOutput(
 
 function resetOnboarding(): void {
   writeSettings({ onboardingComplete: false });
+  remixBarHeldForOnboarding = true;
+  updateRemixBar();
   showSettingsWindow("/onboarding");
 }
 
@@ -2007,8 +2254,35 @@ app.whenReady().then(async () => {
   });
 
   // IPC: the renderer needs (or no longer needs) room for the status card.
-  ipcMain.on("pill:set-expanded", (_event, expanded: boolean) => {
-    setPillExpanded(expanded === true);
+  ipcMain.on(
+    "pill:set-expanded",
+    (_event, expanded: boolean, expansion?: unknown) => {
+      setPillExpanded(
+        expanded === true,
+        expansion === "remix-chat" ? expansion : "card",
+      );
+    },
+  );
+
+  // IPC: the held remix room shows only a small surface right now — go
+  // click-through everywhere except that rect (null = fully interactive).
+  ipcMain.on("pill:set-hot-rect", (_event, rect: unknown) => {
+    if (rect === null) {
+      setPillHotRect(null);
+      return;
+    }
+    if (typeof rect !== "object" || rect === null) return;
+    const { x, y, width, height } = rect as Record<string, unknown>;
+    if (
+      typeof x !== "number" ||
+      typeof y !== "number" ||
+      typeof width !== "number" ||
+      typeof height !== "number" ||
+      ![x, y, width, height].every(Number.isFinite)
+    ) {
+      return;
+    }
+    setPillHotRect({ x, y, width, height });
   });
 
   // IPC: fan out per-frame audio levels from the pill to other windows
@@ -2201,10 +2475,20 @@ app.whenReady().then(async () => {
 
   ipcMain.on("onboarding:set-complete", () => {
     writeSettings({ onboardingComplete: true });
+    remixPracticeTarget = false;
+    remixBarHeldForOnboarding = false;
+    updateRemixBar();
   });
 
   // IPC: hotkey recording — global native listener + renderer DOM on macOS
   ipcMain.on("hotkey-record:start", () => {
+    // The remix listener would otherwise fire on whatever chord the user
+    // presses while recording a new one.
+    if (remixKeyListener) {
+      remixKeyListener.stop();
+      remixKeyListener = null;
+      remixPressed = false;
+    }
     // Pause the active hotkey listener so it doesn't fire during recording
     if (keyListener) {
       keyListener.stop();
@@ -2323,6 +2607,8 @@ app.whenReady().then(async () => {
   // Onboarding already has dedicated permission cards. Existing users instead
   // get one actionable warning once a user-facing window can be shown.
   void isOnboardingActive().then((onboardingActive) => {
+    remixBarHeldForOnboarding = onboardingActive;
+    updateRemixBar();
     const warning = startupPermissionWarning(
       process.platform,
       onboardingActive,
@@ -2622,6 +2908,11 @@ app.whenReady().then(async () => {
       ? normalizeAccelerator(configured)
       : DEFAULT_HOTKEY;
     if (accel !== currentHotkeyAccel) scheduleHotkeyRegistration(configured);
+    // Remix wait for the server rather than registering a default eagerly:
+    // unlike dictation there is no cost to a press in the first second going
+    // nowhere, and registering before we know whether the user turned remix
+    // off would spawn a listener process only to kill it again.
+    applyRemixSettings(settings);
   });
 
   // Start microphone activity monitoring
@@ -2657,9 +2948,875 @@ app.whenReady().then(async () => {
     clearHotkeyStuckWatchdog();
     scheduleHotkeyRegistration(currentHotkeyAccel ?? undefined);
   });
+
+  // Remix: the settings UI writes the setting, then tells us to re-read it.
+  ipcMain.on("remix-hotkey:reload", () => {
+    void getServerSettings().then((settings) => {
+      if (!settings) return;
+      applyRemixSettings(settings);
+    });
+  });
+
+  // Remix paste over a selection rather than appending at a cursor, so this
+  // deliberately does not go through `deliverOutput`: no trailing space, and no
+  // plugin output pipeline (see the /api/remix route on why).
+  ipcMain.handle("remix:paste", async (_event, text: string) => {
+    if (typeof text !== "string" || !text.trim()) return false;
+    if (await isSecureInputActive()) {
+      notifyPasteFailed();
+      hotkeyLog.warn("Remix paste refused: secure input is active.");
+      return false;
+    }
+    try {
+      await pasteIntoFocusedApp(
+        text,
+        async () => {
+          hidePill();
+          await wait(0);
+        },
+        { trailingSpace: false },
+      );
+      return true;
+    } catch (err) {
+      notifyPasteFailed();
+      hotkeyLog.error(`Remix paste failed: ${err}`);
+      return false;
+    }
+  });
+
+  // ---- Remix primitives ----
+  // Each is one dumb action against the user's machine; the agent composes
+  // them per its system prompt, and edge cases are handled by tweaking that
+  // prompt rather than by machinery here. The one piece of invisible
+  // plumbing is the focus dance: injected keystrokes must physically reach
+  // the document, and OS key-window state isn't something a prompt can
+  // manage.
+
+  ipcMain.handle("remix:get-context", async () => {
+    if (await isSecureInputActive()) {
+      return { ok: false, reason: "secure-input" };
+    }
+    const pill = mainWindow;
+    if (pill && !pill.isDestroyed() && pill.isFocused()) {
+      pill.blur();
+      await wait(140);
+    }
+    const front = await getFrontmostContext();
+    const ours = getFreestyleAppExclusions();
+    if (!isRemixTargetAllowed(front.appName, ours, remixPracticeTarget)) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    remixAnchor = { ...front, capturedAt: Date.now() };
+    const [selection, caps] = await Promise.all([
+      copySelectionFromFocusedApp().catch(() => null),
+      runMacAxCaps(),
+    ]);
+    hotkeyLog.info(
+      `remix get-context: "${front.appName}"${selection ? ` · ${selection.length} chars selected` : " · no selection"} · precise=${caps?.settable ?? false}`,
+    );
+    const preview = clipboardPreviewFields();
+    return {
+      ok: true,
+      appName: front.appName,
+      windowTitle: front.windowTitle,
+      url: front.url,
+      selection,
+      preciseSelection: caps?.settable ?? false,
+      docLength: caps && caps.length >= 0 ? caps.length : null,
+      clipboardPreview: preview.clipboard,
+      clipboardLength: preview.clipboardLength,
+    };
+  });
+
+  // Non-destructive document read: one AX call, no keystrokes, and — the
+  // point — the user's highlight survives. Canvas editors return unsupported
+  // and the agent decides between selection-only work and the destructive
+  // select_all read.
+  ipcMain.handle("remix:read-document", async () => {
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    const ax = await runMacAxRead();
+    if (!ax?.text) return { ok: false, reason: "unsupported" };
+    hotkeyLog.info(
+      `remix read-document: ${ax.text.length} chars via accessibility`,
+    );
+    return {
+      ok: true,
+      text: ax.text.slice(0, 60_000),
+      truncated: ax.text.length > 60_000,
+      selStart: ax.selStart,
+      selLen: ax.selLen,
+    };
+  });
+
+  ipcMain.handle("remix:select-all", async () => {
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    if (!(await sendSelectAllToFocusedApp())) {
+      return { ok: false, reason: "inject-failed" };
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle("remix:collapse-selection", async () => {
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    if (
+      !(await runMacAxKey(124)) &&
+      !(await runKeystrokeScript(["key code 124"]))
+    ) {
+      return { ok: false, reason: "inject-failed" };
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle("remix:copy", async () => {
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    // Generous budget: after a select_all this is a whole-document copy, and
+    // rich editors are slow to produce it.
+    const text = await copySelectionFromFocusedApp({
+      timeoutsMs: [600, 2_000],
+    }).catch(() => null);
+    if (text === null) return { ok: false, reason: "nothing-copied" };
+    return {
+      ok: true,
+      text: text.slice(0, 60_000),
+      truncated: text.length > 60_000,
+    };
+  });
+
+  ipcMain.handle("remix:set-clipboard", (_event, text: unknown) => {
+    if (
+      typeof text !== "string" ||
+      !text ||
+      text.length > REMIX_CLIPBOARD_LIMIT
+    ) {
+      return { ok: false, reason: "bad-text" };
+    }
+    clipboard.writeText(text);
+    hotkeyLog.info(`remix set-clipboard: ${text.length} chars`);
+    return { ok: true };
+  });
+
+  ipcMain.handle("remix:set-clipboard-image", async (_event, url: unknown) => {
+    if (typeof url !== "string" || !url)
+      return { ok: false, reason: "bad-url" };
+    const image = await fetchRemixImage(url);
+    if (!image) return { ok: false, reason: "fetch-failed" };
+    clipboard.writeImage(image);
+    return { ok: true };
+  });
+
+  ipcMain.handle("remix:paste-clipboard", async () => {
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    // Length only, never content — but this one line separates "the model
+    // never loaded the clipboard" from "the injection failed" in the log.
+    hotkeyLog.info(
+      `remix paste: injecting (clipboard: ${clipboard.readText().length} chars)`,
+    );
+    try {
+      await pasteClipboardIntoFocusedApp();
+      if (remixPracticeTarget) {
+        settingsWindow?.webContents.send("remix:practice-delivered");
+      }
+      return { ok: true };
+    } catch (err) {
+      hotkeyLog.error(`Remix paste failed: ${err}`);
+      return { ok: false, reason: "paste-failed" };
+    }
+  });
+
+  ipcMain.handle(
+    "remix:select-text",
+    async (_event, text: unknown, occurrence: unknown) => {
+      if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
+        return { ok: false, reason: "failed" };
+      }
+      const wanted =
+        typeof occurrence === "number" &&
+        Number.isInteger(occurrence) &&
+        occurrence >= 1
+          ? occurrence
+          : null;
+      if (!(await focusAnchorForInjection())) {
+        return { ok: false, reason: "document-not-in-front" };
+      }
+      const ax = await runMacAxRead();
+      if (!ax?.text || !ax.settable) {
+        return { ok: false, reason: "unsupported" };
+      }
+      // All match positions — selecting the wrong twin of a repeated phrase
+      // and pasting over it is the one way a well-behaved agent can corrupt
+      // the wrong text, so ambiguity is an error unless an occurrence is
+      // named explicitly.
+      const positions: number[] = [];
+      for (
+        let at = ax.text.indexOf(text);
+        at >= 0 && positions.length <= 50;
+        at = ax.text.indexOf(text, at + 1)
+      ) {
+        positions.push(at);
+      }
+      if (positions.length === 0) return { ok: false, reason: "not-found" };
+      if (wanted === null && positions.length > 1) {
+        return { ok: false, reason: "ambiguous", matches: positions.length };
+      }
+      const index = positions[(wanted ?? 1) - 1];
+      if (index === undefined) {
+        return { ok: false, reason: "not-found", matches: positions.length };
+      }
+      if (!(await runMacAxSelect(index, text.length))) {
+        return { ok: false, reason: "failed" };
+      }
+      if (remixAnchor) remixAnchor.capturedAt = Date.now();
+      return { ok: true };
+    },
+  );
+
+  // The app's own undo stack: Cmd+Z / Cmd+Shift+Z through the native chord
+  // binary (which resolves Z on non-QWERTY layouts), osascript as fallback.
+  ipcMain.handle("remix:undo", async () => {
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    if (!(await sendChordToFocusedApp("z", false))) {
+      return { ok: false, reason: "inject-failed" };
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle("remix:redo", async () => {
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    if (!(await sendChordToFocusedApp("z", true))) {
+      return { ok: false, reason: "inject-failed" };
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle(
+    "remix:press-key",
+    async (_event, key: unknown, times: unknown) => {
+      const code =
+        typeof key === "string" ? REMIX_PRESSABLE_KEYS[key] : undefined;
+      if (code === undefined) return { ok: false, reason: "bad-key" };
+      const count =
+        typeof times === "number" && Number.isInteger(times)
+          ? Math.min(Math.max(times, 1), 50)
+          : 1;
+      if (!(await focusAnchorForInjection())) {
+        return { ok: false, reason: "document-not-in-front" };
+      }
+      for (let i = 0; i < count; i++) {
+        if (
+          !(await runMacAxKey(code)) &&
+          !(await runKeystrokeScript([`key code ${code}`]))
+        ) {
+          return { ok: false, reason: "inject-failed", pressed: i };
+        }
+        if (count > 1) await wait(25);
+      }
+      return { ok: true };
+    },
+  );
+
+  ipcMain.handle("remix:get-clipboard", () => {
+    const text = clipboard.readText();
+    return {
+      ok: true,
+      text: text.slice(0, 60_000),
+      truncated: text.length > 60_000,
+    };
+  });
+
+  // Fast-lane delivery for the preset chips (not an agent tool): replace the
+  // selection with a known string, the user's clipboard preserved.
+  ipcMain.handle("remix:paste-text", async (_event, text: unknown) => {
+    if (typeof text !== "string" || !text.trim()) {
+      return { ok: false, reason: "bad-text" };
+    }
+    if (!(await focusAnchorForInjection())) {
+      return { ok: false, reason: "document-not-in-front" };
+    }
+    try {
+      await pasteIntoFocusedApp(text, undefined, { trailingSpace: false });
+      if (remixPracticeTarget) {
+        settingsWindow?.webContents.send("remix:practice-delivered");
+      }
+      return { ok: true };
+    } catch (err) {
+      hotkeyLog.error(`Remix paste-text failed: ${err}`);
+      return { ok: false, reason: "paste-failed" };
+    }
+  });
+
+  // Fresh context for a typed follow-up: the document may have changed since
+  // the hotkey press, so the agent gets the state as it is now — but reading
+  // the selection means injecting a Copy, which is only safe when the user is
+  // actually in the document rather than in the pill.
+  ipcMain.handle("remix:recapture", async () => {
+    // Typing in the chat box makes the pill the KEY window while the document
+    // app stays frontmost (non-activating panel). An injected Copy goes to
+    // the key window — so yield the keyboard back to the document first, the
+    // same dance delivery does, or the copy reads our own empty input and
+    // wipes a perfectly good selection.
+    const pill = mainWindow;
+    if (pill && !pill.isDestroyed() && pill.isFocused()) {
+      pill.blur();
+      await wait(140);
+    }
+    const front = await getFrontmostContext();
+    const ours = getFreestyleAppExclusions();
+    const inDocument = isRemixTargetAllowed(
+      front.appName,
+      ours,
+      remixPracticeTarget,
+    );
+    if (inDocument) {
+      remixAnchor = { ...front, capturedAt: Date.now() };
+      const selection = (await isSecureInputActive())
+        ? null
+        : await copySelectionFromFocusedApp().catch(() => null);
+      hotkeyLog.info(
+        `remix recapture: ${selection ? `${selection.length} chars` : "no selection"} in "${front.appName}"`,
+      );
+      return {
+        selection,
+        ...clipboardPreviewFields(),
+        ...remixAnchor,
+        stale: false,
+      };
+    }
+    hotkeyLog.info("remix recapture: document not in front; keeping anchor");
+    return {
+      selection: null,
+      appName: remixAnchor?.appName ?? null,
+      windowTitle: remixAnchor?.windowTitle ?? null,
+      url: remixAnchor?.url ?? null,
+      ...clipboardPreviewFields(),
+      capturedAt: remixAnchor?.capturedAt ?? Date.now(),
+      stale: true,
+    };
+  });
+
+  // Onboarding's remix practice: while active, our own window is a legal
+  // Remix target. Only the dashboard window may flip this.
+  ipcMain.on("remix:set-practice-target", (event, active: unknown) => {
+    if (event.sender !== settingsWindow?.webContents) return;
+    remixPracticeTarget = active === true;
+    hotkeyLog.info(`remix practice target: ${remixPracticeTarget}`);
+  });
+
+  if (process.env.FREESTYLE_E2E === "1") {
+    ipcMain.handle("e2e:remix-practice-target", () => remixPracticeTarget);
+  }
+
+  // The chat card holds no digit routes; it gives Control+1..3 back to the
+  // rest of the system for as long as it is up.
+  ipcMain.on("remix:set-route-keys", (_event, open: unknown) => {
+    setRemixRouteKeys(open === true);
+  });
+
+  // The persistent bar was hovered: open the Remix chat where the user is.
+  ipcMain.on("remix:bar-hover", () => {
+    handleRemixBarOpen();
+  });
+
+  // The pill is focusable:false by design — it must never steal focus from
+  // the app being dictated into. The chat card is the one exception: while it
+  // is up the window is *allowed* to take focus, but only when the user
+  // clicks into it — opening the card never pulls the keyboard away from the
+  // document they were just writing in.
+  ipcMain.on("remix:set-chat-focus", (_event, focus: unknown) => {
+    const win = mainWindow;
+    if (!win || win.isDestroyed()) return;
+    if (focus === true) {
+      if (!win.isFocusable()) win.setFocusable(true);
+    } else {
+      if (win.isFocused()) win.blur();
+      if (win.isFocusable()) win.setFocusable(false);
+    }
+  });
 });
 
+interface FrontmostContext {
+  appName: string | null;
+  windowTitle: string | null;
+  /** The active browser tab's URL, when the frontmost app is a browser. */
+  url: string | null;
+}
+
+/**
+ * The frontmost app + window context, parsed from the per-platform helpers.
+ * Browsers report `{app, url, title}` (the active tab); everything else
+ * reports `{app, windowTitle}` or a bare app name.
+ */
+async function getFrontmostContext(): Promise<FrontmostContext> {
+  try {
+    let raw: string | null = null;
+    if (process.platform === "darwin") raw = await getMacFrontmostApp();
+    else if (process.platform === "win32") raw = await getWindowsFrontmostApp();
+    else if (process.platform === "linux") raw = await getLinuxFrontmostApp();
+    if (!raw) return { appName: null, windowTitle: null, url: null };
+    try {
+      const parsed = JSON.parse(raw) as {
+        app?: string;
+        windowTitle?: string;
+        title?: string;
+        url?: string;
+      };
+      return {
+        appName: parsed.app?.trim() || null,
+        windowTitle: parsed.windowTitle?.trim() || parsed.title?.trim() || null,
+        url: parsed.url?.trim() || null,
+      };
+    } catch {
+      return { appName: raw.trim() || null, windowTitle: null, url: null };
+    }
+  } catch {
+    return { appName: null, windowTitle: null, url: null };
+  }
+}
+
+/**
+ * A capped look at the user's clipboard text, read AFTER selection capture
+ * (which restores the clipboard it borrowed). "Edit this" with nothing
+ * highlighted usually means the clipboard, so the agent gets a preview.
+ */
+function clipboardPreviewFields(): {
+  clipboard: string | null;
+  clipboardLength: number;
+} {
+  const text = clipboard.readText();
+  return {
+    clipboard: text ? text.slice(0, REMIX_CLIPBOARD_PREVIEW_LIMIT) : null,
+    clipboardLength: text.length,
+  };
+}
+
+/** Where the current remix session's edits belong. */
+let remixAnchor: {
+  appName: string | null;
+  windowTitle: string | null;
+  url: string | null;
+  capturedAt: number;
+} | null = null;
+
+/** How stale an anchor can be before delivery refuses to trust it. */
+const REMIX_ANCHOR_MAX_AGE_MS = 5 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// Remix document access — reading the whole focused document and driving its
+// selection, which is what lets the agent act on "the fourth paragraph"
+// rather than only on what the user highlighted.
+//
+// Two tiers. Accessibility (AX): silent, precise, works in native text
+// fields. Keyboard: Select-All+Copy to read and find-and-select to place the
+// selection, for canvas editors (Google Docs) that expose nothing to AX.
+// ---------------------------------------------------------------------------
+
+interface AxReadResult {
+  text: string;
+  selStart: number;
+  selLen: number;
+  settable: boolean;
+}
+
+async function runMacAxRead(): Promise<AxReadResult | null> {
+  if (process.platform !== "darwin") return null;
+  const binary = getNativeBinaryPath("macos-ax");
+  if (!binary) return null;
+  try {
+    // A large document's JSON easily exceeds execFile's 1MB default buffer.
+    const out = await execAsync(binary, ["read"], 3000, 16 * 1024 * 1024);
+    return JSON.parse(out) as AxReadResult;
+  } catch {
+    return null;
+  }
+}
+
+async function runMacAxSelect(start: number, len: number): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const binary = getNativeBinaryPath("macos-ax");
+  if (!binary) return false;
+  try {
+    await execAsync(binary, ["select", String(start), String(len)], 3000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Cheap capability probe: can the focused element's selection be placed? */
+async function runMacAxCaps(): Promise<{
+  settable: boolean;
+  length: number;
+} | null> {
+  if (process.platform !== "darwin") return null;
+  const binary = getNativeBinaryPath("macos-ax");
+  if (!binary) return null;
+  try {
+    const out = await execAsync(binary, ["caps"], 3000);
+    return JSON.parse(out) as { settable: boolean; length: number };
+  } catch {
+    return null;
+  }
+}
+
+async function isSecureInputActive(): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const binary = getNativeBinaryPath("macos-ax");
+  if (!binary) return false;
+  try {
+    return (await execAsync(binary, ["secure"], 1000)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Post one bare key press (by keycode) through the native helper. */
+async function runMacAxKey(code: number): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const binary = getNativeBinaryPath("macos-ax");
+  if (!binary) return false;
+  try {
+    await execAsync(binary, ["key", String(code)], 3000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Inject Cmd+A through the native CGEvent binary — the same Accessibility
+ * permission paste already holds, and no Apple Events, so no separate
+ * Automation consent. osascript is the fallback, not the default.
+ */
+async function sendSelectAllToFocusedApp(): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const binary = getNativeBinaryPath("macos-fast-paste");
+  if (binary) {
+    try {
+      await execAsync(binary, ["a"], 3000);
+      return true;
+    } catch (err) {
+      hotkeyLog.warn(`Native select-all failed, trying osascript: ${err}`);
+    }
+  }
+  return runKeystrokeScript(['keystroke "a" using {command down}']);
+}
+
+/**
+ * The bare keys press_key may inject, by macOS virtual keycode. A whitelist
+ * by design: no modifier chords, so the blast radius of a confused agent is
+ * exactly one ordinary keypress.
+ */
+const REMIX_PRESSABLE_KEYS: Record<string, number> = {
+  enter: 36,
+  tab: 48,
+  escape: 53,
+  backspace: 51,
+  delete: 117,
+  left: 123,
+  right: 124,
+  down: 125,
+  up: 126,
+  home: 115,
+  end: 119,
+};
+
+/** Cmd+<letter> (optionally +Shift) via the native chord binary. */
+async function sendChordToFocusedApp(
+  letter: string,
+  shift: boolean,
+): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const binary = getNativeBinaryPath("macos-fast-paste");
+  if (binary) {
+    try {
+      await execAsync(binary, shift ? [letter, "shift"] : [letter], 3000);
+      return true;
+    } catch (err) {
+      hotkeyLog.warn(`Native chord ${letter} failed, trying osascript: ${err}`);
+    }
+  }
+  return runKeystrokeScript([
+    `keystroke "${letter}" using {command down${shift ? ", shift down" : ""}}`,
+  ]);
+}
+
+/** Run a short System Events keystroke script (macOS keyboard tier). */
+async function runKeystrokeScript(lines: string[]): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const script = [
+    'tell application "System Events"',
+    ...lines,
+    "end tell",
+  ].flatMap((line) => ["-e", line]);
+  try {
+    await execAsync("osascript", script, 8000);
+    return true;
+  } catch (err) {
+    hotkeyLog.warn(`Keystroke script failed: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Yield the keyboard to the document before injecting anything: the chat
+ * panel may hold key focus, and on other platforms the pill's app may be
+ * active outright. Returns false when the document can't be brought back.
+ */
+async function focusAnchorForInjection(): Promise<boolean> {
+  const anchor = remixAnchor;
+  if (
+    !anchor?.appName ||
+    Date.now() - anchor.capturedAt > REMIX_ANCHOR_MAX_AGE_MS
+  ) {
+    return false;
+  }
+  if (await isSecureInputActive()) {
+    hotkeyLog.warn("Remix injection refused: secure input is active.");
+    return false;
+  }
+  const pill = mainWindow;
+  if (pill && !pill.isDestroyed() && pill.isFocused()) {
+    pill.blur();
+    await wait(140);
+  }
+  let front = await getFrontmostContext();
+  const ours = getFreestyleAppExclusions();
+  // In practice mode our own window IS the target, so re-activating the
+  // anchor app ("Freestyle" via osascript) is skipped — it is at best a
+  // no-op and at worst raises the wrong window.
+  if (
+    front.appName &&
+    !isRemixTargetAllowed(front.appName, ours, remixPracticeTarget)
+  ) {
+    await activateAnchorApp(anchor.appName);
+    front = await getFrontmostContext();
+  }
+  return front.appName === anchor.appName;
+}
+
+/**
+ * Keyboard-tier selection: drive the app's own Find. Editors like Google
+ * Docs leave the found text selected after Escape, which is exactly the
+ * "move the cursor there and highlight it" the agent needs. Not verifiable
+ * from out here — the caller reports the method so the agent stays honest.
+ */
+/** Ceiling on a fetched image; past this it's a download, not an insert. */
+const REMIX_IMAGE_MAX_BYTES = 15 * 1024 * 1024;
+const REMIX_IMAGE_TIMEOUT_MS = 15_000;
+
+/** Download and decode an image the agent wants inserted, or null. */
+async function fetchRemixImage(
+  url: string,
+): Promise<Electron.NativeImage | null> {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(REMIX_IMAGE_TIMEOUT_MS),
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const type = res.headers.get("content-type") ?? "";
+    if (!type.startsWith("image/")) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.byteLength === 0 || buffer.byteLength > REMIX_IMAGE_MAX_BYTES) {
+      return null;
+    }
+    const image = nativeImage.createFromBuffer(buffer);
+    return image.isEmpty() ? null : image;
+  } catch (err) {
+    hotkeyLog.warn(`Remix image fetch failed: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * Bring the anchored app back to the front (macOS only — elsewhere the
+ * anchor check simply fails over to the clipboard). The settle wait gives
+ * the app time to become key before the frontmost re-check.
+ */
+async function activateAnchorApp(appName: string): Promise<void> {
+  if (process.platform !== "darwin") return;
+  try {
+    await execAsync(
+      "osascript",
+      ["-e", `tell application ${JSON.stringify(appName)} to activate`],
+      2000,
+    );
+    await wait(150);
+  } catch (err) {
+    hotkeyLog.warn(`Could not re-activate "${appName}": ${err}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Remix bar — the persistent sliver at the bottom of the screen. Hovering it
+// opens the Remix chat; it hides whenever the pill itself is up, and follows
+// the display the cursor is on.
+// ---------------------------------------------------------------------------
+
+let remixBarWindow: BrowserWindow | null = null;
+let remixBarEnabled = true;
+// The bar is noise during onboarding. Seeded synchronously from the light
+// settings file, then corrected by the startup isOnboardingActive() probe
+// (existing users may predate the onboardingComplete flag), and cleared on
+// onboarding:set-complete.
+let remixBarHeldForOnboarding = readSettings().onboardingComplete !== true;
+let remixBarFollowTimer: NodeJS.Timeout | null = null;
+const REMIX_BAR_WIDTH = 120;
+const REMIX_BAR_HEIGHT = 18;
+const REMIX_BAR_FOLLOW_MS = 3_000;
+const REMIX_BAR_REOPEN_COOLDOWN_MS = 700;
+const REMIX_BAR_RESHOW_DELAY_MS = 400;
+let lastPillHideAt = 0;
+let remixBarShowTimer: NodeJS.Timeout | null = null;
+
+function remixBarPosition(): { x: number; y: number } {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const wa = display.workArea;
+  return {
+    x: wa.x + Math.round((wa.width - REMIX_BAR_WIDTH) / 2),
+    y: wa.y + wa.height - REMIX_BAR_HEIGHT + 6,
+  };
+}
+
+function createRemixBarWindow(): void {
+  if (remixBarWindow) return;
+  const { x, y } = remixBarPosition();
+  const win = new BrowserWindow({
+    width: REMIX_BAR_WIDTH,
+    height: REMIX_BAR_HEIGHT,
+    x,
+    y,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    autoHideMenuBar: true,
+    focusable: false,
+    ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: false,
+      // Same transparent-overlay caveat as the pill window: occlusion
+      // misdetection would freeze its animations.
+      backgroundThrottling: false,
+    },
+  });
+  win.setAlwaysOnTop(true, "screen-saver");
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  win.on("closed", () => {
+    remixBarWindow = null;
+  });
+  void win.loadURL(getRemixBarURL());
+  remixBarWindow = win;
+}
+
+/** Reconcile the bar with reality: shown iff enabled and the pill is down. */
+function updateRemixBar(): void {
+  const shouldShow =
+    remixBarEnabled && !remixBarHeldForOnboarding && !mainWindow?.isVisible();
+  if (!shouldShow) {
+    if (remixBarShowTimer) {
+      clearTimeout(remixBarShowTimer);
+      remixBarShowTimer = null;
+    }
+    if (remixBarFollowTimer) {
+      clearInterval(remixBarFollowTimer);
+      remixBarFollowTimer = null;
+    }
+    remixBarWindow?.hide();
+    return;
+  }
+  const sinceHide = Date.now() - lastPillHideAt;
+  if (!remixBarWindow?.isVisible() && sinceHide < REMIX_BAR_RESHOW_DELAY_MS) {
+    if (!remixBarShowTimer) {
+      remixBarShowTimer = setTimeout(() => {
+        remixBarShowTimer = null;
+        updateRemixBar();
+      }, REMIX_BAR_RESHOW_DELAY_MS - sinceHide);
+    }
+    return;
+  }
+  if (!remixBarWindow) createRemixBarWindow();
+  const win = remixBarWindow;
+  if (!win) return;
+  const place = (): void => {
+    if (!remixBarWindow || remixBarWindow.isDestroyed()) return;
+    if (
+      !remixBarEnabled ||
+      remixBarHeldForOnboarding ||
+      mainWindow?.isVisible()
+    )
+      return;
+    const { x, y } = remixBarPosition();
+    const [bx, by] = remixBarWindow.getPosition();
+    if (bx !== x || by !== y) remixBarWindow.setPosition(x, y);
+    if (!remixBarWindow.isVisible()) remixBarWindow.showInactive();
+  };
+  if (win.webContents.isLoading()) {
+    win.webContents.once("did-finish-load", place);
+  } else {
+    place();
+  }
+  // The bar follows the cursor's display so it is always where the user is
+  // working, not pinned to the primary monitor.
+  if (!remixBarFollowTimer) {
+    remixBarFollowTimer = setInterval(() => {
+      const bar = remixBarWindow;
+      if (!bar || bar.isDestroyed() || !bar.isVisible()) return;
+      const { x, y } = remixBarPosition();
+      const [bx, by] = bar.getPosition();
+      if (bx !== x || by !== y) bar.setPosition(x, y);
+    }, REMIX_BAR_FOLLOW_MS);
+  }
+}
+
+/** The bar was hovered (or clicked): open the Remix chat where the user is. */
+function handleRemixBarOpen(): void {
+  if (!remixBarEnabled) return;
+  if (mainWindow?.isVisible()) return;
+  if (Date.now() - lastPillHideAt < REMIX_BAR_REOPEN_COOLDOWN_MS) return;
+  remixSelectionRequested = false;
+  captureRemixSelection();
+  showPill();
+  sendToPill("remix:open-chat");
+  updateRemixBar();
+}
+
+/** Apply the remix bar flag + accelerator from a settings snapshot. */
+function applyRemixSettings(settings: Record<string, string>): void {
+  // Absent means on: a server that has never been told otherwise shouldn't
+  // read as "the user switched this off".
+  remixBarEnabled = settings[SETTINGS_KEYS.remixBarEnabled] !== "false";
+  remixInitialized = true;
+  updateRemixBar();
+  const configured = settings[SETTINGS_KEYS.remixHotkey];
+  scheduleRemixHotkeyRegistration(
+    configured && isValidAccelerator(configured) ? configured : undefined,
+  );
+}
+
 const DEFAULT_HOTKEY = getDefaultHotkey();
+const DEFAULT_REMIX_HOTKEY = getDefaultRemixHotkey();
 const HOTKEY_MODIFIER_PARTS = new Set([
   "alt",
   "option",
@@ -2757,6 +3914,278 @@ function sendHotkeyUp(): void {
   }
   mainWindow?.webContents.send("hotkey:up");
   settingsWindow?.webContents.send("hotkey:up");
+}
+
+// ---------------------------------------------------------------------------
+// Remix
+// ---------------------------------------------------------------------------
+
+/**
+ * Send to the pill, deferring until it exists. Remix IPC is bursty at the
+ * moment the window is first created — down, then the selection, then possibly
+ * up — and all of it must arrive in order and none of it may be dropped.
+ */
+function sendToPill(channel: string, payload?: unknown): void {
+  if (pillReadyPromise) {
+    void pillReadyPromise.then(() => {
+      mainWindow?.webContents.send(channel, payload);
+    });
+    return;
+  }
+  mainWindow?.webContents.send(channel, payload);
+}
+
+/**
+ * Whether the selection can be read while the hotkey is still held down.
+ *
+ * Reading it means injecting the focused app's own Copy — a synthetic Cmd/
+ * Ctrl+C. Explicitly-set modifier flags override whatever the user is
+ * physically holding, so a chord of modifiers is no obstacle. A chord
+ * containing the letter C is: the real C key is already down, and the injected
+ * one collides with it, so the app sees nothing and the copy silently fails.
+ *
+ * Neither default contains C. For a chord that does, the copy waits for the
+ * release instead — later, but correct, which is the right way round.
+ */
+function canCopySelectionWhileHeld(): boolean {
+  const parts = currentRemixAccel?.split("+") ?? [];
+  return !parts.some((part) => part.trim().toLowerCase() === "c");
+}
+
+/** Set while a press has already gone to fetch the selection. */
+let remixSelectionRequested = false;
+
+/**
+ * Go and read the selection, then hand it to the pill. Safe to call twice for
+ * one press — the second call is a no-op.
+ */
+function captureRemixSelection(): void {
+  if (remixSelectionRequested) return;
+  remixSelectionRequested = true;
+
+  // The selection copy and the frontmost lookup race in parallel; together
+  // they are the session's anchor — the app the eventual edit belongs to.
+  void Promise.allSettled([
+    isSecureInputActive().then((secure) =>
+      secure
+        ? Promise.reject(new Error("secure-input"))
+        : copySelectionFromFocusedApp(),
+    ),
+    getFrontmostContext(),
+  ]).then(([sel, front]) => {
+    const context =
+      front.status === "fulfilled"
+        ? front.value
+        : { appName: null, windowTitle: null, url: null };
+    remixAnchor = { ...context, capturedAt: Date.now() };
+    if (sel.status === "rejected") {
+      hotkeyLog.warn(`Selection capture failed: ${sel.reason}`);
+    }
+    sendToPill("remix:selection", {
+      text: sel.status === "fulfilled" ? sel.value : null,
+      ...clipboardPreviewFields(),
+      ...remixAnchor,
+    });
+  });
+}
+
+/** The remix hotkey went down: put the pill up straight away. */
+function handleRemixHotkeyDown(): void {
+  if (remixPressed) return;
+  remixPressed = true;
+
+  // On macOS the two hotkeys deliberately share a home key — Fn dictates,
+  // Fn+Control edits — and the listeners watching them are separate processes
+  // that cannot see each other. Press the chord a shade too slowly and the
+  // dictation one has already fired on the solo Fn, so by the time Control
+  // lands there is a recording in progress that the user never asked for.
+  //
+  // The chord is the more specific of the two and therefore the one that was
+  // meant: cancel the dictation it interrupted. Nothing is lost — it is a few
+  // tens of milliseconds of audio from someone who was reaching for a
+  // different key.
+  // Its own channel rather than the ordinary cancel, which would tell the
+  // renderer to hide a pill this very function is about to show again — and
+  // the hide would land second and win.
+  if (hotkeyPressed) {
+    hotkeyPressed = false;
+    clearHotkeyStuckWatchdog();
+    sendToPill("remix:supersede");
+  }
+
+  setRemixRouteKeys(true);
+  armRemixStuckWatchdog();
+  remixSelectionRequested = false;
+  showPill();
+  sendToPill("remix:down");
+  // Mirror the key events to the dashboard (onboarding keycaps, the Remix
+  // page's demo), the same way hotkey:down/up already reach both windows.
+  settingsWindow?.webContents.send("remix:down");
+
+  // Read the selection now, not on release. Whether there is anything to edit
+  // is the first thing the user needs to know — telling them only after they
+  // have held the key down and said a whole sentence is telling them too late.
+  if (canCopySelectionWhileHeld()) captureRemixSelection();
+}
+
+/**
+ * The hotkey came up. Tell the pill, and read the selection if the press
+ * itself couldn't (a chord containing C — see `canCopySelectionWhileHeld`).
+ */
+function handleRemixHotkeyUp(): void {
+  if (!remixPressed) return;
+  remixPressed = false;
+  clearRemixStuckWatchdog();
+  sendToPill("remix:up");
+  settingsWindow?.webContents.send("remix:up");
+  captureRemixSelection();
+}
+
+let remixStuckTimer: NodeJS.Timeout | null = null;
+
+function clearRemixStuckWatchdog(): void {
+  if (remixStuckTimer) {
+    clearTimeout(remixStuckTimer);
+    remixStuckTimer = null;
+  }
+}
+
+function armRemixStuckWatchdog(): void {
+  clearRemixStuckWatchdog();
+  remixStuckTimer = setTimeout(() => {
+    remixStuckTimer = null;
+    if (!remixPressed) return;
+    hotkeyLog.warn(
+      "Remix hotkey saw no key-up for 5 minutes; forcing release.",
+    );
+    handleRemixHotkeyUp();
+  }, HOTKEY_STUCK_TIMEOUT_MS);
+}
+
+/**
+ * The route shortcuts: the remix chord plus a digit.
+ *
+ * The chord is already under the user's fingers, so a number finishes it —
+ * hold, press 2, done, without ever reaching the microphone. They stay claimed
+ * for as long as the card is up rather than only while the key is down, so a
+ * tapped-open card can still be answered with a digit; the card's own idle
+ * timeout is what bounds how long they are taken from the rest of the system.
+ *
+ * The modifiers have to be spelled out because a bare digit would not match
+ * the event the OS actually delivers — Control is physically down. Fn is not
+ * expressible as an Electron accelerator and does not modify the number row,
+ * so it is simply absent here.
+ */
+const REMIX_ROUTE_MODIFIER =
+  process.platform === "darwin" ? "Control" : "Control+Alt";
+const REMIX_ROUTE_DIGITS = ["1", "2", "3"];
+let remixRouteKeysHeld = false;
+
+function setRemixRouteKeys(open: boolean): void {
+  if (open === remixRouteKeysHeld) return;
+  remixRouteKeysHeld = open;
+
+  for (const [index, digit] of REMIX_ROUTE_DIGITS.entries()) {
+    const accel = `${REMIX_ROUTE_MODIFIER}+${digit}`;
+    if (!open) {
+      try {
+        globalShortcut.unregister(accel);
+      } catch {}
+      continue;
+    }
+    try {
+      const claimed = globalShortcut.register(accel, () => {
+        if (mainWindow?.isVisible()) {
+          mainWindow.webContents.send("remix:route", index);
+        }
+      });
+      // A route whose chord the OS or another app already owns simply has no
+      // shortcut. Saying so out loud beats a key that silently does nothing.
+      if (!claimed) {
+        hotkeyLog.warn(`Route shortcut "${accel}" is already taken.`);
+      }
+    } catch (err) {
+      hotkeyLog.warn(`Could not claim "${accel}" for a remix route: ${err}`);
+    }
+  }
+}
+
+function scheduleRemixHotkeyRegistration(hotkey?: string): void {
+  void registerRemixHotkey(hotkey).catch((err) => {
+    hotkeyLog.error(
+      `Remix hotkey registration failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  });
+}
+
+/**
+ * Bring the remix listener up on `hotkey`.
+ *
+ * There is deliberately no `globalShortcut` fallback here, unlike dictation's.
+ * That fallback exists to keep dictation working in toggle mode where the
+ * native listener can't run, and it is worth the degraded behaviour because
+ * dictation is the product. Remix are not: a hotkey that can't tell a tap
+ * from a hold can't offer the voice half at all, and silently shipping half
+ * the feature is worse than the feature being absent on that machine.
+ */
+async function registerRemixHotkey(hotkey?: string): Promise<void> {
+  if (remixKeyListener) {
+    remixKeyListener.stop();
+    remixKeyListener = null;
+  }
+  remixPressed = false;
+
+  remixHotkeyPreference = hotkey ?? remixHotkeyPreference;
+  const configured = hotkey ?? remixHotkeyPreference;
+  const normalized =
+    configured && isValidAccelerator(configured)
+      ? normalizeAccelerator(configured)
+      : null;
+  const accel = normalized ?? DEFAULT_REMIX_HOTKEY;
+
+  // One key can't mean two things. Dictation wins — it is the feature the user
+  // reaches for dozens of times a day — and remix stay off until the clash
+  // is resolved in Settings.
+  if (currentHotkeyAccel && accel === currentHotkeyAccel) {
+    hotkeyLog.warn(
+      `Remix hotkey "${accel}" is already the dictation hotkey; remix disabled.`,
+    );
+    return;
+  }
+
+  currentRemixAccel = accel;
+
+  const listener = new NativeKeyListener({
+    hotkey: accel,
+    onKeyDown: handleRemixHotkeyDown,
+    onKeyUp: handleRemixHotkeyUp,
+    onError: (error) => {
+      hotkeyLog.error(`Remix key listener error: ${error}`);
+    },
+    onReady: () => {
+      hotkeyLog.debug(`Remix key listener ready for "${accel}"`);
+    },
+    onPermanentFailure: () => {
+      if (remixKeyListener !== listener) return;
+      hotkeyLog.error("Remix key listener permanently failed; remix off.");
+      listener.stop();
+      remixKeyListener = null;
+    },
+  });
+  remixKeyListener = listener;
+
+  const started = await listener.start();
+  if (remixKeyListener !== listener) {
+    listener.stop();
+    return;
+  }
+  if (!started) {
+    hotkeyLog.warn(
+      `Remix key listener unavailable for "${accel}"; remix are off.`,
+    );
+    listener.stop();
+    remixKeyListener = null;
+  }
 }
 
 const HOTKEY_STUCK_TIMEOUT_MS = 5 * 60 * 1000;
@@ -2982,6 +4411,9 @@ async function registerHotkey(hotkey?: string): Promise<void> {
     if (started) {
       accessibilityConfirmed = true;
       hotkeyDegradedNotified = false;
+      // The dictation hotkey just moved, which can free a chord remix were
+      // parked on — or take the one they were using. Re-resolve either way.
+      if (remixInitialized) scheduleRemixHotkeyRegistration();
     } else {
       hotkeyLog.warn(
         "Native key listener unavailable, falling back to Electron globalShortcut (toggle mode).",
@@ -3028,6 +4460,14 @@ app.on("will-quit", () => {
   if (keyListener) {
     keyListener.stop();
     keyListener = null;
+  }
+  if (remixKeyListener) {
+    remixKeyListener.stop();
+    remixKeyListener = null;
+  }
+  if (remixBarFollowTimer) {
+    clearInterval(remixBarFollowTimer);
+    remixBarFollowTimer = null;
   }
   if (micListener) {
     micListener.stop();

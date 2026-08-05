@@ -95,6 +95,7 @@ import {
   normalizePillCancelMode,
   type PillCancelMode,
 } from "../../../shared/pill-cancel";
+import { getDefaultRemixHotkey } from "../../../shared/remix";
 import { SETTINGS_KEYS } from "../../../shared/settings-keys";
 
 // ---------------------------------------------------------------------------
@@ -115,6 +116,7 @@ const audioPlaybackOptions = [
 
 const settingsSectionIds = [
   "recording",
+  "remix",
   "application",
   "display",
   "permissions",
@@ -176,6 +178,10 @@ export default function SettingsPage(): React.JSX.Element {
     window.api?.defaultHotkey ?? getDefaultHotkey(),
   );
   const [hotkeyMode, setHotkeyMode] = useState<"hold" | "toggle">("hold");
+  const [remixBarEnabled, setRemixBarEnabled] = useState(true);
+  const [remixHotkey, setRemixHotkey] = useState(
+    window.api?.defaultRemixHotkey ?? getDefaultRemixHotkey(),
+  );
   const [languages, setLanguages] = useState<string[]>([]);
   const [translateMode, setTranslateMode] = useState(false);
   const [outputMode, setOutputMode] = useState("paste");
@@ -350,6 +356,30 @@ export default function SettingsPage(): React.JSX.Element {
       .catch(() => {});
   }, []);
 
+  const handleRemixBarToggle = useCallback((enabled: boolean) => {
+    setRemixBarEnabled(enabled);
+    getClient()
+      .api.settings[":key"].$put({
+        param: { key: SETTINGS_KEYS.remixBarEnabled },
+        json: { value: String(enabled) },
+      })
+      .then(() => window.api?.reloadRemixHotkey())
+      .catch(() => {});
+  }, []);
+
+  // The remix listener re-reads its accelerator from the server rather than
+  // being handed one, so the reload has to wait for the write to land.
+  const handleRemixHotkeyRecorded = useCallback((accelerator: string) => {
+    setRemixHotkey(accelerator);
+    getClient()
+      .api.settings[":key"].$put({
+        param: { key: SETTINGS_KEYS.remixHotkey },
+        json: { value: accelerator },
+      })
+      .then(() => window.api?.reloadRemixHotkey())
+      .catch(() => {});
+  }, []);
+
   const {
     state: recorderState,
     liveModifiers,
@@ -360,6 +390,16 @@ export default function SettingsPage(): React.JSX.Element {
     startRecording: startHotkeyRecording,
     cancelRecording: cancelHotkeyRecording,
   } = useHotkeyRecorder(handleHotkeyRecorded);
+
+  const {
+    state: remixRecorderState,
+    liveModifiers: remixLiveModifiers,
+    capturedCombo: remixCapturedCombo,
+    canSaveRecording: remixCanSave,
+    needsModifierOrMouseButton: remixNeedsModifier,
+    startRecording: startRemixHotkeyRecording,
+    cancelRecording: cancelRemixHotkeyRecording,
+  } = useHotkeyRecorder(handleRemixHotkeyRecorded, { target: "remix" });
 
   const queryClient = useQueryClient();
 
@@ -379,6 +419,9 @@ export default function SettingsPage(): React.JSX.Element {
       setSelectedDevice(s[SETTINGS_KEYS.micDeviceId]);
     if (s[SETTINGS_KEYS.hotkey]) setHotkey(s[SETTINGS_KEYS.hotkey]);
     if (s[SETTINGS_KEYS.hotkeyMode] === "toggle") setHotkeyMode("toggle");
+    if (s[SETTINGS_KEYS.remixHotkey])
+      setRemixHotkey(s[SETTINGS_KEYS.remixHotkey]);
+    setRemixBarEnabled(s[SETTINGS_KEYS.remixBarEnabled] !== "false");
     setLanguages(parseLanguagesSetting(s));
     if (s[SETTINGS_KEYS.translateMode] === "true") setTranslateMode(true);
     if (s[SETTINGS_KEYS.outputMode]) setOutputMode(s[SETTINGS_KEYS.outputMode]);
@@ -676,6 +719,15 @@ export default function SettingsPage(): React.JSX.Element {
   // Build display keys for current recorder state
   const liveKeys = liveModifiers.map(keyDisplayLabel);
   const draftKeys = capturedCombo ? comboDisplayKeys(capturedCombo) : liveKeys;
+  const remixLiveKeys = remixLiveModifiers.map(keyDisplayLabel);
+  const remixDraftKeys = remixCapturedCombo
+    ? comboDisplayKeys(remixCapturedCombo)
+    : remixLiveKeys;
+  const remixCaptureHint = remixNeedsModifier
+    ? "Add a modifier or side mouse button · Esc to cancel"
+    : remixCanSave
+      ? "Release to save · Esc to cancel"
+      : "Press a modifier or side mouse button... · Esc to cancel";
   const captureHint = needsModifierOrMouseButton
     ? "Add a modifier or side mouse button · Esc to cancel"
     : canSaveRecording
@@ -990,6 +1042,70 @@ export default function SettingsPage(): React.JSX.Element {
                   />
                 </Row>
               ) : null}
+            </SettingsPanel>
+          )}
+
+          {activeSection === "remix" && (
+            <SettingsPanel>
+              <Row
+                label={t("settings.remix.hotkey")}
+                desc={
+                  remixHotkey === hotkey
+                    ? t("settings.remix.conflict")
+                    : t("settings.remix.hotkeyDesc")
+                }
+              >
+                {remixRecorderState === "idle" ? (
+                  <Button
+                    variant="outline"
+                    onClick={startRemixHotkeyRecording}
+                    className="h-auto max-w-full flex-wrap gap-3 px-3.5 py-2"
+                  >
+                    <Keyboard className="text-muted-foreground size-4 shrink-0" />
+                    <KeyComboDisplay
+                      keys={formatAcceleratorKeys(remixHotkey)}
+                    />
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      {t("common.change")}
+                    </span>
+                  </Button>
+                ) : (
+                  <div className="border-primary/60 bg-primary/5 relative inline-flex max-w-full flex-wrap items-center gap-3 rounded-lg border px-3.5 py-2">
+                    <Keyboard className="text-primary h-4 w-4 shrink-0" />
+                    {remixDraftKeys.length > 0 ? (
+                      <>
+                        <KeyComboDisplay keys={remixDraftKeys} variant="dim" />
+                        <span className="text-muted-foreground text-xs">
+                          {remixCaptureHint}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground animate-pulse text-sm">
+                        {remixCaptureHint}
+                      </span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelRemixHotkeyRecording}
+                      className="ml-1"
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                  </div>
+                )}
+              </Row>
+
+              <Row
+                label={t("settings.remix.bar")}
+                desc={t("settings.remix.barDesc")}
+                last
+              >
+                <Switch
+                  checked={remixBarEnabled}
+                  onCheckedChange={handleRemixBarToggle}
+                />
+              </Row>
             </SettingsPanel>
           )}
 
