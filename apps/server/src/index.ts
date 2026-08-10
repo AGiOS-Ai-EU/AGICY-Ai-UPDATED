@@ -265,7 +265,7 @@ export async function startServer(
   });
 }
 
-export { closeDb, writeSetting } from "./lib/db.js";
+export { closeDb, readSetting, writeSetting } from "./lib/db.js";
 export { configureNetwork } from "./lib/network.js";
 export {
   disposeServerPlugins,

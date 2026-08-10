@@ -185,10 +185,16 @@
       "widgetPosition": "Posizione del widget",
       "widgetPositionDesc": "Dove appare il widget fluttuante sullo schermo.",
       "positionBottomCenter": "In basso · Centro",
+      "positionBottomLeft": "Basso · Sinistra",
       "positionBottomRight": "In basso · Destra",
       "positionTopCenter": "In alto · Centro",
+      "positionTopLeft": "Alto · Sinistra",
       "positionTopRight": "In alto · Destra",
-      "positionCustom": "Personalizzato"
+      "positionCustom": "Personalizzato",
+      "companion": "Compagno",
+      "companionDesc": "Chi sta nell'angolo.",
+      "companionSpark": "Spark",
+      "companionJeb": "Samurai Jeb"
     },
     "permissions": {
       "microphone": "Microfono",
@@ -212,6 +218,12 @@
       "conflict": "Questa è già la tua scorciatoia di dettatura. Scegli un'altra combinazione.",
       "bar": "Barra Remix",
       "barDesc": "Mostra una piccola barra in fondo allo schermo. Passaci sopra per aprire Remix."
+    },
+    "dictation": {
+      "destination": "La dettatura arriva",
+      "destinationDesc": "Dove finiscono le parole quando rilasci il tasto.",
+      "destinationCursor": "Al cursore",
+      "destinationComposer": "Nel pannello"
     }
   },
   "today": {

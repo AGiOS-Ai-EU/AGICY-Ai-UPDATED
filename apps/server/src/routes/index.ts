@@ -6,6 +6,7 @@ import {
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { capture, captureException, getDeviceId } from "../lib/posthog.js";
+import agentRoute from "./agent.js";
 import auth from "./auth.js";
 import billing from "./billing.js";
 import configRoute from "./config.js";
@@ -70,6 +71,7 @@ const apiRouter = new Hono()
   .route("/dismissed-notifications", dismissedNotifications)
   .route("/vocabulary", vocabulary)
   .route("/post-process", postProcessRoute)
+  .route("/agent", agentRoute)
   .route("/remix", remixRoute)
   .route("/output", outputRoute)
   .route("/events", eventsRoute)

@@ -15,7 +15,7 @@
     "pactl",
     "pkg-config",
     "powershell",
-    "powershell.exe",
+    "powershell.exe"
   ],
   "ignoreFiles": [
     "apps/electron/src/preload/*.d.ts",

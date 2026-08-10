@@ -204,14 +204,20 @@
       "widgetPosition": "Widget position",
       "widgetPositionDesc": "Where the floating pill appears on your screen.",
       "positionBottomCenter": "Bottom · Center",
+      "positionBottomLeft": "Bottom · Left",
       "positionBottomRight": "Bottom · Right",
       "positionTopCenter": "Top · Center",
+      "positionTopLeft": "Top · Left",
       "positionTopRight": "Top · Right",
       "positionCustom": "Custom",
       "cancelButton": "Cancel button",
       "cancelButtonDesc": "Show a cancel button on the floating pill. Escape always cancels too.",
       "cancelButtonHover": "On hover",
-      "cancelButtonAlways": "Always"
+      "cancelButtonAlways": "Always",
+      "companion": "Companion",
+      "companionDesc": "Who sits in the corner.",
+      "companionSpark": "Spark",
+      "companionJeb": "Samurai Jeb"
     },
     "permissions": {
       "microphone": "Microphone",
@@ -269,6 +275,12 @@
       "conflict": "This is already your dictation hotkey. Pick a different combination.",
       "bar": "Remix bar",
       "barDesc": "Keep a small bar at the bottom of your screen. Hover it to open Remix."
+    },
+    "dictation": {
+      "destination": "Dictation lands",
+      "destinationDesc": "Where your words go when you release the key.",
+      "destinationCursor": "At your cursor",
+      "destinationComposer": "In the panel"
     }
   },
   "today": {

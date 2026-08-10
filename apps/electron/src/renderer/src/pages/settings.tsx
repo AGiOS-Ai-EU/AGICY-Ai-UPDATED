@@ -60,6 +60,12 @@ import {
   useCloudUsage,
 } from "@renderer/lib/use-cloud-usage";
 import { cn } from "@renderer/lib/utils";
+import {
+  type CompanionForm,
+  type DictationDestinationSetting,
+  parseCompanionForm,
+  parseDictationDestination,
+} from "@shared/companion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -179,7 +185,6 @@ export default function SettingsPage(): React.JSX.Element {
     window.api?.defaultHotkey ?? getDefaultHotkey(),
   );
   const [hotkeyMode, setHotkeyMode] = useState<"hold" | "toggle">("hold");
-  const [remixBarEnabled, setRemixBarEnabled] = useState(true);
   const [remixHotkey, setRemixHotkey] = useState(
     window.api?.defaultRemixHotkey ?? getDefaultRemixHotkey(),
   );
@@ -187,6 +192,9 @@ export default function SettingsPage(): React.JSX.Element {
   const [translateMode, setTranslateMode] = useState(false);
   const [outputMode, setOutputMode] = useState("paste");
   const [pillPosition, setPillPosition] = useState("bottom-center");
+  const [companionForm, setCompanionForm] = useState<CompanionForm>("spark");
+  const [dictationDestination, setDictationDestination] =
+    useState<DictationDestinationSetting>("cursor");
   const [pillCancel, setPillCancel] = useState<PillCancelMode>("hover");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [historyPaused, setHistoryPaused] = useState(false);
@@ -357,17 +365,6 @@ export default function SettingsPage(): React.JSX.Element {
       .catch(() => {});
   }, []);
 
-  const handleRemixBarToggle = useCallback((enabled: boolean) => {
-    setRemixBarEnabled(enabled);
-    getClient()
-      .api.settings[":key"].$put({
-        param: { key: SETTINGS_KEYS.remixBarEnabled },
-        json: { value: String(enabled) },
-      })
-      .then(() => window.api?.reloadRemixHotkey())
-      .catch(() => {});
-  }, []);
-
   // The remix listener re-reads its accelerator from the server rather than
   // being handed one, so the reload has to wait for the write to land.
   const handleRemixHotkeyRecorded = useCallback((accelerator: string) => {
@@ -429,10 +426,12 @@ export default function SettingsPage(): React.JSX.Element {
     if (s[SETTINGS_KEYS.hotkeyMode] === "toggle") setHotkeyMode("toggle");
     if (s[SETTINGS_KEYS.remixHotkey])
       setRemixHotkey(s[SETTINGS_KEYS.remixHotkey]);
-    setRemixBarEnabled(s[SETTINGS_KEYS.remixBarEnabled] !== "false");
     setLanguages(parseLanguagesSetting(s));
     if (s[SETTINGS_KEYS.translateMode] === "true") setTranslateMode(true);
     if (s[SETTINGS_KEYS.outputMode]) setOutputMode(s[SETTINGS_KEYS.outputMode]);
+    setDictationDestination(
+      parseDictationDestination(s[SETTINGS_KEYS.dictationDestination]),
+    );
     setPillCancel(normalizePillCancelMode(s[SETTINGS_KEYS.pillCancelButton]));
     if (s[SETTINGS_KEYS.soundEnabled] === "false") setSoundEnabled(false);
     if (s[SETTINGS_KEYS.historyPaused] === "true") setHistoryPaused(true);
@@ -585,6 +584,24 @@ export default function SettingsPage(): React.JSX.Element {
   const handlePillPositionChange = useCallback((value: string) => {
     setPillPosition(value);
     window.api?.setPillPosition(value);
+  }, []);
+
+  const handleDictationDestinationChange = useCallback((value: string) => {
+    const next = parseDictationDestination(value);
+    setDictationDestination(next);
+    getClient()
+      .api.settings[":key"].$put({
+        param: { key: SETTINGS_KEYS.dictationDestination },
+        json: { value: next },
+      })
+      .then(() => window.api?.reloadDictationPrefs())
+      .catch(() => {});
+  }, []);
+
+  const handleCompanionFormChange = useCallback((value: string) => {
+    const form = parseCompanionForm(value);
+    setCompanionForm(form);
+    window.api?.setCompanionForm(form);
   }, []);
 
   const handlePillCancelChange = useCallback((value: string) => {
@@ -743,10 +760,28 @@ export default function SettingsPage(): React.JSX.Element {
 
   const activeSectionLabel = t(`settings.sections.${activeSection}`);
 
+  const dictationDestinationOptions = useMemo<SegmentOption[]>(
+    () => [
+      { id: "cursor", label: t("settings.dictation.destinationCursor") },
+      { id: "composer", label: t("settings.dictation.destinationComposer") },
+    ],
+    [t],
+  );
+
+  const companionOptions = useMemo<SegmentOption[]>(
+    () => [
+      { id: "spark", label: t("settings.display.companionSpark") },
+      { id: "jeb", label: t("settings.display.companionJeb") },
+    ],
+    [t],
+  );
+
   const positionOptions = useMemo<SegmentOption[]>(() => {
     const opts: SegmentOption[] = [
+      { id: "top-left", label: t("settings.display.positionTopLeft") },
       { id: "top-center", label: t("settings.display.positionTopCenter") },
       { id: "top-right", label: t("settings.display.positionTopRight") },
+      { id: "bottom-left", label: t("settings.display.positionBottomLeft") },
       {
         id: "bottom-center",
         label: t("settings.display.positionBottomCenter"),
@@ -995,6 +1030,18 @@ export default function SettingsPage(): React.JSX.Element {
               </Row>
 
               <Row
+                label={t("settings.dictation.destination")}
+                desc={t("settings.dictation.destinationDesc")}
+              >
+                <Segment
+                  compact
+                  options={dictationDestinationOptions}
+                  active={dictationDestination}
+                  onSelect={handleDictationDestinationChange}
+                />
+              </Row>
+
+              <Row
                 label={t("settings.recording.outputMode")}
                 desc={t("settings.recording.outputModeDesc")}
               >
@@ -1111,17 +1158,6 @@ export default function SettingsPage(): React.JSX.Element {
                   </div>
                 )}
               </Row>
-
-              <Row
-                label={t("settings.remix.bar")}
-                desc={t("settings.remix.barDesc")}
-                last
-              >
-                <Switch
-                  checked={remixBarEnabled}
-                  onCheckedChange={handleRemixBarToggle}
-                />
-              </Row>
             </SettingsPanel>
           )}
 
@@ -1141,6 +1177,17 @@ export default function SettingsPage(): React.JSX.Element {
                   }))}
                   active={theme ?? "system"}
                   onSelect={handleThemeChange}
+                />
+              </Row>
+              <Row
+                label={t("settings.display.companion")}
+                desc={t("settings.display.companionDesc")}
+              >
+                <Segment
+                  compact
+                  options={companionOptions}
+                  active={companionForm}
+                  onSelect={handleCompanionFormChange}
                 />
               </Row>
               <Row

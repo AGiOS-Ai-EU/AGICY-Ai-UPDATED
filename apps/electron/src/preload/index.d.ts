@@ -3,6 +3,8 @@ import type {
   ActiveAudioPlaybackMode,
   AudioPlaybackMode,
 } from "../shared/audio-playback";
+import type { CompanionForm, CompanionState } from "../shared/companion";
+import type { JebScript, JebTravelEvent } from "../shared/jeb";
 import type { OpenAppCandidate } from "../shared/open-apps";
 import type { PillCancelMode } from "../shared/pill-cancel";
 import type { PluginViewBounds } from "../shared/plugins";
@@ -88,6 +90,69 @@ declare global {
       setRemixChatFocus: (focus: boolean) => void;
       setRemixRouteKeys: (open: boolean) => void;
       remixBarHover: () => void;
+      jebPlay: (script: JebScript) => void;
+      jebPlaySync: (script: JebScript) => Promise<boolean>;
+      jebSay: (text: string) => void;
+      jebSetThinking: (on: boolean) => void;
+      jebSetHotRect: (
+        rect: { x: number; y: number; width: number; height: number } | null,
+      ) => void;
+      companionForm: () => Promise<CompanionForm>;
+      companionSetHotRect: (
+        rect: { x: number; y: number; width: number; height: number } | null,
+      ) => void;
+      companionHover: () => void;
+      setCompanionForm: (form: CompanionForm) => void;
+      panelOpenForDictation: () => void;
+      panelDictationPartial: (text: string) => void;
+      panelDictationFinal: (text: string) => void;
+      panelDictationError: (message: string) => void;
+      onPanelDictation: (
+        callback: (ev: {
+          kind: "partial" | "final" | "error";
+          text: string;
+        }) => void,
+      ) => () => void;
+      dictationPrefs: () => Promise<{
+        destination: "cursor" | "composer";
+        outputMode: "paste" | "clipboard";
+        soundEnabled: boolean;
+        audioPlaybackMode: "off" | "duck" | "pause";
+      }>;
+      onDictationPrefs: (
+        callback: (prefs: {
+          destination: "cursor" | "composer";
+          outputMode: "paste" | "clipboard";
+          soundEnabled: boolean;
+          audioPlaybackMode: "off" | "duck" | "pause";
+        }) => void,
+      ) => () => void;
+      reloadDictationPrefs: () => void;
+      panelClose: () => void;
+      panelPointerLeft: () => void;
+      panelPointerEntered: () => void;
+      onPanelFocusComposer: (callback: () => void) => () => void;
+      onCompanionForm: (callback: (form: CompanionForm) => void) => () => void;
+      onCompanionState: (
+        callback: (state: CompanionState) => void,
+      ) => () => void;
+      onCompanionHotEnter: (callback: () => void) => () => void;
+      jebHoverOpen: () => void;
+      jebImpact: (id: string) => void;
+      jebPerformDone: (id: string) => void;
+      onJebHotEnter: (callback: () => void) => () => void;
+      onJebWake: (callback: () => void) => () => void;
+      onJebTravel: (callback: (ev: JebTravelEvent) => void) => () => void;
+      onJebPerform: (
+        callback: (payload: {
+          id: string;
+          steps: JebScript["performance"];
+          say: string | null;
+        }) => void,
+      ) => () => void;
+      onJebSay: (callback: (text: string) => void) => () => void;
+      onJebThinking: (callback: (on: boolean) => void) => () => void;
+      onJebListen: (callback: (on: boolean) => void) => () => void;
       setRemixPracticeTarget: (active: boolean) => void;
       onRemixPracticeDelivered: (callback: () => void) => () => void;
       onRemixOpenChat: (callback: () => void) => () => void;

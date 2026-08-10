@@ -185,10 +185,16 @@
       "widgetPosition": "Posição do widget",
       "widgetPositionDesc": "Onde o widget flutuante aparece na tela.",
       "positionBottomCenter": "Abaixo · Centro",
+      "positionBottomLeft": "Base · Esquerda",
       "positionBottomRight": "Abaixo · Direita",
       "positionTopCenter": "Acima · Centro",
+      "positionTopLeft": "Topo · Esquerda",
       "positionTopRight": "Acima · Direita",
-      "positionCustom": "Personalizado"
+      "positionCustom": "Personalizado",
+      "companion": "Companheiro",
+      "companionDesc": "Quem fica no canto.",
+      "companionSpark": "Spark",
+      "companionJeb": "Samurai Jeb"
     },
     "permissions": {
       "microphone": "Microfone",
@@ -212,6 +218,12 @@
       "conflict": "Este já é o seu atalho de ditado. Escolha outra combinação.",
       "bar": "Barra do Remix",
       "barDesc": "Mantém uma pequena barra na parte inferior da tela. Passe o mouse para abrir o Remix."
+    },
+    "dictation": {
+      "destination": "O ditado vai",
+      "destinationDesc": "Para onde vão as palavras ao soltar a tecla.",
+      "destinationCursor": "No cursor",
+      "destinationComposer": "No painel"
     }
   },
   "today": {

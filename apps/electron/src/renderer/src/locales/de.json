@@ -185,10 +185,16 @@
       "widgetPosition": "Widget-Position",
       "widgetPositionDesc": "Wo das schwebende Fenster auf Ihrem Bildschirm erscheint.",
       "positionBottomCenter": "Unten · Mitte",
+      "positionBottomLeft": "Unten · Links",
       "positionBottomRight": "Unten · Rechts",
       "positionTopCenter": "Oben · Mitte",
+      "positionTopLeft": "Oben · Links",
       "positionTopRight": "Oben · Rechts",
-      "positionCustom": "Benutzerdefiniert"
+      "positionCustom": "Benutzerdefiniert",
+      "companion": "Begleiter",
+      "companionDesc": "Wer in der Ecke sitzt.",
+      "companionSpark": "Spark",
+      "companionJeb": "Samurai Jeb"
     },
     "permissions": {
       "microphone": "Mikrofon",
@@ -212,6 +218,12 @@
       "conflict": "Das ist bereits Ihre Diktat-Tastenkombination. Wählen Sie eine andere Kombination.",
       "bar": "Remix-Leiste",
       "barDesc": "Zeigt eine kleine Leiste am unteren Bildschirmrand. Fahren Sie darüber, um Remix zu öffnen."
+    },
+    "dictation": {
+      "destination": "Diktat landet",
+      "destinationDesc": "Wohin deine Worte gehen, wenn du die Taste loslässt.",
+      "destinationCursor": "Am Cursor",
+      "destinationComposer": "Im Panel"
     }
   },
   "today": {

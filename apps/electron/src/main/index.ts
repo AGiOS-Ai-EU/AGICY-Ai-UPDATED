@@ -49,6 +49,7 @@ import {
   captureException,
   closeDb,
   disposeServerPlugins,
+  readSetting as readServerSetting,
   shutdownPosthog,
   startServer as startFreestyleServer,
 } from "@freestyle-voice/server";
@@ -79,9 +80,25 @@ import { autoUpdater } from "electron-updater";
 import { hc } from "hono/client";
 import icon from "../../resources/icon.png?asset";
 import trayIconPath from "../../resources/tray/logoTemplate.png?asset";
-import { isActiveAudioPlaybackMode } from "../shared/audio-playback";
+import {
+  type AudioPlaybackMode,
+  isActiveAudioPlaybackMode,
+} from "../shared/audio-playback";
+import {
+  COMPANION_WINDOW_SIZE,
+  type CompanionForm,
+  type CompanionState,
+  parseCompanionForm,
+  parseDictationDestination,
+} from "../shared/companion";
 import { getDefaultHotkey } from "../shared/hotkey-defaults";
 import type { OpenAppCandidate } from "../shared/open-apps";
+import {
+  COMPANION_CLEARANCE,
+  PANEL_GAP,
+  PANEL_HEIGHT,
+  PANEL_WIDTH,
+} from "../shared/panel";
 import { normalizePillCancelMode } from "../shared/pill-cancel";
 import {
   getDefaultRemixHotkey,
@@ -617,14 +634,19 @@ function presetPositionForDisplay(
   );
   const overlap = process.platform !== "darwin" && bottomInset > 0 ? 14 : -8;
   const centerX = waX + Math.round((width - APP_WIDTH) / 2);
+  const leftX = waX;
   const rightX = waX + width - APP_WIDTH;
   const bottomY = waY + height - APP_HEIGHT + overlap;
 
   switch (position) {
     case "top-center":
       return { x: centerX, y: waY };
+    case "top-left":
+      return { x: leftX, y: waY };
     case "top-right":
       return { x: rightX, y: waY };
+    case "bottom-left":
+      return { x: leftX, y: bottomY };
     case "bottom-right":
       return { x: rightX, y: bottomY };
     default:
@@ -2648,6 +2670,11 @@ app.whenReady().then(async () => {
     startServer(DEFAULT_PORT);
   }
 
+  if (readSettings().companionEnabled !== false) {
+    createCompanionWindow();
+    registerSummonShortcut();
+  }
+
   createTray();
 
   createAppWindow();
@@ -3624,8 +3651,380 @@ async function activateAnchorApp(appName: string): Promise<void> {
 
 // Remix bar — bottom-edge sliver; hides while the pill is up.
 
+let companionWindow: BrowserWindow | null = null;
+let companionHotRect: PillHotRect | null = null;
+let companionLastRect: PillHotRect | null = null;
+let companionHotPollTimer: NodeJS.Timeout | null = null;
+
+function companionPosition(): { x: number; y: number } {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { x: waX, y: waY, height } = display.workArea;
+  return {
+    x: waX,
+    y: waY + height - COMPANION_WINDOW_SIZE,
+  };
+}
+
+function stopCompanionHotPoll(): void {
+  if (!companionHotPollTimer) return;
+  clearInterval(companionHotPollTimer);
+  companionHotPollTimer = null;
+}
+
+function setCompanionHotRect(rect: PillHotRect | null): void {
+  if (process.env.FREESTYLE_E2E === "1") return;
+  if (rect) companionLastRect = rect;
+  companionHotRect = rect;
+  const win = companionWindow;
+  if (!win || win.isDestroyed()) return;
+  if (!rect) {
+    stopCompanionHotPoll();
+    win.setIgnoreMouseEvents(false);
+    return;
+  }
+  win.setIgnoreMouseEvents(true, { forward: process.platform !== "linux" });
+  if (companionHotPollTimer) return;
+  companionHotPollTimer = setInterval(() => {
+    const w = companionWindow;
+    const hot = companionHotRect;
+    if (!w || w.isDestroyed() || !hot || !w.isVisible()) return;
+    const bounds = w.getBounds();
+    const cursor = screen.getCursorScreenPoint();
+    const inside =
+      cursor.x >= bounds.x + hot.x &&
+      cursor.x <= bounds.x + hot.x + hot.width &&
+      cursor.y >= bounds.y + hot.y &&
+      cursor.y <= bounds.y + hot.y + hot.height;
+    if (!inside) return;
+    companionHotRect = null;
+    stopCompanionHotPoll();
+    w.setIgnoreMouseEvents(false);
+    w.webContents.send("companion:hot-enter");
+  }, 120);
+}
+
+function rearmCompanionHotRect(): void {
+  if (!companionLastRect) return;
+  setCompanionHotRect(companionLastRect);
+}
+
+function companionFormSetting(): CompanionForm {
+  return parseCompanionForm(readSettings().companionForm as string | undefined);
+}
+
+function dictationPrefs(): {
+  destination: "cursor" | "composer";
+  outputMode: "paste" | "clipboard";
+  soundEnabled: boolean;
+  audioPlaybackMode: AudioPlaybackMode;
+} {
+  let destination: "cursor" | "composer" = "cursor";
+  let outputMode: "paste" | "clipboard" = "paste";
+  let soundEnabled = true;
+  let audioPlaybackMode: AudioPlaybackMode = "off";
+  try {
+    destination = parseDictationDestination(
+      readServerSetting(SETTINGS_KEYS.dictationDestination),
+    );
+    outputMode =
+      readServerSetting(SETTINGS_KEYS.outputMode) === "clipboard"
+        ? "clipboard"
+        : "paste";
+    soundEnabled = readServerSetting(SETTINGS_KEYS.soundEnabled) !== "false";
+    const mode = readServerSetting("audio_playback_mode");
+    if (mode === "duck" || mode === "pause" || mode === "off") {
+      audioPlaybackMode = mode;
+    }
+  } catch {}
+  return { destination, outputMode, soundEnabled, audioPlaybackMode };
+}
+
+export function broadcastDictationPrefs(): void {
+  companionWindow?.webContents.send("dictation:prefs", dictationPrefs());
+}
+
+ipcMain.handle("dictation:prefs", () => dictationPrefs());
+
+ipcMain.on("dictation:reload-prefs", () => broadcastDictationPrefs());
+
+ipcMain.handle("companion:form", () => companionFormSetting());
+
+ipcMain.on("companion:set-form", (_event, form: string) => {
+  const next = parseCompanionForm(form);
+  writeSettings({ companionForm: next });
+  companionWindow?.webContents.send("companion:form", next);
+});
+
+ipcMain.on("companion:set-hot-rect", (event, rect: PillHotRect | null) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  setCompanionHotRect(rect);
+});
+
+ipcMain.on("companion:hover", (event) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  openPanel();
+});
+
+let pendingDictation: { kind: string; text: string } | null = null;
+
+function forwardDictation(
+  kind: "partial" | "final" | "error",
+  text: string,
+): void {
+  const win = panelWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.webContents.isLoading()) {
+    pendingDictation = { kind, text };
+    win.webContents.once("did-finish-load", () => {
+      if (!pendingDictation) return;
+      win.webContents.send("panel:dictation", pendingDictation);
+      pendingDictation = null;
+    });
+    return;
+  }
+  win.webContents.send("panel:dictation", { kind, text });
+}
+
+ipcMain.on("panel:open-for-dictation", (event) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  openPanel({ focusComposer: true });
+});
+
+ipcMain.on("panel:dictation-partial", (event, text: string) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  forwardDictation("partial", text);
+});
+
+ipcMain.on("panel:dictation-final", (event, text: string) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  forwardDictation("final", text);
+});
+
+ipcMain.on("panel:dictation-error", (event, message: string) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  forwardDictation("error", message);
+});
+
+ipcMain.on("panel:close", (event) => {
+  if (event.sender !== panelWindow?.webContents) return;
+  closePanel();
+});
+
+ipcMain.on("panel:pointer-left", (event) => {
+  if (event.sender !== panelWindow?.webContents) return;
+  schedulePanelHide();
+});
+
+ipcMain.on("panel:pointer-entered", (event) => {
+  if (event.sender !== panelWindow?.webContents) return;
+  cancelPanelHide();
+});
+
+let panelWindow: BrowserWindow | null = null;
+let panelHideTimer: NodeJS.Timeout | null = null;
+const PANEL_HIDE_GRACE_MS = 420;
+const PANEL_HOVER_PAD = 24;
+
+function panelPosition(): { x: number; y: number; height: number } {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { x: waX, y: waY, width, height } = display.workArea;
+  const x = Math.min(waX + 16, waX + Math.max(0, width - PANEL_WIDTH - 16));
+  const available = height - COMPANION_CLEARANCE - PANEL_GAP;
+  const panelHeight = Math.max(320, Math.min(PANEL_HEIGHT, available));
+  const y = Math.max(waY, waY + height - COMPANION_CLEARANCE - panelHeight);
+  return { x, y, height: panelHeight };
+}
+
+function createPanelWindow(): void {
+  if (panelWindow && !panelWindow.isDestroyed()) return;
+  const { x, y, height } = panelPosition();
+
+  panelWindow = new BrowserWindow({
+    width: PANEL_WIDTH,
+    height,
+    x,
+    y,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    autoHideMenuBar: true,
+    focusable: true,
+    ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
+    ...(process.platform === "linux" ? { icon } : {}),
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  panelWindow.setAlwaysOnTop(true, "screen-saver");
+  panelWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  panelWindow.on("closed", () => {
+    panelWindow = null;
+  });
+
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    void panelWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL}/panel.html`);
+  } else {
+    void panelWindow.loadFile(join(__dirname, "../renderer/panel.html"));
+  }
+}
+
+function cancelPanelHide(): void {
+  if (!panelHideTimer) return;
+  clearTimeout(panelHideTimer);
+  panelHideTimer = null;
+}
+
+function openPanel(opts: { focusComposer?: boolean } = {}): void {
+  cancelPanelHide();
+  createPanelWindow();
+  const win = panelWindow;
+  if (!win || win.isDestroyed()) return;
+  const { x, y, height } = panelPosition();
+  win.setBounds({ x, y, width: PANEL_WIDTH, height });
+  if (opts.focusComposer) {
+    win.show();
+    win.focus();
+    win.webContents.send("panel:focus-composer");
+  } else {
+    win.showInactive();
+  }
+}
+
+function closePanel(): void {
+  cancelPanelHide();
+  if (panelWindow && !panelWindow.isDestroyed()) panelWindow.hide();
+  rearmCompanionHotRect();
+}
+
+function cursorWithin(win: BrowserWindow | null, pad = 0): boolean {
+  if (!win || win.isDestroyed()) return false;
+  const b = win.getBounds();
+  const c = screen.getCursorScreenPoint();
+  return (
+    c.x >= b.x - pad &&
+    c.x <= b.x + b.width + pad &&
+    c.y >= b.y - pad &&
+    c.y <= b.y + b.height + pad
+  );
+}
+
+function schedulePanelHide(): void {
+  cancelPanelHide();
+  panelHideTimer = setTimeout(() => {
+    panelHideTimer = null;
+    const win = panelWindow;
+    if (!win || win.isDestroyed() || !win.isVisible()) return;
+    if (win.isFocused()) return;
+    // A pointer heading for the companion, or hovering the gap between the two,
+    // is not a pointer leaving — only hide when it is clear of both.
+    if (cursorWithin(win, PANEL_HOVER_PAD)) return;
+    if (cursorWithin(companionWindow, PANEL_HOVER_PAD)) return;
+    win.hide();
+    rearmCompanionHotRect();
+  }, PANEL_HIDE_GRACE_MS);
+}
+
+const SUMMON_ACCELERATOR = "Alt+Space";
+
+function registerSummonShortcut(): void {
+  try {
+    if (globalShortcut.isRegistered(SUMMON_ACCELERATOR)) {
+      globalShortcut.unregister(SUMMON_ACCELERATOR);
+    }
+    const ok = globalShortcut.register(SUMMON_ACCELERATOR, () => {
+      const visible = panelWindow?.isVisible() && !panelWindow.isDestroyed();
+      if (visible) closePanel();
+      else openPanel({ focusComposer: true });
+    });
+    if (!ok)
+      log.warn(`Could not register summon shortcut ${SUMMON_ACCELERATOR}`);
+  } catch (err) {
+    log.warn(`Summon shortcut registration failed: ${err}`);
+  }
+}
+
+function destroyPanelWindow(): void {
+  cancelPanelHide();
+  if (panelWindow && !panelWindow.isDestroyed()) panelWindow.destroy();
+  panelWindow = null;
+}
+
+function createCompanionWindow(): void {
+  if (companionWindow && !companionWindow.isDestroyed()) return;
+  const { x, y } = companionPosition();
+
+  companionWindow = new BrowserWindow({
+    width: COMPANION_WINDOW_SIZE,
+    height: COMPANION_WINDOW_SIZE,
+    x,
+    y,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    autoHideMenuBar: true,
+    focusable: false,
+    ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
+    ...(process.platform === "linux" ? { icon } : {}),
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  companionWindow.setAlwaysOnTop(true, "screen-saver");
+  companionWindow.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true,
+  });
+  companionWindow.setIgnoreMouseEvents(true, {
+    forward: process.platform !== "linux",
+  });
+
+  companionWindow.on("closed", () => {
+    stopCompanionHotPoll();
+    companionWindow = null;
+  });
+
+  companionWindow.once("ready-to-show", () => {
+    companionWindow?.showInactive();
+  });
+
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    void companionWindow.loadURL(
+      `${process.env.ELECTRON_RENDERER_URL}/companion.html`,
+    );
+  } else {
+    void companionWindow.loadFile(
+      join(__dirname, "../renderer/companion.html"),
+    );
+  }
+}
+
+function destroyCompanionWindow(): void {
+  stopCompanionHotPoll();
+  if (companionWindow && !companionWindow.isDestroyed()) {
+    companionWindow.destroy();
+  }
+  companionWindow = null;
+}
+
+export function setCompanionState(state: CompanionState): void {
+  companionWindow?.webContents.send("companion:state", state);
+}
+
 let remixBarWindow: BrowserWindow | null = null;
-let remixBarEnabled = true;
+let remixBarEnabled = false;
 // Held during onboarding; seeded from settings, corrected by startup probe.
 let remixBarHeldForOnboarding = readSettings().onboardingComplete !== true;
 let remixBarFollowTimer: NodeJS.Timeout | null = null;
@@ -3821,7 +4220,7 @@ function handleRemixBarOpen(): void {
 
 function applyRemixSettings(settings: Record<string, string>): void {
   // Absent means on.
-  remixBarEnabled = settings[SETTINGS_KEYS.remixBarEnabled] !== "false";
+  remixBarEnabled = false;
   remixInitialized = true;
   updateRemixBar();
   const configured = settings[SETTINGS_KEYS.remixHotkey];
@@ -3896,6 +4295,19 @@ function hotkeyModeFromSettings(
   return settings[SETTINGS_KEYS.hotkeyMode] === "toggle" ? "toggle" : "hold";
 }
 
+function companionOwnsDictation(): boolean {
+  return !!companionWindow && !companionWindow.isDestroyed();
+}
+
+function dictationTargets(): BrowserWindow[] {
+  const targets: BrowserWindow[] = [];
+  if (companionOwnsDictation() && companionWindow)
+    targets.push(companionWindow);
+  else if (mainWindow) targets.push(mainWindow);
+  if (settingsWindow) targets.push(settingsWindow);
+  return targets;
+}
+
 function sendHotkeyDown(): void {
   const missingPermission = getMissingDictationPermission();
   if (missingPermission) {
@@ -3904,8 +4316,14 @@ function sendHotkeyDown(): void {
     void showRequiredPermissionDialog(missingPermission);
     return;
   }
-  showPill();
   relayServerEvent({ type: FreestyleEventType.RecordingStarted });
+  if (companionOwnsDictation()) {
+    for (const win of dictationTargets()) {
+      win.webContents.send("hotkey:down");
+    }
+    return;
+  }
+  showPill();
   if (pillReadyPromise) {
     // The pill window is still loading — defer IPC until it can receive it.
     void pillReadyPromise.then(() => {
@@ -3919,6 +4337,12 @@ function sendHotkeyDown(): void {
 }
 
 function sendHotkeyUp(): void {
+  if (companionOwnsDictation()) {
+    for (const win of dictationTargets()) {
+      win.webContents.send("hotkey:up");
+    }
+    return;
+  }
   if (pillReadyPromise) {
     // Preserve IPC ordering: hotkey:up must arrive after hotkey:down.
     void pillReadyPromise.then(() => {
@@ -4403,6 +4827,8 @@ async function registerHotkey(hotkey?: string): Promise<void> {
 app.on("will-quit", () => {
   audioPlaybackController.restoreSync();
   stopLinuxPasteHelper();
+  destroyCompanionWindow();
+  destroyPanelWindow();
   if (keyListener) {
     keyListener.stop();
     keyListener = null;

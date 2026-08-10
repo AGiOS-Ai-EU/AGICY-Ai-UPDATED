@@ -23,6 +23,7 @@ export const SETTINGS_KEYS = {
   networkCaCertPath: "network_ca_cert_path",
   networkProxyUrl: "network_proxy_url",
   outputMode: "output_mode",
+  dictationDestination: "dictation_destination",
   pillCancelButton: "pill_cancel_button",
   soundEnabled: "sound_enabled",
   theme: "theme",

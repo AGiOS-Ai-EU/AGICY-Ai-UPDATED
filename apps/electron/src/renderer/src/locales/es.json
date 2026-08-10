@@ -185,10 +185,16 @@
       "widgetPosition": "Posición del widget",
       "widgetPositionDesc": "Dónde aparece la pastilla flotante en tu pantalla.",
       "positionBottomCenter": "Abajo · Centro",
+      "positionBottomLeft": "Abajo · Izquierda",
       "positionBottomRight": "Abajo · Derecha",
       "positionTopCenter": "Arriba · Centro",
+      "positionTopLeft": "Arriba · Izquierda",
       "positionTopRight": "Arriba · Derecha",
-      "positionCustom": "Personalizado"
+      "positionCustom": "Personalizado",
+      "companion": "Compañero",
+      "companionDesc": "Quién está en la esquina.",
+      "companionSpark": "Spark",
+      "companionJeb": "Samurai Jeb"
     },
     "permissions": {
       "microphone": "Micrófono",
@@ -212,6 +218,12 @@
       "conflict": "Este ya es tu atajo de dictado. Elige otra combinación.",
       "bar": "Barra de Remix",
       "barDesc": "Mantén una pequeña barra en la parte inferior de la pantalla. Pasa el cursor para abrir Remix."
+    },
+    "dictation": {
+      "destination": "El dictado va",
+      "destinationDesc": "Dónde acaban tus palabras al soltar la tecla.",
+      "destinationCursor": "En el cursor",
+      "destinationComposer": "En el panel"
     }
   },
   "today": {

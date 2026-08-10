@@ -185,10 +185,16 @@
       "widgetPosition": "Position du widget",
       "widgetPositionDesc": "Où la pastille flottante apparaît sur votre écran.",
       "positionBottomCenter": "Bas · Centre",
+      "positionBottomLeft": "Bas · Gauche",
       "positionBottomRight": "Bas · Droite",
       "positionTopCenter": "Haut · Centre",
+      "positionTopLeft": "Haut · Gauche",
       "positionTopRight": "Haut · Droite",
-      "positionCustom": "Personnalisé"
+      "positionCustom": "Personnalisé",
+      "companion": "Compagnon",
+      "companionDesc": "Qui occupe le coin.",
+      "companionSpark": "Spark",
+      "companionJeb": "Samurai Jeb"
     },
     "permissions": {
       "microphone": "Microphone",
@@ -212,6 +218,12 @@
       "conflict": "C'est déjà votre raccourci de dictée. Choisissez une autre combinaison.",
       "bar": "Barre Remix",
       "barDesc": "Affiche une petite barre en bas de l'écran. Survolez-la pour ouvrir Remix."
+    },
+    "dictation": {
+      "destination": "La dictée arrive",
+      "destinationDesc": "Où vont vos mots quand vous relâchez la touche.",
+      "destinationCursor": "Au curseur",
+      "destinationComposer": "Dans le panneau"
     }
   },
   "today": {
