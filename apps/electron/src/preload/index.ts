@@ -242,6 +242,9 @@ const api = {
   },
   reloadDictationPrefs: (): void => ipcRenderer.send("dictation:reload-prefs"),
   panelClose: (): void => ipcRenderer.send("panel:close"),
+  panelSetBusy: (busy: boolean): void =>
+    ipcRenderer.send("panel:set-busy", busy),
+  panelRequestFocus: (): void => ipcRenderer.send("panel:request-focus"),
   panelPointerLeft: (): void => ipcRenderer.send("panel:pointer-left"),
   panelPointerEntered: (): void => ipcRenderer.send("panel:pointer-entered"),
   onPanelFocusComposer: (callback: () => void): (() => void) => {

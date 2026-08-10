@@ -7,7 +7,7 @@ import { countFixes } from "./fixes.js";
 // and would otherwise perturb test module-mock ordering.
 const DEFAULT_CLOUD_URL = "https://service.freestylevoice.com";
 
-const SCHEMA_VERSION = 23;
+const SCHEMA_VERSION = 24;
 
 // Legacy default format-rule patterns (used only by pre-v12 migrations below):
 // domain/phrase entries match as substrings of url+title+app; bare words match
@@ -684,6 +684,21 @@ function applyMigrations(db: DatabaseSync, currentVersion: number): void {
         "DELETE FROM settings WHERE key IN ('local_llm_url', 'local_llm_api_key', 'openai_stt_api_key', 'openai_stt_base_url')",
       );
     } catch {}
+  }
+
+  if (currentVersion < 24) {
+    // Companion agent threads. Whole-thread UIMessage JSON per row: threads
+    // are small, single-user, and read/written whole on each turn, so
+    // per-message rows buy nothing here.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_threads (
+        id         TEXT PRIMARY KEY,
+        title      TEXT,
+        messages   TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
   }
 
   // Upsert schema version

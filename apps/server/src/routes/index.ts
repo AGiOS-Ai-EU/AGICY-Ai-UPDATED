@@ -7,6 +7,8 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { capture, captureException, getDeviceId } from "../lib/posthog.js";
 import agentRoute from "./agent.js";
+import agentFsRoute from "./agent-fs.js";
+import agentThreadsRoute from "./agent-threads.js";
 import auth from "./auth.js";
 import billing from "./billing.js";
 import configRoute from "./config.js";
@@ -72,6 +74,8 @@ const apiRouter = new Hono()
   .route("/vocabulary", vocabulary)
   .route("/post-process", postProcessRoute)
   .route("/agent", agentRoute)
+  .route("/agent/thread", agentThreadsRoute)
+  .route("/agent-fs", agentFsRoute)
   .route("/remix", remixRoute)
   .route("/output", outputRoute)
   .route("/events", eventsRoute)

@@ -129,6 +129,8 @@ declare global {
       ) => () => void;
       reloadDictationPrefs: () => void;
       panelClose: () => void;
+      panelSetBusy: (busy: boolean) => void;
+      panelRequestFocus: () => void;
       panelPointerLeft: () => void;
       panelPointerEntered: () => void;
       onPanelFocusComposer: (callback: () => void) => () => void;

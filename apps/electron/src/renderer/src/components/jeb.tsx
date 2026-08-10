@@ -520,7 +520,7 @@ export function JebRoot(): React.JSX.Element {
           background: #ffffff;
           border: 2.5px solid #141210;
           color: #141210;
-          font: 700 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+          font: 700 11px/1.4 "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
           letter-spacing: 0.04em;
           text-align: center;
           pointer-events: none;

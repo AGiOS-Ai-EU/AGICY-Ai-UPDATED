@@ -3053,36 +3053,49 @@ app.whenReady().then(async () => {
     if (await isSecureInputActive()) {
       return { ok: false, reason: "secure-input" };
     }
-    await yieldFocusToUserApp();
-    const front = await getFrontmostContext();
-    const ours = getFreestyleAppExclusions();
-    if (!isRemixTargetAllowed(front.appName, ours, remixPracticeTarget)) {
-      return { ok: false, reason: "document-not-in-front" };
+    const panelYielded = await yieldFocusToUserApp();
+    try {
+      const front = await getFrontmostContext();
+      const ours = getFreestyleAppExclusions();
+      if (!isRemixTargetAllowed(front.appName, ours, remixPracticeTarget)) {
+        return { ok: false, reason: "document-not-in-front" };
+      }
+      remixAnchor = { ...front, capturedAt: Date.now() };
+      const [selection, caps] = await Promise.all([
+        copySelectionFromFocusedApp().catch(() => null),
+        runMacAxCaps(),
+      ]);
+      hotkeyLog.info(
+        `remix get-context: "${front.appName}"${selection ? ` · ${selection.length} chars selected` : " · no selection"} · precise=${caps?.settable ?? false}`,
+      );
+      const preview = clipboardPreviewFields();
+      return {
+        ok: true,
+        appName: front.appName,
+        windowTitle: front.windowTitle,
+        url: front.url,
+        selection,
+        preciseSelection: caps?.settable ?? false,
+        docLength: caps && caps.length >= 0 ? caps.length : null,
+        clipboardPreview: preview.clipboard,
+        clipboardLength: preview.clipboardLength,
+      };
+    } finally {
+      if (panelYielded) restorePanelFocus();
     }
-    remixAnchor = { ...front, capturedAt: Date.now() };
-    const [selection, caps] = await Promise.all([
-      copySelectionFromFocusedApp().catch(() => null),
-      runMacAxCaps(),
-    ]);
-    hotkeyLog.info(
-      `remix get-context: "${front.appName}"${selection ? ` · ${selection.length} chars selected` : " · no selection"} · precise=${caps?.settable ?? false}`,
-    );
-    const preview = clipboardPreviewFields();
-    return {
-      ok: true,
-      appName: front.appName,
-      windowTitle: front.windowTitle,
-      url: front.url,
-      selection,
-      preciseSelection: caps?.settable ?? false,
-      docLength: caps && caps.length >= 0 ? caps.length : null,
-      clipboardPreview: preview.clipboard,
-      clipboardLength: preview.clipboardLength,
-    };
   });
 
   // AX read keeps the highlight; canvas editors return unsupported.
   ipcMain.handle("remix:read-document", async () => {
+    const panelWasFocused = panelWindow?.isFocused() ?? false;
+    try {
+      return await readDocumentForRemix();
+    } finally {
+      if (panelWasFocused) restorePanelFocus();
+    }
+  });
+
+  async function readDocumentForRemix(): Promise<Record<string, unknown>> {
     if (!(await focusAnchorForInjection())) {
       return { ok: false, reason: "document-not-in-front" };
     }
@@ -3098,7 +3111,7 @@ app.whenReady().then(async () => {
       selStart: ax.selStart,
       selLen: ax.selLen,
     };
-  });
+  }
 
   ipcMain.handle("remix:select-all", async () => {
     if (!(await focusAnchorForInjection())) {
@@ -3305,39 +3318,43 @@ app.whenReady().then(async () => {
   ipcMain.handle("remix:recapture", async () => {
     // Pill or panel may be key window while typing — yield before Copy or we
     // read our own input.
-    await yieldFocusToUserApp();
-    const front = await getFrontmostContext();
-    const ours = getFreestyleAppExclusions();
-    const inDocument = isRemixTargetAllowed(
-      front.appName,
-      ours,
-      remixPracticeTarget,
-    );
-    if (inDocument) {
-      remixAnchor = { ...front, capturedAt: Date.now() };
-      const selection = (await isSecureInputActive())
-        ? null
-        : await copySelectionFromFocusedApp().catch(() => null);
-      hotkeyLog.info(
-        `remix recapture: ${selection ? `${selection.length} chars` : "no selection"} in "${front.appName}"`,
+    const panelYielded = await yieldFocusToUserApp();
+    try {
+      const front = await getFrontmostContext();
+      const ours = getFreestyleAppExclusions();
+      const inDocument = isRemixTargetAllowed(
+        front.appName,
+        ours,
+        remixPracticeTarget,
       );
+      if (inDocument) {
+        remixAnchor = { ...front, capturedAt: Date.now() };
+        const selection = (await isSecureInputActive())
+          ? null
+          : await copySelectionFromFocusedApp().catch(() => null);
+        hotkeyLog.info(
+          `remix recapture: ${selection ? `${selection.length} chars` : "no selection"} in "${front.appName}"`,
+        );
+        return {
+          selection,
+          ...clipboardPreviewFields(),
+          ...remixAnchor,
+          stale: false,
+        };
+      }
+      hotkeyLog.info("remix recapture: document not in front; keeping anchor");
       return {
-        selection,
+        selection: null,
+        appName: remixAnchor?.appName ?? null,
+        windowTitle: remixAnchor?.windowTitle ?? null,
+        url: remixAnchor?.url ?? null,
         ...clipboardPreviewFields(),
-        ...remixAnchor,
-        stale: false,
+        capturedAt: remixAnchor?.capturedAt ?? Date.now(),
+        stale: true,
       };
+    } finally {
+      if (panelYielded) restorePanelFocus();
     }
-    hotkeyLog.info("remix recapture: document not in front; keeping anchor");
-    return {
-      selection: null,
-      appName: remixAnchor?.appName ?? null,
-      windowTitle: remixAnchor?.windowTitle ?? null,
-      url: remixAnchor?.url ?? null,
-      ...clipboardPreviewFields(),
-      capturedAt: remixAnchor?.capturedAt ?? Date.now(),
-      stale: true,
-    };
   });
 
   // Onboarding practice: allow targeting Freestyle's own window.
@@ -3569,16 +3586,36 @@ async function runKeystrokeScript(lines: string[]): Promise<boolean> {
  * Injected keystrokes land in the KEY window, so any focusable Freestyle
  * window (the pill while typing, the companion panel's composer) must yield
  * before a Copy/Paste or we read/write our own input field.
+ *
+ * Returns whether the companion panel was the window that yielded, so
+ * capture handlers can hand focus back to its composer when they finish.
+ * macOS panels can order themselves out on losing key status — if the blur
+ * hid the panel, reshow it inactive so the user never sees it vanish.
  */
-async function yieldFocusToUserApp(): Promise<void> {
+async function yieldFocusToUserApp(): Promise<boolean> {
   let yielded = false;
+  let panelYielded = false;
   for (const win of [mainWindow, panelWindow]) {
     if (win && !win.isDestroyed() && win.isFocused()) {
       win.blur();
       yielded = true;
+      if (win === panelWindow) panelYielded = true;
     }
   }
   if (yielded) await wait(140);
+  const panel = panelWindow;
+  if (panelYielded && panel && !panel.isDestroyed() && !panel.isVisible()) {
+    panel.showInactive();
+  }
+  return panelYielded;
+}
+
+/** Hand key focus back to the panel composer after a capture finished. */
+function restorePanelFocus(): void {
+  const win = panelWindow;
+  if (!win || win.isDestroyed() || !win.isVisible()) return;
+  win.focus();
+  win.webContents.send("panel:focus-composer");
 }
 
 /** Yield key focus to the document before injecting; false if it can't. */
@@ -3825,8 +3862,29 @@ ipcMain.on("panel:pointer-entered", (event) => {
   cancelPanelHide();
 });
 
+// The renderer pins the panel while a turn is running or an approval card is
+// up: no hover-out hide, no blur-triggered hide, so the agent yielding key
+// focus to capture the user's document can't dismiss the panel mid-turn.
+ipcMain.on("panel:set-busy", (event, busy: unknown) => {
+  if (event.sender !== panelWindow?.webContents) return;
+  panelBusy = busy === true;
+  if (panelBusy) cancelPanelHide();
+});
+
+// Clicking into the composer after an agent tool yielded key focus: panel
+// windows don't always take key back from a content click on macOS, so the
+// renderer asks for it explicitly.
+ipcMain.on("panel:request-focus", (event) => {
+  if (event.sender !== panelWindow?.webContents) return;
+  const win = panelWindow;
+  if (win && !win.isDestroyed() && win.isVisible() && !win.isFocused()) {
+    win.focus();
+  }
+});
+
 let panelWindow: BrowserWindow | null = null;
 let panelHideTimer: NodeJS.Timeout | null = null;
+let panelBusy = false;
 const PANEL_HIDE_GRACE_MS = 420;
 const PANEL_HOVER_PAD = 24;
 
@@ -3871,6 +3929,13 @@ function createPanelWindow(): void {
   panelWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   panelWindow.on("closed", () => {
     panelWindow = null;
+  });
+  // Losing focus is the only signal that "hover off then hide" can rely on
+  // once the composer has been clicked: pointer-leave alone is ignored while
+  // the panel is focused, so re-check on blur. Agent tool calls blur the
+  // panel deliberately mid-turn — panelBusy suppresses those.
+  panelWindow.on("blur", () => {
+    if (!panelBusy) schedulePanelHide();
   });
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
@@ -3926,6 +3991,7 @@ function schedulePanelHide(): void {
     panelHideTimer = null;
     const win = panelWindow;
     if (!win || win.isDestroyed() || !win.isVisible()) return;
+    if (panelBusy) return;
     if (win.isFocused()) return;
     // A pointer heading for the companion, or hovering the gap between the two,
     // is not a pointer leaving — only hide when it is clear of both.

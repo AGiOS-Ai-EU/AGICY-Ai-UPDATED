@@ -1,9 +1,9 @@
 export const PANEL_TABS = [
   "chat",
-  "today",
+  "history",
+  "todos",
   "notes",
-  "skills",
-  "memory",
+  "brain",
 ] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
 
