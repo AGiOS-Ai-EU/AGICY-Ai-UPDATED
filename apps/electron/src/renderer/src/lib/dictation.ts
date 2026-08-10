@@ -220,6 +220,10 @@ export class DictationController {
     }
   }
 
+  isActive(): boolean {
+    return this.active;
+  }
+
   async start(): Promise<void> {
     if (this.active) return;
     this.active = true;

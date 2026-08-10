@@ -612,6 +612,9 @@
 }
 
 .tavern-input {
+  field-sizing: content;
+  max-height: 110px;
+  resize: none;
   flex: 1;
   border-radius: 9px;
   padding: 8px 11px;
@@ -889,4 +892,58 @@
   font-size: 10px;
   width: 10px;
   flex-shrink: 0;
+}
+
+.tavern-tool {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tavern-tool-toggle {
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--tavern-mute);
+}
+
+.tavern-tool-toggle:hover {
+  color: var(--tavern-ink);
+}
+
+.tavern-tool-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-left: 2px solid var(--tavern-rule);
+  padding-left: 9px;
+  margin-left: 2px;
+}
+
+.tavern-tool-heading {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tavern-mute);
+}
+
+.tavern-tool-block {
+  margin: 0;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  background: var(--tavern-wash);
+  border-radius: 8px;
+  padding: 6px 9px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-height: 180px;
+  overflow-y: auto;
 }

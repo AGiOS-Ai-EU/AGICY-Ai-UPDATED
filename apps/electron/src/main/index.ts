@@ -62,7 +62,6 @@ import {
   app,
   BrowserWindow,
   clipboard,
-  type Display,
   dialog,
   globalShortcut,
   ipcMain,
@@ -99,7 +98,6 @@ import {
   PANEL_HEIGHT,
   PANEL_WIDTH,
 } from "../shared/panel";
-import { normalizePillCancelMode } from "../shared/pill-cancel";
 import {
   getDefaultRemixHotkey,
   REMIX_CLIPBOARD_PREVIEW_LIMIT,
@@ -385,7 +383,6 @@ function getServerBaseUrl(): string {
  * views are dropped too, since they hold pages loaded from the previous origin.
  */
 function broadcastServerChanged(): void {
-  mainWindow?.webContents.send("server:changed");
   settingsWindow?.webContents.send("server:changed");
   invalidatePluginViews();
 }
@@ -393,7 +390,7 @@ function broadcastServerChanged(): void {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let httpServer: any = null;
 let serverPort = DEFAULT_PORT;
-let mainWindow: BrowserWindow | null = null;
+const mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 // In-flight settings-window creation. createSettingsWindow awaits an onboarding
 // probe before it assigns settingsWindow, so this serializes concurrent opens
@@ -412,10 +409,8 @@ let micListener: MicListener | null = null;
 let hotkeyRecorder: HotkeyRecorder | null = null;
 /** Own listener process — native binaries only take one accelerator each. */
 let remixKeyListener: NativeKeyListener | null = null;
-let remixPressed = false;
 /** User-configured accel (may differ from what's listening while parked/off). */
 let remixHotkeyPreference: string | undefined;
-let currentRemixAccel: string | null = null;
 /** False until server settings are read once (don't spawn on defaults). */
 let remixInitialized = false;
 /** Onboarding practice: allow Remix to target Freestyle's own window. */
@@ -461,41 +456,15 @@ function registerAppProtocol(): void {
   });
 }
 
-function getPillURL(): string {
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    return `${process.env.ELECTRON_RENDERER_URL}/pill.html`;
-  }
-  return "app://renderer/pill.html";
-}
-
-function getRemixBarURL(): string {
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    return `${process.env.ELECTRON_RENDERER_URL}/bar.html`;
-  }
-  return "app://renderer/bar.html";
-}
+// The pill's programmatic-move filter is gone with the pill; the remaining
+// caller in the legacy bounds path needs only a no-op.
+function markProgrammaticTarget(_x: number, _y: number): void {}
 
 function getDashboardURL(path = "/"): string {
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     return `${process.env.ELECTRON_RENDERER_URL}${path}`;
   }
   return `app://renderer${path}`;
-}
-
-// Tracks the exact coordinates of the last programmatic setPosition call.
-// The move listener compares reported coords against this target and ignores
-// matching events, eliminating the fixed-timeout race condition.
-let programmaticTarget: { x: number; y: number } | null = null;
-let programmaticCleanupTimer: NodeJS.Timeout | null = null;
-
-function markProgrammaticTarget(x: number, y: number): void {
-  programmaticTarget = { x, y };
-  if (programmaticCleanupTimer) clearTimeout(programmaticCleanupTimer);
-  // Safety: clear the target after 1s in case the OS never delivers a settle event.
-  programmaticCleanupTimer = setTimeout(() => {
-    programmaticTarget = null;
-    programmaticCleanupTimer = null;
-  }, 1000);
 }
 
 /**
@@ -512,19 +481,6 @@ function markProgrammaticTarget(x: number, y: number): void {
 let pillExpandOffset = { dx: 0, dy: 0 };
 /** Which expanded size `pillExpandOffset` was computed for. */
 let pillExpansion: PillExpansion = "card";
-
-function setProgrammaticPosition(
-  win: BrowserWindow,
-  x: number,
-  y: number,
-): void {
-  const tx = x - pillExpandOffset.dx;
-  const ty = y - pillExpandOffset.dy;
-  markProgrammaticTarget(tx, ty);
-  win.setPosition(tx, ty);
-  const [ax, ay] = win.getPosition();
-  if (ax !== tx || ay !== ty) markProgrammaticTarget(ax, ay);
-}
 
 /** Which capsule edge stays pinned when the window grows around the pill. */
 function getPillAnchor(): { side: "center" | "right"; edge: "top" | "bottom" } {
@@ -620,357 +576,6 @@ function getPillAlignmentForCustom(): "custom-top" | "custom-bottom" {
   const midY = display.workArea.y + display.workArea.height / 2;
   return wy < midY ? "custom-top" : "custom-bottom";
 }
-
-// Computes a preset pill slot for a specific display. The pill is aligned
-// inside the window via CSS (justify-center or justify-end).
-function presetPositionForDisplay(
-  display: Display,
-  position: string,
-): { x: number; y: number } {
-  const { x: waX, y: waY, width, height } = display.workArea;
-  const bottomInset = Math.max(
-    0,
-    display.bounds.y + display.bounds.height - (waY + height),
-  );
-  const overlap = process.platform !== "darwin" && bottomInset > 0 ? 14 : -8;
-  const centerX = waX + Math.round((width - APP_WIDTH) / 2);
-  const leftX = waX;
-  const rightX = waX + width - APP_WIDTH;
-  const bottomY = waY + height - APP_HEIGHT + overlap;
-
-  switch (position) {
-    case "top-center":
-      return { x: centerX, y: waY };
-    case "top-left":
-      return { x: leftX, y: waY };
-    case "top-right":
-      return { x: rightX, y: waY };
-    case "bottom-left":
-      return { x: leftX, y: bottomY };
-    case "bottom-right":
-      return { x: rightX, y: bottomY };
-    default:
-      return { x: centerX, y: bottomY };
-  }
-}
-
-/**
- * Screen bounds (top-left origin, in screen coordinates) of the currently
- * focused *external* application window, or null if it can't be determined.
- *
- * Used to anchor the pill to the display the user is actually typing on, which
- * the cursor's display alone can't tell us: a keyboard-driven user often leaves
- * the mouse resting on a different monitor. This is intentionally async/native
- * (AppleScript / PowerShell), so it is never awaited on the pill-show hot path —
- * the pill shows immediately on the cursor's display and re-anchors here if this
- * resolves to a different one.
- */
-async function getFocusedWindowBounds(): Promise<{
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-} | null> {
-  try {
-    if (process.platform === "darwin") {
-      // `position`/`size` of the frontmost app's front window via Accessibility.
-      const out = await execAsync(
-        "osascript",
-        [
-          "-e",
-          'tell application "System Events" to tell (first application process whose frontmost is true) to get {position, size} of front window',
-        ],
-        1500,
-      );
-      // osascript returns e.g. "12, -340, 800, 600" (x, y, w, h).
-      const nums = out
-        .split(",")
-        .map((n) => Number.parseInt(n.trim(), 10))
-        .filter((n) => Number.isFinite(n));
-      if (nums.length < 4) return null;
-      const [x, y, width, height] = nums;
-      if (width <= 0 || height <= 0) return null;
-      return { x, y, width, height };
-    }
-
-    if (process.platform === "win32") {
-      const script = `
-        Add-Type @"
-          using System;
-          using System.Runtime.InteropServices;
-          public class Win32Rect {
-            [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-            [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
-          }
-"@
-        $hwnd = [Win32Rect]::GetForegroundWindow()
-        $r = New-Object Win32Rect+RECT
-        [Win32Rect]::GetWindowRect($hwnd, [ref]$r) | Out-Null
-        "$($r.Left),$($r.Top),$($r.Right),$($r.Bottom)"
-      `;
-      const out = await execAsync(
-        "powershell",
-        ["-NoProfile", "-Command", script],
-        2000,
-      );
-      const nums = out
-        .split(",")
-        .map((n) => Number.parseInt(n.trim(), 10))
-        .filter((n) => Number.isFinite(n));
-      if (nums.length < 4) return null;
-      const [left, top, right, bottom] = nums;
-      const width = right - left;
-      const height = bottom - top;
-      if (width <= 0 || height <= 0) return null;
-      return { x: left, y: top, width, height };
-    }
-
-    // Linux compositors vary too much for a reliable synchronous rect; the
-    // cursor's display is used as-is there.
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The Electron display the focused external window is on, or null if it can't
- * be determined. Falls back to the cursor's display at call sites.
- */
-async function getFocusedWindowDisplay(): Promise<Electron.Display | null> {
-  const bounds = await getFocusedWindowBounds();
-  if (!bounds) return null;
-  return screen.getDisplayMatching(bounds);
-}
-
-// Preset positions follow the display under the cursor so the pill appears
-// on whichever monitor the user is working on. Custom positions can be on
-// any display — they are saved as absolute screen coordinates and
-// bounds-checked on restore.
-function getAppWindowPosition(preferredDisplay?: Electron.Display | null): {
-  x: number;
-  y: number;
-} {
-  // Anchor preset positions to the focused window's display when known,
-  // otherwise the display containing the cursor rather than the primary
-  // display, so multi-monitor users see the pill where they are working.
-  const activeDisplay =
-    preferredDisplay ??
-    screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-
-  // Read pill position preference
-  const position = (readSettings().pillPosition as string) || "bottom-center";
-
-  if (position === "custom") {
-    const custom = readSettings().pillCustomPosition as
-      | { x: number; y: number }
-      | undefined;
-    if (
-      custom &&
-      typeof custom.x === "number" &&
-      typeof custom.y === "number"
-    ) {
-      const display = screen.getDisplayMatching({
-        x: custom.x,
-        y: custom.y,
-        width: APP_WIDTH,
-        height: APP_HEIGHT,
-      });
-      const wa = display.workArea;
-      if (
-        custom.x >= wa.x &&
-        custom.x + APP_WIDTH <= wa.x + wa.width &&
-        custom.y >= wa.y &&
-        custom.y <= wa.y + wa.height
-      ) {
-        // A custom slot is the user's *offset*, not an absolute point on one
-        // monitor: when the cursor is on a different display, carry the same
-        // fractional position over so the pill follows them there.
-        if (display.id === activeDisplay.id) return custom;
-        const activeWa = activeDisplay.workArea;
-        const fx =
-          wa.width > APP_WIDTH
-            ? (custom.x - wa.x) / (wa.width - APP_WIDTH)
-            : 0.5;
-        const fy =
-          wa.height > APP_HEIGHT
-            ? (custom.y - wa.y) / (wa.height - APP_HEIGHT)
-            : 1;
-        return {
-          x: Math.round(
-            activeWa.x +
-              Math.min(1, Math.max(0, fx)) * (activeWa.width - APP_WIDTH),
-          ),
-          y: Math.round(
-            activeWa.y +
-              Math.min(1, Math.max(0, fy)) * (activeWa.height - APP_HEIGHT),
-          ),
-        };
-      }
-      // Saved position is off-screen; reset to default.
-      writeSettings({
-        pillPosition: "bottom-center",
-        pillCustomPosition: undefined,
-      });
-    }
-    return presetPositionForDisplay(activeDisplay, "bottom-center");
-  }
-
-  return presetPositionForDisplay(activeDisplay, position);
-}
-
-function createAppWindow(): void {
-  const { x, y } = getAppWindowPosition();
-
-  // Mark the initial position as programmatic so the move listener ignores it.
-  markProgrammaticTarget(x, y);
-
-  mainWindow = new BrowserWindow({
-    width: APP_WIDTH,
-    height: APP_HEIGHT,
-    x,
-    y,
-    show: false,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    hasShadow: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    roundedCorners: true,
-    autoHideMenuBar: true,
-    focusable: false,
-    ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
-    ...(process.platform === "linux" ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
-      // The pill is a transparent always-on-top overlay; Chromium's occlusion
-      // tracker misreads it (notably under Xvfb) and stops producing frames,
-      // freezing rAF-driven morphs mid-animation. Keep its renderer ticking.
-      backgroundThrottling: false,
-    },
-  });
-
-  mainWindow.setAlwaysOnTop(true, "screen-saver");
-  mainWindow.setVisibleOnAllWorkspaces(true, {
-    visibleOnFullScreen: true,
-  });
-
-  let moveTimeout: NodeJS.Timeout | null = null;
-  let moveBurst = 0;
-  let userMoved = false;
-  mainWindow.on("will-move", () => {
-    userMoved = true;
-  });
-  mainWindow.on("move", () => {
-    if (!mainWindow) return;
-    const [rawX, rawY] = mainWindow.getPosition();
-
-    // Ignore events that match the programmatic target (the window settling
-    // after a setProgrammaticPosition call). Clear the target once we see
-    // the first matching position so subsequent real drags are captured.
-    if (
-      programmaticTarget &&
-      rawX === programmaticTarget.x &&
-      rawY === programmaticTarget.y
-    ) {
-      if (programmaticCleanupTimer) clearTimeout(programmaticCleanupTimer);
-      programmaticTarget = null;
-      programmaticCleanupTimer = null;
-      return;
-    }
-
-    // If programmaticTarget is set but coords don't match yet, the window is
-    // still mid-animation — ignore until it settles.
-    if (programmaticTarget) return;
-
-    // Work in slot coordinates: while the status card is up the window origin
-    // sits outside the capsule, and saving *that* as the custom position would
-    // walk the pill across the screen on every expand/collapse cycle.
-    const nx = rawX + pillExpandOffset.dx;
-    const ny = rawY + pillExpandOffset.dy;
-
-    // Ignore sub-threshold moves so accidental bumps don't override the preset.
-    const currentSetting = readSettings().pillPosition as string;
-    if (currentSetting !== "custom") {
-      // Compare against the preset slot on the display the window is actually
-      // on — not the cursor's display. Using the cursor here let a trailing
-      // settle event (fired after the cursor had moved to another monitor)
-      // look like a manual drag, which latched pillPosition to "custom" and
-      // froze the pill on one screen.
-      const windowDisplay = screen.getDisplayMatching({
-        x: nx,
-        y: ny,
-        width: APP_WIDTH,
-        height: APP_HEIGHT,
-      });
-      const presetPos = presetPositionForDisplay(windowDisplay, currentSetting);
-      if (Math.abs(nx - presetPos.x) < 10 && Math.abs(ny - presetPos.y) < 10)
-        return;
-    }
-
-    moveBurst++;
-    if (moveTimeout) clearTimeout(moveTimeout);
-    moveTimeout = setTimeout(() => {
-      const burst = moveBurst;
-      const dragged = userMoved;
-      moveBurst = 0;
-      userMoved = false;
-      if (!mainWindow || (burst < 3 && !dragged)) return;
-      const [fx, fy] = mainWindow.getPosition();
-      writeSettings({
-        pillPosition: "custom",
-        pillCustomPosition: {
-          x: fx + pillExpandOffset.dx,
-          y: fy + pillExpandOffset.dy,
-        },
-      });
-      const alignment = getPillAlignmentForCustom();
-      mainWindow.webContents.send("settings:pill-position-changed", alignment);
-      settingsWindow?.webContents.send(
-        "settings:pill-position-changed",
-        alignment,
-      );
-    }, 200);
-  });
-
-  mainWindow.on("closed", () => {
-    if (moveTimeout) {
-      clearTimeout(moveTimeout);
-      moveTimeout = null;
-    }
-    mainWindow = null;
-  });
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
-    return { action: "deny" };
-  });
-
-  mainWindow.loadURL(getPillURL());
-
-  // Dev: mirror remix tool-executor console into the main log; optional pill DevTools.
-  if (is.dev) {
-    // Electron has shipped this event with both positional args and a
-    // details object across versions; accept either shape.
-    mainWindow.webContents.on("console-message", (_event, level, message) => {
-      const second = level as unknown;
-      const text =
-        typeof message === "string"
-          ? message
-          : second !== null && typeof second === "object" && "message" in second
-            ? String((second as { message: unknown }).message)
-            : null;
-      if (text?.startsWith("[remix]")) hotkeyLog.info(text);
-    });
-    if (process.env.FREESTYLE_PILL_DEVTOOLS === "1") {
-      mainWindow.webContents.openDevTools({ mode: "detach" });
-    }
-  }
-}
-
 function createSettingsWindow(initialPath?: string): Promise<void> {
   // Serialize concurrent opens: the first call owns creation, the rest await it.
   if (settingsWindowCreating) return settingsWindowCreating;
@@ -1096,95 +701,6 @@ function handlePluginAction(
  * Resolves once a freshly-created pill window has finished loading and is
  * visible.  `null` when no deferred show is in progress.
  */
-let pillReadyPromise: Promise<void> | null = null;
-
-function showPill(): void {
-  // Already waiting for a freshly-created pill to finish loading.
-  if (pillReadyPromise) return;
-
-  remixBarWindow?.hide();
-
-  if (!mainWindow) {
-    createAppWindow();
-    // createAppWindow() synchronously assigns mainWindow, but TypeScript
-    // cannot track mutations through function calls.  Re-read and bail
-    // out if the assignment unexpectedly failed.
-    const win = mainWindow as BrowserWindow | null;
-    if (!win) return;
-
-    // The window was just created with `show: false` and is still loading.
-    // Defer showing until the renderer finishes loading so IPC messages
-    // (e.g. hotkey:down) sent immediately after are not lost.
-    pillReadyPromise = new Promise<void>((resolve) => {
-      const cleanup = (): void => {
-        pillReadyPromise = null;
-        resolve();
-      };
-
-      // If the window is closed before it finishes loading, resolve the
-      // promise so deferred IPC calls are not stuck forever.
-      win.once("closed", cleanup);
-
-      win.webContents.once("did-finish-load", () => {
-        win.removeListener("closed", cleanup);
-        pillReadyPromise = null;
-        if (!mainWindow) {
-          resolve();
-          return;
-        }
-        const { x, y } = getAppWindowPosition();
-        setProgrammaticPosition(mainWindow, x, y);
-        mainWindow.showInactive();
-        updateRemixBar();
-        updatePillEscape();
-        anchorPillToFocusedDisplay();
-        resolve();
-      });
-    });
-    return;
-  }
-
-  if (!mainWindow.isVisible()) {
-    const { x, y } = getAppWindowPosition();
-    setProgrammaticPosition(mainWindow, x, y);
-    mainWindow.showInactive();
-    updateRemixBar();
-  }
-  updatePillEscape();
-  anchorPillToFocusedDisplay();
-}
-
-/**
- * Re-anchor the pill to the display the user is actually typing on once we can
- * learn it from the focused window (an async native call). Shown immediately on
- * the cursor's display; this quietly corrects the monitor when the mouse rests
- * on a different one than the keyboard focus. No-op for custom (dragged)
- * positions and while the pill is expanded, so it never fights a card
- * animation or overrides a user-placed slot.
- */
-function anchorPillToFocusedDisplay(): void {
-  const position = (readSettings().pillPosition as string) || "bottom-center";
-  if (position === "custom") return;
-
-  void getFocusedWindowDisplay().then((focusedDisplay) => {
-    if (!focusedDisplay || !mainWindow || mainWindow.isDestroyed()) return;
-    if (!mainWindow.isVisible()) return;
-    // Don't move the window out from under an in-progress card expansion.
-    if (pillExpandOffset.dx !== 0 || pillExpandOffset.dy !== 0) return;
-
-    const [curX, curY] = mainWindow.getPosition();
-    const currentDisplay = screen.getDisplayMatching({
-      x: curX,
-      y: curY,
-      width: APP_WIDTH,
-      height: APP_HEIGHT,
-    });
-    if (currentDisplay.id === focusedDisplay.id) return;
-
-    const { x, y } = getAppWindowPosition(focusedDisplay);
-    setProgrammaticPosition(mainWindow, x, y);
-  });
-}
 
 function updatePillEscape(): void {
   const chatLike = pillExpansion === "remix-chat";
@@ -1575,7 +1091,6 @@ async function getOpenAppCandidates(): Promise<OpenAppCandidate[]> {
 function hidePill(): void {
   if (mainWindow?.isVisible()) {
     mainWindow.hide();
-    lastPillHideAt = Date.now();
   }
   // The next session starts as a bare capsule, so give the extra room back
   // now — the renderer's own collapse only runs when it animates a card away.
@@ -1585,12 +1100,10 @@ function hidePill(): void {
   // holding the dictation key.
   hotkeyPressed = false;
   clearHotkeyStuckWatchdog();
-  remixPressed = false;
   clearRemixStuckWatchdog();
   setRemixRouteKeys(false);
   // Chat may have set focusable; clear it when hiding.
   try {
-    mainWindow?.setFocusable(false);
   } catch {}
   updateRemixBar();
   // Unregister Escape shortcut when pill is hidden
@@ -1651,7 +1164,6 @@ async function deliverOutput(
 
 function resetOnboarding(): void {
   writeSettings({ onboardingComplete: false });
-  remixBarHeldForOnboarding = true;
   updateRemixBar();
   showSettingsWindow("/onboarding");
 }
@@ -2321,32 +1833,22 @@ app.whenReady().then(async () => {
     await audioPlaybackController.restore();
   });
 
-  // IPC: broadcast output mode changes to pill window
-  ipcMain.on("settings:output-mode-changed", (_event, mode: string) => {
-    mainWindow?.webContents.send("settings:output-mode-changed", mode);
-  });
+  // IPC: dictation-relevant settings changed in the dashboard — push the
+  // fresh prefs to the companion, which owns the dictation pipeline.
+  ipcMain.on("settings:output-mode-changed", () => broadcastDictationPrefs());
 
-  ipcMain.on("settings:pill-cancel-mode-changed", (_event, mode: unknown) => {
-    mainWindow?.webContents.send(
-      "settings:pill-cancel-mode-changed",
-      normalizePillCancelMode(mode),
-    );
-  });
+  ipcMain.on("settings:pill-cancel-mode-changed", () => {});
 
-  ipcMain.on("settings:audio-ducking-changed", (_event, enabled: boolean) => {
-    mainWindow?.webContents.send("settings:audio-ducking-changed", enabled);
-  });
+  ipcMain.on("settings:audio-ducking-changed", () => broadcastDictationPrefs());
 
-  ipcMain.on("settings:audio-playback-mode-changed", (_event, mode: string) => {
-    mainWindow?.webContents.send("settings:audio-playback-mode-changed", mode);
-  });
+  ipcMain.on("settings:audio-playback-mode-changed", () =>
+    broadcastDictationPrefs(),
+  );
 
   // IPC: relay cleanup-context changes (llm_cleanup / cleanup tones) from the
   // dashboard to the pill so it refreshes its cached routing decision instead
   // of re-fetching /api/settings on every recording start.
-  ipcMain.on("settings:cleanup-context-changed", () => {
-    mainWindow?.webContents.send("settings:cleanup-context-changed");
-  });
+  ipcMain.on("settings:cleanup-context-changed", () => {});
 
   // IPC: hide the pill window on request from renderer
   ipcMain.on("pill:hide", () => {
@@ -2575,7 +2077,6 @@ app.whenReady().then(async () => {
   ipcMain.on("onboarding:set-complete", () => {
     writeSettings({ onboardingComplete: true });
     remixPracticeTarget = false;
-    remixBarHeldForOnboarding = false;
     updateRemixBar();
   });
 
@@ -2585,7 +2086,6 @@ app.whenReady().then(async () => {
     if (remixKeyListener) {
       remixKeyListener.stop();
       remixKeyListener = null;
-      remixPressed = false;
     }
     // Pause the active hotkey listener so it doesn't fire during recording
     if (keyListener) {
@@ -2595,8 +2095,7 @@ app.whenReady().then(async () => {
     globalShortcut.unregisterAll();
 
     stopHotkeyRecorderProcess();
-    const target =
-      settingsWindow?.webContents ?? mainWindow?.webContents ?? null;
+    const target = settingsWindow?.webContents ?? null;
     if (!target) return;
 
     hotkeyRecorder = new HotkeyRecorder({
@@ -2677,12 +2176,14 @@ app.whenReady().then(async () => {
 
   createTray();
 
-  createAppWindow();
+  // The pill window is retired: it hosted the legacy dictation pipeline
+  // (recorder + paste), which double-delivered alongside the companion's.
+  // The companion owns dictation; the pill exists only via the showPill()
+  // boot-race fallback when no companion window could be created.
 
   // Onboarding already has dedicated permission cards. Existing users instead
   // get one actionable warning once a user-facing window can be shown.
   void isOnboardingActive().then((onboardingActive) => {
-    remixBarHeldForOnboarding = onboardingActive;
     updateRemixBar();
     const warning = startupPermissionWarning(
       process.platform,
@@ -2694,21 +2195,6 @@ app.whenReady().then(async () => {
       void showRequiredPermissionDialog(warning);
     }
   });
-
-  // Clamp the pill to valid display bounds when monitors change.
-  const repositionPillForDisplayChange = (): void => {
-    if (!mainWindow) return;
-    const before = readSettings().pillPosition as string;
-    const { x, y } = getAppWindowPosition();
-    setProgrammaticPosition(mainWindow, x, y);
-    const after = (readSettings().pillPosition as string) ?? "bottom-center";
-    if (before !== after) {
-      mainWindow.webContents.send("settings:pill-position-changed", after);
-      settingsWindow?.webContents.send("settings:pill-position-changed", after);
-    }
-  };
-  screen.on("display-removed", repositionPillForDisplayChange);
-  screen.on("display-metrics-changed", repositionPillForDisplayChange);
 
   if (readSettings().showDashboardOnLaunch !== false) {
     showSettingsWindow();
@@ -2943,15 +2429,9 @@ app.whenReady().then(async () => {
     } else {
       writeSettings({ pillPosition: position, pillCustomPosition: undefined });
     }
-    // Reposition the window and notify the renderer for CSS alignment.
-    if (mainWindow) {
-      const { x, y } = getAppWindowPosition();
-      setProgrammaticPosition(mainWindow, x, y);
-    }
     // For custom, resolve the live alignment; for presets, send as-is.
     const broadcast =
       position === "custom" ? getPillAlignmentForCustom() : position;
-    mainWindow?.webContents.send("settings:pill-position-changed", broadcast);
     settingsWindow?.webContents.send(
       "settings:pill-position-changed",
       broadcast,
@@ -2984,7 +2464,6 @@ app.whenReady().then(async () => {
   micListener = new MicListener({
     excludePid: process.pid,
     onStateChange: (state) => {
-      mainWindow?.webContents.send("mic:activity-changed", state);
       settingsWindow?.webContents.send("mic:activity-changed", state);
     },
   });
@@ -3373,22 +2852,8 @@ app.whenReady().then(async () => {
     setRemixRouteKeys(open === true);
   });
 
-  // The persistent bar was hovered: open the Remix chat where the user is.
-  ipcMain.on("remix:bar-hover", () => {
-    handleRemixBarOpen();
-  });
-
-  // Exception to focusable:false — allow focus only while the chat card is up.
-  ipcMain.on("remix:set-chat-focus", (_event, focus: unknown) => {
-    const win = mainWindow;
-    if (!win || win.isDestroyed()) return;
-    if (focus === true) {
-      if (!win.isFocusable()) win.setFocusable(true);
-    } else {
-      if (win.isFocused()) win.blur();
-      if (win.isFocusable()) win.setFocusable(false);
-    }
-  });
+  // The pill is retired; accept the legacy channel as a no-op.
+  ipcMain.on("remix:set-chat-focus", () => {});
 });
 
 interface FrontmostContext {
@@ -4094,206 +3559,12 @@ export function setCompanionState(state: CompanionState): void {
   companionWindow?.webContents.send("companion:state", state);
 }
 
-let remixBarWindow: BrowserWindow | null = null;
-let remixBarEnabled = false;
-// Held during onboarding; seeded from settings, corrected by startup probe.
-let remixBarHeldForOnboarding = readSettings().onboardingComplete !== true;
-let remixBarFollowTimer: NodeJS.Timeout | null = null;
-/** Last display we placed on (follow timer ignores OS Y drift). */
-let remixBarPlacedDisplay: number | null = null;
-const REMIX_BAR_WIDTH = 120;
-const REMIX_BAR_HEIGHT = 18;
-const REMIX_BAR_FOLLOW_MS = 3_000;
-/** Window hangs past work area so the drawn sliver meets the screen edge. */
-const REMIX_BAR_EDGE_OVERHANG = 6;
-/** Delay before measuring OS Dock constraint after placement. */
-const REMIX_BAR_CALIBRATE_MS = 48;
-const REMIX_BAR_REOPEN_COOLDOWN_MS = 700;
-const REMIX_BAR_RESHOW_DELAY_MS = 400;
-let lastPillHideAt = 0;
-let remixBarShowTimer: NodeJS.Timeout | null = null;
-
-/** Per-display Y offset: macOS Dock relocates the panel off the work-area edge.
- *  Measured (not hard-coded); absolute so remixBarLearn is idempotent. */
-const remixBarAdjust = new Map<number, number>();
-
-function remixBarBasePosition(): { x: number; y: number; displayId: number } {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const wa = display.workArea;
-  return {
-    x: wa.x + Math.round((wa.width - REMIX_BAR_WIDTH) / 2),
-    y: wa.y + wa.height - REMIX_BAR_HEIGHT + REMIX_BAR_EDGE_OVERHANG,
-    displayId: display.id,
-  };
-}
-
-function remixBarPosition(): { x: number; y: number; displayId: number } {
-  const base = remixBarBasePosition();
-  return { ...base, y: base.y + (remixBarAdjust.get(base.displayId) ?? 0) };
-}
-
-/** Learn OS Y offset from unadjusted position (absolute, idempotent). */
-function remixBarLearn(): void {
-  setTimeout(() => {
-    const win = remixBarWindow;
-    if (!win || win.isDestroyed() || !win.isVisible()) return;
-    const base = remixBarBasePosition();
-    remixBarAdjust.set(base.displayId, win.getBounds().y - base.y);
-  }, REMIX_BAR_CALIBRATE_MS);
-}
-
-function createRemixBarWindow(): void {
-  if (remixBarWindow) return;
-  const { x, y } = remixBarPosition();
-  const win = new BrowserWindow({
-    width: REMIX_BAR_WIDTH,
-    height: REMIX_BAR_HEIGHT,
-    x,
-    y,
-    show: false,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    hasShadow: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    autoHideMenuBar: true,
-    focusable: false,
-    ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
-    webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
-      // Same transparent-overlay caveat as the pill window: occlusion
-      // misdetection would freeze its animations.
-      backgroundThrottling: false,
-    },
-  });
-  win.setAlwaysOnTop(true, "screen-saver");
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.on("closed", () => {
-    remixBarWindow = null;
-  });
-  void win.loadURL(getRemixBarURL());
-  remixBarWindow = win;
-}
-
-/** First show at opacity 0, learn Dock offset, then become visible. */
-let remixBarCalibrating = false;
-
-function calibrateThenShow(bar: BrowserWindow, displayId: number): void {
-  if (remixBarCalibrating) {
-    bar.showInactive();
-    return;
-  }
-  remixBarCalibrating = true;
-  bar.setOpacity(0);
-  bar.showInactive();
-  const base = remixBarBasePosition();
-  setTimeout(() => {
-    remixBarCalibrating = false;
-    const live = remixBarWindow;
-    if (!live || live.isDestroyed()) return;
-    try {
-      remixBarAdjust.set(displayId, live.getBounds().y - base.y);
-      const next = remixBarPosition();
-      live.setBounds({
-        x: next.x,
-        y: next.y,
-        width: REMIX_BAR_WIDTH,
-        height: REMIX_BAR_HEIGHT,
-      });
-    } finally {
-      // Whatever happened above, the bar must not be left invisible.
-      live.setOpacity(1);
-    }
-    // Re-learn after correction in case the display needs another pass.
-    remixBarLearn();
-  }, REMIX_BAR_CALIBRATE_MS);
-}
-
-function updateRemixBar(): void {
-  const shouldShow =
-    remixBarEnabled && !remixBarHeldForOnboarding && !mainWindow?.isVisible();
-  if (!shouldShow) {
-    if (remixBarShowTimer) {
-      clearTimeout(remixBarShowTimer);
-      remixBarShowTimer = null;
-    }
-    if (remixBarFollowTimer) {
-      clearInterval(remixBarFollowTimer);
-      remixBarFollowTimer = null;
-    }
-    remixBarWindow?.hide();
-    return;
-  }
-  const sinceHide = Date.now() - lastPillHideAt;
-  if (!remixBarWindow?.isVisible() && sinceHide < REMIX_BAR_RESHOW_DELAY_MS) {
-    if (!remixBarShowTimer) {
-      remixBarShowTimer = setTimeout(() => {
-        remixBarShowTimer = null;
-        updateRemixBar();
-      }, REMIX_BAR_RESHOW_DELAY_MS - sinceHide);
-    }
-    return;
-  }
-  if (!remixBarWindow) createRemixBarWindow();
-  const win = remixBarWindow;
-  if (!win) return;
-  const place = (): void => {
-    const bar = remixBarWindow;
-    if (!bar || bar.isDestroyed()) return;
-    if (
-      !remixBarEnabled ||
-      remixBarHeldForOnboarding ||
-      mainWindow?.isVisible()
-    )
-      return;
-    const { x, y, displayId } = remixBarPosition();
-    bar.setBounds({ x, y, width: REMIX_BAR_WIDTH, height: REMIX_BAR_HEIGHT });
-    remixBarPlacedDisplay = displayId;
-
-    if (bar.isVisible() || remixBarAdjust.has(displayId)) {
-      if (!bar.isVisible()) bar.showInactive();
-      remixBarLearn();
-      return;
-    }
-    calibrateThenShow(bar, displayId);
-  };
-  if (win.webContents.isLoading()) {
-    win.webContents.once("did-finish-load", place);
-  } else {
-    place();
-  }
-  if (!remixBarFollowTimer) {
-    remixBarFollowTimer = setInterval(() => {
-      const bar = remixBarWindow;
-      if (!bar || bar.isDestroyed() || !bar.isVisible()) return;
-      // Compare display id, not Y — OS holds the window off the computed position.
-      const { x, y, displayId } = remixBarPosition();
-      if (displayId === remixBarPlacedDisplay) return;
-      bar.setBounds({ x, y, width: REMIX_BAR_WIDTH, height: REMIX_BAR_HEIGHT });
-      remixBarPlacedDisplay = displayId;
-      remixBarLearn();
-    }, REMIX_BAR_FOLLOW_MS);
-  }
-}
-
-function handleRemixBarOpen(): void {
-  if (!remixBarEnabled) return;
-  if (mainWindow?.isVisible()) return;
-  if (Date.now() - lastPillHideAt < REMIX_BAR_REOPEN_COOLDOWN_MS) return;
-  remixSelectionRequested = false;
-  captureRemixSelection();
-  showPill();
-  sendToPill("remix:open-chat");
-  updateRemixBar();
-}
+// The remix bar is retired with the pill. Call sites that used to
+// reposition or toggle it remain; there is nothing left to update.
+function updateRemixBar(): void {}
 
 function applyRemixSettings(settings: Record<string, string>): void {
-  // Absent means on.
-  remixBarEnabled = false;
   remixInitialized = true;
-  updateRemixBar();
   const configured = settings[SETTINGS_KEYS.remixHotkey];
   scheduleRemixHotkeyRegistration(
     configured && isValidAccelerator(configured) ? configured : undefined,
@@ -4301,7 +3572,6 @@ function applyRemixSettings(settings: Record<string, string>): void {
 }
 
 const DEFAULT_HOTKEY = getDefaultHotkey();
-const DEFAULT_REMIX_HOTKEY = getDefaultRemixHotkey();
 const HOTKEY_MODIFIER_PARTS = new Set([
   "alt",
   "option",
@@ -4366,15 +3636,13 @@ function hotkeyModeFromSettings(
   return settings[SETTINGS_KEYS.hotkeyMode] === "toggle" ? "toggle" : "hold";
 }
 
-function companionOwnsDictation(): boolean {
-  return !!companionWindow && !companionWindow.isDestroyed();
-}
-
 function dictationTargets(): BrowserWindow[] {
+  // The companion is the ONLY window that records and delivers dictation.
+  // The settings window receives the events too, but purely for the
+  // onboarding/tutorial visuals — it has no recording pipeline.
   const targets: BrowserWindow[] = [];
-  if (companionOwnsDictation() && companionWindow)
+  if (companionWindow && !companionWindow.isDestroyed())
     targets.push(companionWindow);
-  else if (mainWindow) targets.push(mainWindow);
   if (settingsWindow) targets.push(settingsWindow);
   return targets;
 }
@@ -4388,123 +3656,15 @@ function sendHotkeyDown(): void {
     return;
   }
   relayServerEvent({ type: FreestyleEventType.RecordingStarted });
-  if (companionOwnsDictation()) {
-    for (const win of dictationTargets()) {
-      win.webContents.send("hotkey:down");
-    }
-    return;
+  for (const win of dictationTargets()) {
+    win.webContents.send("hotkey:down");
   }
-  showPill();
-  if (pillReadyPromise) {
-    // The pill window is still loading — defer IPC until it can receive it.
-    void pillReadyPromise.then(() => {
-      mainWindow?.webContents.send("hotkey:down");
-      settingsWindow?.webContents.send("hotkey:down");
-    });
-    return;
-  }
-  mainWindow?.webContents.send("hotkey:down");
-  settingsWindow?.webContents.send("hotkey:down");
 }
 
 function sendHotkeyUp(): void {
-  if (companionOwnsDictation()) {
-    for (const win of dictationTargets()) {
-      win.webContents.send("hotkey:up");
-    }
-    return;
+  for (const win of dictationTargets()) {
+    win.webContents.send("hotkey:up");
   }
-  if (pillReadyPromise) {
-    // Preserve IPC ordering: hotkey:up must arrive after hotkey:down.
-    void pillReadyPromise.then(() => {
-      mainWindow?.webContents.send("hotkey:up");
-      settingsWindow?.webContents.send("hotkey:up");
-    });
-    return;
-  }
-  mainWindow?.webContents.send("hotkey:up");
-  settingsWindow?.webContents.send("hotkey:up");
-}
-
-/** Send to the pill, deferring until it exists so bursty IPC stays ordered. */
-function sendToPill(channel: string, payload?: unknown): void {
-  if (pillReadyPromise) {
-    void pillReadyPromise.then(() => {
-      mainWindow?.webContents.send(channel, payload);
-    });
-    return;
-  }
-  mainWindow?.webContents.send(channel, payload);
-}
-
-/** False if the remix chord includes C — injected Cmd/Ctrl+C collides with the held key. */
-function canCopySelectionWhileHeld(): boolean {
-  const parts = currentRemixAccel?.split("+") ?? [];
-  return !parts.some((part) => part.trim().toLowerCase() === "c");
-}
-
-let remixSelectionRequested = false;
-
-function captureRemixSelection(): void {
-  if (remixSelectionRequested) return;
-  remixSelectionRequested = true;
-
-  void Promise.allSettled([
-    isSecureInputActive().then((secure) =>
-      secure
-        ? Promise.reject(new Error("secure-input"))
-        : copySelectionFromFocusedApp(),
-    ),
-    getFrontmostContext(),
-  ]).then(([sel, front]) => {
-    const context =
-      front.status === "fulfilled"
-        ? front.value
-        : { appName: null, windowTitle: null, url: null };
-    remixAnchor = { ...context, capturedAt: Date.now() };
-    if (sel.status === "rejected") {
-      hotkeyLog.warn(`Selection capture failed: ${sel.reason}`);
-    }
-    sendToPill("remix:selection", {
-      text: sel.status === "fulfilled" ? sel.value : null,
-      ...clipboardPreviewFields(),
-      ...remixAnchor,
-    });
-  });
-}
-
-/** The remix hotkey went down: put the pill up straight away. */
-function handleRemixHotkeyDown(): void {
-  if (remixPressed) return;
-  remixPressed = true;
-
-  // Fn+Control shares Fn with dictation; a slow press starts a rogue recording.
-  // Cancel on the remix channel — ordinary cancel would hide the pill we need.
-  if (hotkeyPressed) {
-    hotkeyPressed = false;
-    clearHotkeyStuckWatchdog();
-    sendToPill("remix:supersede");
-  }
-
-  setRemixRouteKeys(true);
-  armRemixStuckWatchdog();
-  remixSelectionRequested = false;
-  showPill();
-  sendToPill("remix:down");
-  // Mirror to dashboard (onboarding keycaps / Remix demo).
-  settingsWindow?.webContents.send("remix:down");
-
-  // Read selection on press so empty highlight is known before voice starts.
-  if (canCopySelectionWhileHeld()) captureRemixSelection();
-}
-
-function handleRemixHotkeyUp(): void {
-  if (!remixPressed) return;
-  remixPressed = false;
-  clearRemixStuckWatchdog();
-  sendToPill("remix:up");
-  settingsWindow?.webContents.send("remix:up");
-  captureRemixSelection();
 }
 
 let remixStuckTimer: NodeJS.Timeout | null = null;
@@ -4514,18 +3674,6 @@ function clearRemixStuckWatchdog(): void {
     clearTimeout(remixStuckTimer);
     remixStuckTimer = null;
   }
-}
-
-function armRemixStuckWatchdog(): void {
-  clearRemixStuckWatchdog();
-  remixStuckTimer = setTimeout(() => {
-    remixStuckTimer = null;
-    if (!remixPressed) return;
-    hotkeyLog.warn(
-      "Remix hotkey saw no key-up for 5 minutes; forcing release.",
-    );
-    handleRemixHotkeyUp();
-  }, HOTKEY_STUCK_TIMEOUT_MS);
 }
 
 /** Remix chord + digit routes; claimed while the card is up. Spell modifiers
@@ -4572,12 +3720,40 @@ function scheduleRemixHotkeyRegistration(hotkey?: string): void {
 }
 
 /** Start the remix native listener. No globalShortcut fallback (needs hold/tap). */
+/**
+ * The talk key went down: start listening into the Tavern. The panel itself
+ * opens on release, when the transcript lands — while holding, the listening
+ * HUD is the only surface.
+ *
+ * Fn+Control shares Fn with dictation, so a slow chord press starts a rogue
+ * cursor-dictation first; supersede it — the renderer cancels that session
+ * and restarts as a talk session, and clearing hotkeyPressed here keeps the
+ * later Fn release from double-finishing it.
+ */
+function handleTavernTalkDown(): void {
+  if (hotkeyPressed) {
+    hotkeyPressed = false;
+    clearHotkeyStuckWatchdog();
+  }
+  const win = companionWindow;
+  if (win && !win.isDestroyed()) win.webContents.send("talk:down");
+}
+
+function handleTavernTalkUp(): void {
+  const win = companionWindow;
+  if (win && !win.isDestroyed()) win.webContents.send("talk:up");
+}
+
+/**
+ * The old Remix hotkey, rebound: hold it to summon the Tavern panel with
+ * dictation streaming straight into the composer, release to finish. Same
+ * setting key, same default chord (Fn+Control on macOS), new destination.
+ */
 async function registerRemixHotkey(hotkey?: string): Promise<void> {
   if (remixKeyListener) {
     remixKeyListener.stop();
     remixKeyListener = null;
   }
-  remixPressed = false;
 
   remixHotkeyPreference = hotkey ?? remixHotkeyPreference;
   const configured = hotkey ?? remixHotkeyPreference;
@@ -4585,48 +3761,39 @@ async function registerRemixHotkey(hotkey?: string): Promise<void> {
     configured && isValidAccelerator(configured)
       ? normalizeAccelerator(configured)
       : null;
-  const accel = normalized ?? DEFAULT_REMIX_HOTKEY;
+  const accel = normalized ?? getDefaultRemixHotkey();
 
-  // Dictation wins on chord clash; remix stays off until Settings resolves it.
+  // Dictation wins on chord clash; the talk key stays off until Settings
+  // resolves it.
   if (currentHotkeyAccel && accel === currentHotkeyAccel) {
     hotkeyLog.warn(
-      `Remix hotkey "${accel}" is already the dictation hotkey; remix disabled.`,
+      `Talk hotkey "${accel}" is already the dictation hotkey; talk key disabled.`,
     );
     return;
   }
 
-  currentRemixAccel = accel;
-
   const listener = new NativeKeyListener({
     hotkey: accel,
-    onKeyDown: handleRemixHotkeyDown,
-    onKeyUp: handleRemixHotkeyUp,
+    onKeyDown: handleTavernTalkDown,
+    onKeyUp: handleTavernTalkUp,
     onError: (error) => {
-      hotkeyLog.error(`Remix key listener error: ${error}`);
+      hotkeyLog.error(`Talk key listener error: ${error}`);
     },
     onReady: () => {
-      hotkeyLog.debug(`Remix key listener ready for "${accel}"`);
+      hotkeyLog.debug(`Talk key listener ready for "${accel}"`);
     },
     onPermanentFailure: () => {
       if (remixKeyListener !== listener) return;
-      hotkeyLog.error("Remix key listener permanently failed; remix off.");
+      hotkeyLog.error("Talk key listener permanently failed; talk key off.");
       listener.stop();
       remixKeyListener = null;
     },
   });
   remixKeyListener = listener;
-
   const started = await listener.start();
-  if (remixKeyListener !== listener) {
-    listener.stop();
-    return;
-  }
   if (!started) {
-    hotkeyLog.warn(
-      `Remix key listener unavailable for "${accel}"; remix are off.`,
-    );
-    listener.stop();
-    remixKeyListener = null;
+    hotkeyLog.warn(`Talk key listener did not start for "${accel}"`);
+    if (remixKeyListener === listener) remixKeyListener = null;
   }
 }
 
@@ -4834,7 +4001,6 @@ async function registerHotkey(hotkey?: string): Promise<void> {
           const errorPayload = {
             message: `The hotkey listener stopped working and "${accel}" could not be re-registered. Restart Freestyle or pick a different combination in Settings.`,
           };
-          mainWindow?.webContents.send("hotkey:error", errorPayload);
           settingsWindow?.webContents.send("hotkey:error", errorPayload);
         }
       },
@@ -4883,7 +4049,6 @@ async function registerHotkey(hotkey?: string): Promise<void> {
           message = `Hotkey "${accel}" requires access to input devices. Run: sudo usermod -aG input $USER — then log out and back in.`;
         }
         const errorPayload = { message };
-        mainWindow?.webContents.send("hotkey:error", errorPayload);
         settingsWindow?.webContents.send("hotkey:error", errorPayload);
       }
     }
@@ -4907,10 +4072,6 @@ app.on("will-quit", () => {
   if (remixKeyListener) {
     remixKeyListener.stop();
     remixKeyListener = null;
-  }
-  if (remixBarFollowTimer) {
-    clearInterval(remixBarFollowTimer);
-    remixBarFollowTimer = null;
   }
   if (micListener) {
     micListener.stop();

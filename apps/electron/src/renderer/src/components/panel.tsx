@@ -429,6 +429,50 @@ function toolLabel(partType: string): string {
   );
 }
 
+function toolJson(value: unknown): string {
+  try {
+    const dump = JSON.stringify(value, null, 1) ?? "";
+    return dump.length > 2_000 ? `${dump.slice(0, 2_000)}\n…` : dump;
+  } catch {
+    return String(value);
+  }
+}
+
+function ToolChip({
+  partType,
+  input,
+  output,
+}: {
+  partType: string;
+  input: unknown;
+  output: unknown;
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="tavern-tool">
+      <button
+        type="button"
+        className="tavern-msg-tool tavern-tool-toggle"
+        onClick={() => setOpen((v) => !v)}
+      >
+        ✦ {toolLabel(partType)} {open ? "▾" : "▸"}
+      </button>
+      {open ? (
+        <div className="tavern-tool-detail">
+          {input !== undefined && Object.keys(input as object).length > 0 ? (
+            <>
+              <span className="tavern-tool-heading">Input</span>
+              <pre className="tavern-tool-block">{toolJson(input)}</pre>
+            </>
+          ) : null}
+          <span className="tavern-tool-heading">Output</span>
+          <pre className="tavern-tool-block">{toolJson(output)}</pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ChatMessage({ message }: { message: UIMessage }): React.JSX.Element {
   if (message.role === "user") {
     const text = message.parts
@@ -452,14 +496,18 @@ function ChatMessage({ message }: { message: UIMessage }): React.JSX.Element {
         if (part.type.startsWith("tool-")) {
           const tool = part as {
             state?: string;
+            input?: unknown;
             output?: { ok?: boolean; reason?: string };
           };
           if (tool.state !== "output-available") return null;
           if (tool.output?.ok === false) return null;
           return (
-            <div key={`${message.id}-${i}`} className="tavern-msg-tool">
-              ✦ {toolLabel(part.type)}
-            </div>
+            <ToolChip
+              key={`${message.id}-${i}`}
+              partType={part.type}
+              input={tool.input}
+              output={tool.output}
+            />
           );
         }
         return null;
@@ -595,6 +643,7 @@ function PanelInner({
   const [notice, setNotice] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<AgentToolCall[]>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const dictationBaseRef = useRef<string | null>(null);
 
   const transport = useMemo(
     () =>
@@ -696,14 +745,32 @@ function PanelInner({
     const offDictation = window.api.onPanelDictation((ev) => {
       if (ev.kind === "error") {
         setNotice(ev.text);
+        const base = dictationBaseRef.current;
+        dictationBaseRef.current = null;
+        if (base !== null) setDraft(base);
         return;
       }
       setNotice(null);
-      setDraft((prev) =>
-        ev.kind === "final" && prev.trim()
-          ? `${prev.trim()} ${ev.text}`
-          : ev.text,
-      );
+      if (ev.kind === "partial") {
+        // Snapshot whatever was typed before this utterance once; every
+        // partial then re-renders base + live text, replacing the previous
+        // partial rather than stacking on it.
+        setDraft((prev) => {
+          if (dictationBaseRef.current === null)
+            dictationBaseRef.current = prev.trim();
+          const base = dictationBaseRef.current;
+          return base ? `${base} ${ev.text}` : ev.text;
+        });
+        return;
+      }
+      // Final REPLACES the partial tail — appending to the draft here would
+      // duplicate the utterance, since the partials already wrote it.
+      const base = dictationBaseRef.current;
+      dictationBaseRef.current = null;
+      setDraft((prev) => {
+        const anchor = base ?? prev.trim();
+        return anchor ? `${anchor} ${ev.text}` : ev.text;
+      });
     });
     return () => {
       offFocus?.();
@@ -838,15 +905,23 @@ function PanelInner({
         <button type="button" className="tavern-btn" aria-label="Attach">
           ＋
         </button>
-        <input
+        <textarea
           id="panel-composer"
           className="tavern-input"
           value={draft}
+          rows={1}
           placeholder={COMPOSER_PLACEHOLDER[tab]}
           onMouseDown={() => window.api.panelRequestFocus()}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) send();
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing
+            ) {
+              e.preventDefault();
+              send();
+            }
           }}
         />
         <button

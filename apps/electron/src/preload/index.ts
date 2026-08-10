@@ -86,6 +86,16 @@ const api = {
     ipcRenderer.invoke("cloud:prompt-sign-in"),
   cloudPromptUpgrade: (): Promise<boolean> =>
     ipcRenderer.invoke("cloud:prompt-upgrade"),
+  onTalkDown: (cb: () => void) => {
+    const listener = (): void => cb();
+    ipcRenderer.on("talk:down", listener);
+    return () => ipcRenderer.removeListener("talk:down", listener);
+  },
+  onTalkUp: (cb: () => void) => {
+    const listener = (): void => cb();
+    ipcRenderer.on("talk:up", listener);
+    return () => ipcRenderer.removeListener("talk:up", listener);
+  },
   onHotkeyDown: (callback: () => void): (() => void) => {
     const handler = (): void => callback();
     ipcRenderer.on("hotkey:down", handler);

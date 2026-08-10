@@ -54,6 +54,8 @@ declare global {
       openExternal: (url: string) => Promise<boolean>;
       cloudPromptSignIn: () => Promise<boolean>;
       cloudPromptUpgrade: () => Promise<boolean>;
+      onTalkDown: (cb: () => void) => () => void;
+      onTalkUp: (cb: () => void) => () => void;
       onHotkeyDown: (callback: () => void) => () => void;
       onHotkeyUp: (callback: () => void) => () => void;
       onPillCancel: (callback: () => void) => () => void;

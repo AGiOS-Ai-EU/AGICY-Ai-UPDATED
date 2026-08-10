@@ -74,7 +74,6 @@ export default defineConfig({
         input: {
           index: resolve("src/renderer/index.html"),
           pill: resolve("src/renderer/pill.html"),
-          bar: resolve("src/renderer/bar.html"),
           companion: resolve("src/renderer/companion.html"),
           panel: resolve("src/renderer/panel.html"),
         },
