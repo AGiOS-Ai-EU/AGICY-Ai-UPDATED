@@ -1,6 +1,5 @@
 import { normalizeLanguageList } from "@freestyle-voice/validations";
 import { describe, expect, it } from "vitest";
-import { resolveMlxLanguage } from "../src/lib/mlx-asr/language.js";
 import { aiSdkProviderOptions } from "../src/lib/streaming/utils.js";
 
 describe("normalizeLanguageList", () => {
@@ -71,28 +70,5 @@ describe("aiSdkProviderOptions", () => {
   it("returns undefined when there is nothing to send", () => {
     expect(aiSdkProviderOptions("openai", undefined, null)).toBeUndefined();
     expect(aiSdkProviderOptions("openai", "auto", null)).toBeUndefined();
-  });
-});
-
-describe("resolveMlxLanguage", () => {
-  it("maps ISO codes to Qwen3 language names", () => {
-    expect(resolveMlxLanguage("qwen3-0.6b-8bit", "en")).toBe("English");
-    expect(resolveMlxLanguage("qwen3-1.7b-8bit", "zh")).toBe("Chinese");
-    expect(resolveMlxLanguage("qwen3-0.6b-8bit", "sv")).toBe("Swedish");
-  });
-
-  it("drops languages Qwen3 does not support", () => {
-    expect(resolveMlxLanguage("qwen3-0.6b-8bit", "uk")).toBeUndefined();
-    expect(resolveMlxLanguage("qwen3-0.6b-8bit", "no")).toBeUndefined();
-  });
-
-  it("drops auto and missing values", () => {
-    expect(resolveMlxLanguage("qwen3-0.6b-8bit", "auto")).toBeUndefined();
-    expect(resolveMlxLanguage("qwen3-0.6b-8bit", undefined)).toBeUndefined();
-  });
-
-  it("passes ISO codes through for non-qwen3 models", () => {
-    expect(resolveMlxLanguage("parakeet-tdt-0.6b-v3", "fr")).toBe("fr");
-    expect(resolveMlxLanguage("parakeet-tdt-0.6b-v3", "auto")).toBeUndefined();
   });
 });

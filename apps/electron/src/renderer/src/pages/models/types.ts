@@ -6,11 +6,3 @@ export interface ConfiguredModel {
   type: string;
   is_default: number;
 }
-
-export interface ApiKeyEntry {
-  provider: string;
-  created_at: string;
-  status: "valid" | "invalid" | "unknown";
-  /** Masked last-4 preview (e.g. "…a4F2") so keys are tellable apart. */
-  hint?: string;
-}

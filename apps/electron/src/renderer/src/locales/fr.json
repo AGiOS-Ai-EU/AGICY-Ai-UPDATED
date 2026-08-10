@@ -63,17 +63,10 @@
     "modelSelector": {
       "chooseModel": "Choisir un modèle",
       "allVoiceModels": "Tous les modèles vocaux",
-      "cloudApi": "API Cloud",
-      "onDevice": "Sur l'appareil",
       "loading": "Chargement des modèles…",
       "cloudNote": "Les modèles cloud nécessitent une clé API — nous la demanderons une fois.",
-      "onDeviceNote": "Les modèles sur l'appareil s'exécutent en privé sur {{phrase}}.",
       "connect": "Connecter {{provider}}",
-      "addKey": "Ajoutez votre clé {{provider}}",
       "requiredFor": "Requis pour utiliser {{model}}. Stocké dans votre trousseau système — jamais enregistré, jamais envoyé.",
-      "getKey": "Vous n'en avez pas ? Obtenez une clé {{provider}} ↗",
-      "saveKey": "Enregistrer et utiliser {{provider}}",
-      "keyPlaceholder": "Collez votre clé secrète — ex. sk-…",
       "backToModels": "Retour aux modèles"
     },
     "draft": {
@@ -539,19 +532,8 @@
   "models": {
     "title": "Modèles",
     "loading": "Chargement des modèles…",
-    "apiKeys": "Clés API",
-    "noApiKeys": "Pas encore de clés API — choisissez un modèle cloud ci-dessus et vous serez invité à entrer une clé.",
-    "onDevice": "Sur l'appareil",
-    "keyInvalid": "Clé invalide — mettre à jour ou supprimer",
-    "keyStored": "Clé stockée dans le trousseau",
-    "keyStoredWithHint": "Clé {{hint}} stockée dans le trousseau",
     "modelSingular": "Modèle",
-    "modelPlural": "Modèles",
-    "deleteLocalTitle": "Supprimer le modèle local ?",
-    "deleteLocalMsg": "Supprimer <b>{{name}}</b> de {{phrase}}. Les poids sont supprimés de votre cache local ; vous pouvez les retélécharger plus tard.",
-    "deleteProviderTitle": "Supprimer le fournisseur",
-    "deleteProviderMsgBase": "Supprimer la clé API de <b>{{provider}}</b> ? Cela supprime aussi tous les modèles configurés pour ce fournisseur",
-    "deleteProviderCurrentSuffix": ", y compris un modèle que vous utilisez actuellement"
+    "modelPlural": "Modèles"
   },
   "shell": {
     "nav": {

@@ -9,9 +9,6 @@ import {
   cleanupWorkToneSchema,
   disabledPluginsSettingSchema,
   historyRetentionDaysSettingSchema,
-  localLlmConfigSchema,
-  openaiSttBaseUrlSchema,
-  openaiSttConfigSchema,
   pluginsSettingSchema,
   proxyUrlSettingSchema,
   settingValueSchema,
@@ -23,7 +20,6 @@ import {
   HISTORY_RETENTION_SETTING_KEY,
   purgeExpiredHistory,
 } from "../lib/history-store.js";
-import { applyMlxAsrRetentionPolicy } from "../lib/mlx-asr/server.js";
 import {
   CA_CERT_PATH_SETTING,
   configureNetwork,
@@ -34,19 +30,6 @@ import {
   pushSettingToCloud,
   SYNCED_SETTING_KEYS,
 } from "../lib/preferences-sync.js";
-import { applyWhisperRetentionPolicy } from "../lib/whisper/server.js";
-
-/**
- * Normalize an OpenAI-compatible base URL for the `/v1/models` probe.
- *
- * Strips any trailing slashes and a trailing OpenAI path segment so that a
- * user who pastes a specific endpoint (e.g. `.../v1/audio/transcriptions`) or
- * the versioned base (`.../v1`) still resolves to the true base. The probe
- * then appends `/v1/models`.
- */
-function normalizeOpenaiBaseUrl(input: string): string {
-  return input.replace(/\/+$/, "").replace(/\/v1(?:\/[^?#]*)?$/, "");
-}
 
 const settings = new Hono()
   .get("/", (c) => {
@@ -143,17 +126,6 @@ const settings = new Hono()
       if (!parsed.success) {
         return c.json({ error: "Invalid disabled_plugins setting" }, 400);
       }
-    } else if (key === "openai_stt_base_url") {
-      const parsed = openaiSttBaseUrlSchema.safeParse(body.value);
-      if (!parsed.success) {
-        return c.json(
-          {
-            error:
-              parsed.error.issues[0]?.message ?? "Invalid OpenAI STT base URL",
-          },
-          400,
-        );
-      }
     } else if (key === PROXY_URL_SETTING) {
       const parsed = proxyUrlSettingSchema.safeParse(body.value);
       if (!parsed.success) {
@@ -192,12 +164,6 @@ const settings = new Hono()
       pushSettingToCloud(key, String(body.value));
     }
 
-    if (key === "mlx_asr_keep_alive_minutes") {
-      applyMlxAsrRetentionPolicy();
-    }
-    if (key === "whisper_keep_alive_minutes") {
-      applyWhisperRetentionPolicy();
-    }
     if (key === HISTORY_RETENTION_SETTING_KEY) {
       purgeExpiredHistory();
     }
@@ -231,88 +197,6 @@ const settings = new Hono()
       configureNetwork();
     }
     return c.json({ ok: true });
-  })
-  .post(
-    "/local-llm/test",
-    zValidator("json", localLlmConfigSchema),
-    async (c) => {
-      const body = c.req.valid("json");
-      const url = normalizeOpenaiBaseUrl(body.url);
-
-      try {
-        const res = await fetch(`${url}/v1/models`, {
-          headers: {
-            ...(body.api_key
-              ? { Authorization: `Bearer ${body.api_key}` }
-              : {}),
-          },
-          signal: AbortSignal.timeout(5000),
-        });
-
-        if (!res.ok) {
-          return c.json(
-            { error: `Server returned ${res.status}: ${res.statusText}` },
-            502,
-          );
-        }
-
-        const data = (await res.json()) as {
-          data?: { id: string }[];
-        };
-
-        let models: string[] = [];
-        if (data.data && Array.isArray(data.data)) {
-          models = data.data.map((m) => m.id);
-        }
-
-        return c.json({ ok: true, models });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to connect";
-        return c.json({ error: message }, 502);
-      }
-    },
-  )
-  .post(
-    "/openai-stt/test",
-    zValidator("json", openaiSttConfigSchema),
-    async (c) => {
-      const body = c.req.valid("json");
-      const url = normalizeOpenaiBaseUrl(body.url);
-
-      try {
-        const res = await fetch(`${url}/v1/models`, {
-          headers: {
-            ...(body.api_key
-              ? { Authorization: `Bearer ${body.api_key}` }
-              : {}),
-          },
-          signal: AbortSignal.timeout(5000),
-        });
-
-        if (!res.ok) {
-          return c.json(
-            { error: `Server returned ${res.status}: ${res.statusText}` },
-            502,
-          );
-        }
-
-        const data = (await res.json()) as {
-          data?: { id: string }[];
-        };
-
-        let models: string[] = [];
-        if (data.data && Array.isArray(data.data)) {
-          models = data.data.map((m) => m.id);
-        }
-
-        return c.json({ ok: true, models });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to connect";
-        return c.json({ error: message }, 502);
-      }
-    },
-  );
+  });
 
 export default settings;

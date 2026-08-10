@@ -7,17 +7,14 @@ import {
   freestyleCloudUrl,
 } from "../../lib/freestyle-cloud.js";
 import { getDefaultModels } from "../../lib/providers.js";
-import { runRemixAgentLocally } from "../../lib/remix-agent.js";
 import { getSessionToken, invalidateSession } from "../../lib/sessions.js";
-import { isCleanupModelSupported } from "../models.js";
 
 const log = createAppLogger("remix-agent");
 
 /**
- * One agent turn. On Freestyle Cloud the loop runs on the Worker and this
- * route is a streaming proxy — the renderer never holds the cloud token, so
- * the Bearer header is injected here from the server-side session. On BYOK
- * the same loop runs in-process.
+ * One agent turn. The loop runs on the Worker and this route is a streaming
+ * proxy — the renderer never holds the cloud token, so the Bearer header is
+ * injected here from the server-side session.
  */
 const agentRoute = new Hono().post(
   "/",
@@ -25,17 +22,11 @@ const agentRoute = new Hono().post(
   async (c) => {
     const body = c.req.valid("json");
     const llm = getDefaultModels().llm;
-    if (!llm) {
-      return c.json(
-        {
-          error: "no-model",
-          detail: "No AI model is set up yet. Pick one in Settings > Models.",
-        },
-        400,
-      );
+    if (!llm || llm.provider !== FREESTYLE_CLOUD_PROVIDER_ID) {
+      return c.json({ error: "cloud_auth_required" }, 401);
     }
 
-    if (llm.provider === FREESTYLE_CLOUD_PROVIDER_ID) {
+    {
       const token = getSessionToken();
       if (!token) return c.json({ error: "cloud_auth_required" }, 401);
 
@@ -94,29 +85,6 @@ const agentRoute = new Hono().post(
           "x-vercel-ai-ui-message-stream": "v1",
         },
       });
-    }
-
-    if (!(await isCleanupModelSupported(llm.provider, llm.model_id))) {
-      return c.json(
-        {
-          error: "unsupported-model",
-          detail: `${llm.model_id} can't run Remix. Pick a different model in Settings > Models.`,
-        },
-        400,
-      );
-    }
-
-    try {
-      return await runRemixAgentLocally(body, llm, c.req.raw.signal);
-    } catch (err) {
-      log.error(`Remix agent (BYOK) failed: ${err}`);
-      return c.json(
-        {
-          error: "failed",
-          detail: err instanceof Error ? err.message : "Remix failed.",
-        },
-        502,
-      );
     }
   },
 );

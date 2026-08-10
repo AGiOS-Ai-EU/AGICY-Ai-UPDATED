@@ -1,7 +1,4 @@
-import {
-  postProcess as cleanupWithModel,
-  sanitizeTranscriptText,
-} from "@freestyle-voice/stt";
+import { sanitizeTranscriptText } from "@freestyle-voice/stt";
 import { createAppLogger } from "@freestyle-voice/utils";
 import type {
   CleanupAppAssignment,
@@ -21,14 +18,10 @@ import {
   parseCleanupWorkTone,
 } from "@freestyle-voice/validations";
 import type { HookApi } from "freestyle-voice";
-import {
-  getModelCostCached,
-  isCleanupModelSupported,
-} from "../routes/models.js";
+import { getModelCostCached } from "../routes/models.js";
 import { getDb, readSetting, readSettings } from "./db.js";
 import { applyDictionaryReplacements } from "./dictionary-replacements.js";
 import { ensureCleanupPromptConfigFresh } from "./editor/prompt-config.js";
-import { buildRewritePrompt } from "./editor/prompts.js";
 import { getRewritePromptContext } from "./editor/rewrite-context.js";
 import {
   FREESTYLE_CLOUD_PROVIDER_ID,
@@ -36,16 +29,14 @@ import {
   isTransientCloudError,
   postProcessWithFreestyleCloud,
 } from "./freestyle-cloud.js";
-import { getLlmProvider } from "./llm/registry.js";
 import {
   FreestyleEventType,
-  PipelineStage,
   parseAppContext,
   plugins,
 } from "./plugins/index.js";
 import { createHookApi } from "./plugins/pipeline.js";
 import { capture, captureException } from "./posthog.js";
-import { createChatModel, getDefaultModels } from "./providers.js";
+import { getDefaultModels } from "./providers.js";
 import { getSessionToken } from "./sessions.js";
 
 const log = createAppLogger("post-process");
@@ -147,8 +138,6 @@ export function prewarmPostProcess(): void {
   const defaults = getDefaultModels();
   const llm = defaults.llm;
   if (!llm || !isLlmCleanupEnabled()) return;
-
-  getLlmProvider(llm.provider)?.prewarm?.(llm.model_id);
 }
 
 /**
@@ -248,10 +237,9 @@ export async function postProcess(
   }
 
   let cleanedText = normalizedRawText;
-  const handoffStart = Date.now();
   const llm = defaults.llm;
   const llmStart = Date.now();
-  let handoffMs = 0;
+  const handoffMs = 0;
 
   // A plugin already consumed/aborted the pipeline in an earlier stage (e.g.
   // `afterTranscribe`) — skip cleanup entirely rather than spending an LLM
@@ -259,16 +247,6 @@ export async function postProcess(
   if (api.control.state !== "running") {
     cleanedText = normalizedRawText;
   } else if (llm && isLlmCleanupEnabled()) {
-    // Resolved cleanup config for both Freestyle Cloud and local-model paths.
-    const {
-      intensity,
-      customPrompt,
-      personalTone,
-      workTone,
-      emailTone,
-      overallTone,
-    } = getEffectiveCleanupTones();
-
     if (llm.provider === FREESTYLE_CLOUD_PROVIDER_ID) {
       // Freestyle Cloud assembles its cleanup prompts server-side: it resolves
       // the destination from appContext + appAssignments and applies the tone
@@ -326,114 +304,6 @@ export async function postProcess(
           });
           log.error(`Freestyle Cloud cleanup failed: ${err}`);
           cleanedText = normalizedRawText;
-        }
-      }
-    } else if (!(await isCleanupModelSupported(llm.provider, llm.model_id))) {
-      log.warn(
-        `Skipping LLM cleanup: unsupported cleanup model ${llm.provider}/${llm.model_id}`,
-      );
-    } else {
-      const { personalSurface } = getRewritePromptContext(
-        effectiveAppContext,
-        getCleanupAppAssignments(),
-      );
-
-      // Plugin hook: let plugins override the inferred destination, append
-      // extra system-prompt fragments, replace the prompt outright, or skip
-      // cleanup entirely. Runs before prompt assembly so overrides actually
-      // feed into buildRewritePrompt.
-      const promptHook = await plugins().run(
-        "beforeCleanup",
-        {
-          text: normalizedRawText,
-          appContext: parsedContext,
-          destination: resolvedDestination,
-        },
-        { system: [] as string[], destination: resolvedDestination },
-        api,
-      );
-
-      if (promptHook.skip || api.control.state !== "running") {
-        // `skip` bypasses cleanup deliberately; a `consume()`/`abort()` in the
-        // `beforeCleanup` hook does too — the dictation is already terminal, so
-        // spending an LLM call on text the pipeline has decided not to deliver
-        // would be wasted (mirrors the cloud branch's early-out above and the
-        // documented consume/abort semantics of skipping every later stage).
-        cleanedText = normalizedRawText;
-      } else {
-        const { system, prompt } = buildRewritePrompt(normalizedRawText, {
-          languages: options.languages,
-          intensity,
-          customPrompt,
-          destination: promptHook.destination ?? resolvedDestination,
-          personalTone,
-          personalSurface:
-            (promptHook.destination ?? resolvedDestination) === "personal"
-              ? personalSurface
-              : null,
-          workTone,
-          emailTone,
-          overallTone,
-        });
-        const pluginSystem =
-          promptHook.system.length > 0
-            ? system + promptHook.system.map((s) => `\n\n${s}`).join("")
-            : system;
-        // A plugin can replace the assembled prompt outright while still
-        // contributing `system` fragments.
-        const finalPrompt = promptHook.prompt ?? prompt;
-
-        handoffMs = Date.now() - handoffStart;
-
-        const chatModel = await createChatModel(llm.provider, llm.model_id);
-        let cleanupError: unknown;
-        const result = await cleanupWithModel({
-          model: chatModel,
-          text: normalizedRawText,
-          system: pluginSystem,
-          prompt: finalPrompt,
-          // The empty/filler-only case is already handled above for the whole
-          // function (both the cloud and local-model branches), so this call
-          // is guaranteed non-empty text — disable the package's own internal
-          // check rather than relying on two independently-maintained filler
-          // regexes staying in sync.
-          skipEmptyText: false,
-          providerOptions: getLlmProvider(llm.provider)?.providerOptions?.(
-            llm.model_id,
-          ),
-          onError: (err) => {
-            cleanupError = err;
-          },
-        });
-
-        if (result.model) {
-          inputTokens = result.inputTokens;
-          outputTokens = result.outputTokens;
-          llmProvider = llm.provider;
-          // Record the configured model id (e.g. `groq/qwen/qwen3-32b`), not
-          // the AI SDK's prefix-stripped `result.model` (`qwen/qwen3-32b`), so
-          // the persisted history label stays consistent with pre-migration
-          // rows and the Freestyle Cloud branch above.
-          llmModel = llm.model_id;
-          cleanedText = result.cleaned;
-        } else {
-          const err = cleanupError;
-          if (!isTransientCloudError(err)) captureException(err);
-          void plugins().emit({
-            type: FreestyleEventType.PipelineError,
-            stage: PipelineStage.Cleanup,
-            message: err instanceof Error ? err.message : String(err),
-          });
-          capture("post process failed", {
-            provider: llm.provider,
-            model: llm.model_id,
-            source,
-            app_name: parsedContext?.appName,
-            destination: resolvedDestination,
-            has_app_context: !!effectiveAppContext,
-          });
-          log.error(`LLM cleanup failed: ${err}`);
-          cleanedText = result.cleaned;
         }
       }
     }

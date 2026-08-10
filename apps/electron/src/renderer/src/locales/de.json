@@ -63,17 +63,10 @@
     "modelSelector": {
       "chooseModel": "Modell wählen",
       "allVoiceModels": "Alle Sprachmodelle",
-      "cloudApi": "Cloud-API",
-      "onDevice": "Auf dem Gerät",
       "loading": "Modelle werden geladen…",
       "cloudNote": "Cloud-Modelle benötigen einen API-Schlüssel — wir fragen einmalig.",
-      "onDeviceNote": "Gerätemodelle laufen privat auf {{phrase}}.",
       "connect": "{{provider}} verbinden",
-      "addKey": "Ihren {{provider}}-Schlüssel hinzufügen",
       "requiredFor": "Erforderlich für {{model}}. Im Systemschlüsselbund gespeichert — wird nie protokolliert oder gesendet.",
-      "getKey": "Keinen? Einen {{provider}}-Schlüssel erhalten ↗",
-      "saveKey": "Speichern und {{provider}} verwenden",
-      "keyPlaceholder": "Geheimschlüssel einfügen — z.B. sk-…",
       "backToModels": "Zurück zu den Modellen"
     },
     "draft": {
@@ -539,19 +532,8 @@
   "models": {
     "title": "Modelle",
     "loading": "Modelle werden geladen…",
-    "apiKeys": "API-Schlüssel",
-    "noApiKeys": "Noch keine API-Schlüssel — wählen Sie oben ein Cloud-Modell und Sie werden nach einem Schlüssel gefragt.",
-    "onDevice": "Auf dem Gerät",
-    "keyInvalid": "Schlüssel ungültig — aktualisieren oder löschen",
-    "keyStored": "Schlüssel im Schlüsselbund gespeichert",
-    "keyStoredWithHint": "Schlüssel {{hint}} im Schlüsselbund gespeichert",
     "modelSingular": "Modell",
-    "modelPlural": "Modelle",
-    "deleteLocalTitle": "Lokales Modell löschen?",
-    "deleteLocalMsg": "<b>{{name}}</b> von {{phrase}} entfernen. Die Gewichte werden aus Ihrem lokalen Cache gelöscht; Sie können sie später erneut herunterladen.",
-    "deleteProviderTitle": "Anbieter löschen",
-    "deleteProviderMsgBase": "Den API-Schlüssel von <b>{{provider}}</b> löschen? Dadurch werden auch alle konfigurierten Modelle für diesen Anbieter entfernt",
-    "deleteProviderCurrentSuffix": ", einschließlich eines Modells, das Sie derzeit verwenden"
+    "modelPlural": "Modelle"
   },
   "shell": {
     "nav": {

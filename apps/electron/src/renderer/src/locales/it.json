@@ -63,17 +63,10 @@
     "modelSelector": {
       "chooseModel": "Scegli un modello",
       "allVoiceModels": "Tutti i modelli vocali",
-      "cloudApi": "API Cloud",
-      "onDevice": "Sul dispositivo",
       "loading": "Caricamento modelli...",
       "cloudNote": "I modelli cloud richiedono una chiave API — la chiederemo una volta.",
-      "onDeviceNote": "I modelli sul dispositivo funzionano in modo privato su {{phrase}}.",
       "connect": "Connetti {{provider}}",
-      "addKey": "Aggiungi la tua chiave per {{provider}}",
       "requiredFor": "Richiesto per utilizzare {{model}}. Salvato nel portachiavi di sistema — mai registrato, mai inviato a noi.",
-      "getKey": "Non ne hai una? Ottieni una chiave per {{provider}} ↗",
-      "saveKey": "Salva e usa {{provider}}",
-      "keyPlaceholder": "Incolla la tua chiave segreta — es. sk-...",
       "backToModels": "Torna ai modelli"
     },
     "draft": {
@@ -538,19 +531,8 @@
   "models": {
     "title": "Modelli",
     "loading": "Caricamento modelli...",
-    "apiKeys": "Chiavi API",
-    "noApiKeys": "Nessuna chiave API inserita.",
-    "onDevice": "Sul dispositivo",
-    "keyInvalid": "Chiave non valida",
-    "keyStored": "Chiave salvata nel portachiavi",
-    "keyStoredWithHint": "Chiave {{hint}} salvata",
     "modelSingular": "modello",
-    "modelPlural": "modelli",
-    "deleteLocalTitle": "Eliminare il modello locale?",
-    "deleteLocalMsg": "Rimuovere <b>{{name}}</b>? I file verranno eliminati.",
-    "deleteProviderTitle": "Elimina provider",
-    "deleteProviderMsgBase": "Eliminare la chiave per <b>{{provider}}</b>?",
-    "deleteProviderCurrentSuffix": ", incluso il modello in uso"
+    "modelPlural": "modelli"
   },
   "shell": {
     "nav": {

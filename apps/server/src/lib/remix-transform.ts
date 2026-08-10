@@ -1,21 +1,14 @@
-import {
-  maxOutputTokensForCleanup,
-  stripWrappingQuotes,
-} from "@freestyle-voice/stt";
+import { stripWrappingQuotes } from "@freestyle-voice/stt";
 import { createAppLogger } from "@freestyle-voice/utils";
 import { findRemixPreset } from "@freestyle-voice/validations";
-import { generateText } from "ai";
-import { isCleanupModelSupported } from "../routes/models.js";
-import { buildRemixPrompt, buildRemixSystem } from "./editor/remix-prompts.js";
+import { buildRemixSystem } from "./editor/remix-prompts.js";
 import {
-  FREESTYLE_CLOUD_PROVIDER_ID,
   FreestyleCloudAuthError,
   isTransientCloudError,
   postProcessWithFreestyleCloud,
 } from "./freestyle-cloud.js";
-import { getLlmProvider } from "./llm/registry.js";
 import { capture, captureException } from "./posthog.js";
-import { createChatModel, getDefaultModels } from "./providers.js";
+import { getDefaultModels } from "./providers.js";
 import { getSessionToken } from "./sessions.js";
 
 const log = createAppLogger("remix");
@@ -91,7 +84,7 @@ export async function runRemixTransform(
   let text: string;
   let usage: RemixTransformResult["usage"];
 
-  if (llm.provider === FREESTYLE_CLOUD_PROVIDER_ID) {
+  {
     // Freestyle Cloud assembles prompts server-side and owns the user half, but
     // its "custom" intensity takes the system prompt verbatim — which is
     // exactly the shape `buildRemixSystem` is written for. Every tone is
@@ -116,41 +109,6 @@ export async function runRemixTransform(
     });
     text = result.cleaned;
     usage = result.usage;
-  } else {
-    if (!(await isCleanupModelSupported(llm.provider, llm.model_id))) {
-      throw new RemixTransformError(
-        `${llm.model_id} can't run remix. Pick a different model in Settings > Models.`,
-        "unsupported-model",
-      );
-    }
-    const { system, prompt } = buildRemixPrompt(options.text, {
-      instruction,
-      languages: options.languages,
-    });
-    // Called directly rather than through the shared cleanup helper: that one
-    // sanitizes transcript artifacts (collapsing a duplicated trailing
-    // paragraph, in particular) which would quietly eat a repeated line from a
-    // legitimately list-shaped result, and it swallows model errors into a
-    // raw-text fallback this path must not take.
-    const providerOptions = getLlmProvider(llm.provider)?.providerOptions?.(
-      llm.model_id,
-    );
-    const result = await generateText({
-      model: await createChatModel(llm.provider, llm.model_id),
-      system,
-      prompt,
-      temperature: 0,
-      // The budget is sized off the input, which is the right shape here too —
-      // an edit is roughly as long as what it edits. "Expand" is the exception,
-      // and the helper already leaves generous headroom.
-      maxOutputTokens: maxOutputTokensForCleanup(options.text),
-      ...(providerOptions ? { providerOptions } : {}),
-    });
-    text = result.text;
-    usage = {
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-    };
   }
 
   // Models like to hand back a rewrite in quotes even when told not to. The

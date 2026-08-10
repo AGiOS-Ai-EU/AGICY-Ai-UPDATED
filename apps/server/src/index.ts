@@ -16,11 +16,6 @@ import {
   startHistoryRetentionSweep,
   stopHistoryRetentionSweep,
 } from "./lib/history-store.js";
-import { reconcileUnsupportedMlxVoiceDefault } from "./lib/mlx-asr/reconcile.js";
-import {
-  activateManagedMlxRuntimeForAppVersion,
-  prefetchManagedMlxRuntimeForAppRelease,
-} from "./lib/mlx-asr/runtime.js";
 import { configureNetwork } from "./lib/network.js";
 import { pluginApiGuard } from "./lib/plugin-api-guard.js";
 import {
@@ -45,8 +40,8 @@ import routes from "./routes";
 const httpLog = createAppLogger("http");
 
 // Lightweight CRUD routers get a request timeout. Transcription, post-process,
-// model downloads (whisper/mlx-asr), and the auth device-flow poll are
-// intentionally excluded — they can legitimately run longer than this window.
+// and the auth device-flow poll are intentionally excluded — they can
+// legitimately run longer than this window.
 const REQUEST_TIMEOUT_MS = 30_000;
 const TIMEOUT_PREFIXES = [
   "/api/settings",
@@ -271,7 +266,6 @@ export async function startServer(
 }
 
 export { closeDb, writeSetting } from "./lib/db.js";
-export { stopMlxServer } from "./lib/mlx-asr/server.js";
 export { configureNetwork } from "./lib/network.js";
 export {
   disposeServerPlugins,
@@ -285,13 +279,6 @@ export {
   uninstallPackage,
 } from "./lib/plugins/installer.js";
 export { captureException, shutdownPosthog } from "./lib/posthog.js";
-export { stopServer as stopWhisperServer } from "./lib/whisper/server.js";
-export {
-  activateManagedMlxRuntimeForAppVersion,
-  prefetchManagedMlxRuntimeForAppRelease,
-  reconcileUnsupportedMlxVoiceDefault,
-};
-
 export type AppType = ReturnType<typeof createApp>;
 
 export default createApp;

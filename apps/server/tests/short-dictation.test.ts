@@ -69,28 +69,11 @@ class FakeSocket {
 
 vi.mock("ws", () => ({ default: FakeSocket }));
 
-const { SonioxTranscriptionProvider } = await import(
-  "../src/lib/streaming/providers/soniox.js"
-);
-const { DeepgramTranscriptionProvider } = await import(
-  "../src/lib/streaming/providers/deepgram.js"
-);
-const { ElevenLabsTranscriptionProvider } = await import(
-  "../src/lib/streaming/providers/elevenlabs.js"
-);
-const { OpenAITranscriptionProvider } = await import(
-  "../src/lib/streaming/providers/openai.js"
-);
 const { FreestyleCloudTranscriptionProvider } = await import(
   "../src/lib/streaming/providers/freestyle-cloud.js"
 );
 
-type Provider =
-  | "soniox"
-  | "deepgram"
-  | "elevenlabs"
-  | "openai"
-  | "freestyle-cloud";
+type Provider = "freestyle-cloud";
 
 async function openSession(provider: Provider) {
   const onFinal = vi.fn();
@@ -102,38 +85,6 @@ async function openSession(provider: Provider) {
     onClose: vi.fn(),
   };
   const providers = {
-    soniox: () =>
-      new SonioxTranscriptionProvider().openStreamingSession({
-        apiKey: "k",
-        model: "soniox/stt-rt-preview",
-        languages: ["en"],
-        bias: null,
-        callbacks,
-      }),
-    deepgram: () =>
-      new DeepgramTranscriptionProvider().openStreamingSession({
-        apiKey: "k",
-        model: "deepgram/nova-3",
-        languages: ["en"],
-        bias: null,
-        callbacks,
-      }),
-    elevenlabs: () =>
-      new ElevenLabsTranscriptionProvider().openStreamingSession({
-        apiKey: "k",
-        model: "elevenlabs/scribe_v2",
-        languages: ["en"],
-        bias: null,
-        callbacks,
-      }),
-    openai: () =>
-      new OpenAITranscriptionProvider().openStreamingSession({
-        apiKey: "k",
-        model: "openai/gpt-4o-transcribe",
-        languages: ["en"],
-        bias: null,
-        callbacks,
-      }),
     "freestyle-cloud": () =>
       new FreestyleCloudTranscriptionProvider().openStreamingSession({
         apiKey: "k",
@@ -173,10 +124,6 @@ describe("a dictation that ends before its session is live", () => {
   });
 
   it.each([
-    "soniox",
-    "deepgram",
-    "elevenlabs",
-    "openai",
     "freestyle-cloud",
   ] as const)("sends held audio for %s", async (provider) => {
     const { session, socket } = await openSession(provider);
@@ -195,95 +142,6 @@ describe("a dictation that ends before its session is live", () => {
       provider === "openai" ? expect.any(String) : "01020304",
       provider === "openai" ? expect.any(String) : "05060708",
     ]);
-    session.cancel();
-  });
-
-  it("does not resolve the short dictation before a provider can finalize it", async () => {
-    const cases = [
-      {
-        provider: "deepgram" as const,
-        finalMessage: {
-          type: "Results",
-          is_final: true,
-          channel: { alternatives: [{ transcript: "on it" }] },
-        },
-      },
-      {
-        provider: "elevenlabs" as const,
-        finalMessage: { message_type: "committed_transcript", text: "on it" },
-      },
-      {
-        provider: "openai" as const,
-        finalMessage: {
-          type: "conversation.item.input_audio_transcription.completed",
-          transcript: "on it",
-        },
-      },
-    ];
-
-    for (const { provider, finalMessage } of cases) {
-      sockets.length = 0;
-      const { session, socket, onFinal } = await openSession(provider);
-
-      shortDictation(session);
-      expect(onFinal).not.toHaveBeenCalled();
-      socket.open();
-      if (provider === "openai") {
-        socket.reply({ type: "session.updated" });
-      }
-
-      expect(onFinal).not.toHaveBeenCalled();
-      socket.reply(finalMessage);
-
-      expect(onFinal).toHaveBeenCalledWith("on it");
-      expect(
-        socket.control.some((raw) => {
-          const message = JSON.parse(raw) as Record<string, unknown>;
-          return (
-            (provider === "deepgram" && message.type === "Finalize") ||
-            (provider === "openai" &&
-              message.type === "input_audio_buffer.commit") ||
-            (provider === "elevenlabs" &&
-              message.message_type === "input_audio_chunk" &&
-              message.commit === true)
-          );
-        }),
-      ).toBe(true);
-      session.cancel();
-    }
-  });
-
-  it("waits for tokens instead of resolving empty the moment it finalizes", async () => {
-    const { session, socket, onFinal } = await openSession("soniox");
-
-    shortDictation(session);
-    socket.open();
-    // The audio and the finalize reached Soniox together, so its first reply
-    // carries nothing yet. Delivering here would discard the real transcript.
-    socket.reply({ tokens: [] });
-    expect(onFinal).not.toHaveBeenCalled();
-
-    socket.reply({
-      tokens: [
-        { text: "on", is_final: true },
-        { text: " it", is_final: true },
-      ],
-    });
-
-    expect(onFinal).toHaveBeenCalledWith("on it");
-    session.cancel();
-  });
-
-  it("still resolves genuine silence, via the finished message", async () => {
-    const { session, socket, onFinal } = await openSession("soniox");
-
-    shortDictation(session);
-    socket.open();
-    socket.reply({ tokens: [] });
-
-    socket.reply({ finished: true });
-
-    expect(onFinal).toHaveBeenCalledWith("");
     session.cancel();
   });
 });

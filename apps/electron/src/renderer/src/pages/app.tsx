@@ -1506,8 +1506,7 @@ export default function AppPage(): React.JSX.Element {
       setMicSilent(false);
 
       // Warm the pipeline while the user is speaking so submission doesn't pay
-      // startup latency: the local ASR server (whisper/mlx) model load and the
-      // cloud cleanup LLM connection (e.g. Groq TLS handshake). Fire-and-forget:
+      // startup latency on the cloud cleanup LLM connection. Fire-and-forget:
       // the server decides what needs warming (no-op where nothing applies), and
       // lazy start at submission remains the fallback if this doesn't land.
       void getClient()

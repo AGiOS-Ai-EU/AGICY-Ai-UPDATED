@@ -16,7 +16,6 @@
     "pkg-config",
     "powershell",
     "powershell.exe",
-    "python3"
   ],
   "ignoreFiles": [
     "apps/electron/src/preload/*.d.ts",

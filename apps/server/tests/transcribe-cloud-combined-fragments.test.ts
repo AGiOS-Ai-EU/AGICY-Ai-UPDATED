@@ -55,6 +55,8 @@ vi.mock("../src/lib/providers.js", async (importOriginal) => {
 
 vi.mock("../src/lib/streaming-stt.js", () => ({
   getApiKeyForProvider: () => "test-token",
+  voiceProviderCategory: (providerId: string) =>
+    providerId === "freestyle-cloud" ? "freestyle_cloud" : "byok",
 }));
 
 // Local post-process must not be reached on the combined happy path; when the

@@ -63,18 +63,6 @@ test.beforeAll(async () => {
     ) {
       return send([]);
     }
-    if (url.startsWith("/api/whisper/status")) {
-      return send({
-        binaryAvailable: false,
-        binaryDownloading: false,
-        serverBinaryAvailable: false,
-        serverRunning: false,
-        serverFailed: false,
-        modelsDir: "",
-        models: [],
-        modelDefinitions: [],
-      });
-    }
     return send({});
   });
   await new Promise<void>((r) => fakeServer.listen(0, "127.0.0.1", r));

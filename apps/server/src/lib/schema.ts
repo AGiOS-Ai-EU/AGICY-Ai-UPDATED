@@ -7,7 +7,7 @@ import { countFixes } from "./fixes.js";
 // and would otherwise perturb test module-mock ordering.
 const DEFAULT_CLOUD_URL = "https://service.freestylevoice.com";
 
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 23;
 
 // Legacy default format-rule patterns (used only by pre-v12 migrations below):
 // domain/phrase entries match as substrings of url+title+app; bare words match
@@ -663,6 +663,27 @@ function applyMigrations(db: DatabaseSync, currentVersion: number): void {
         "CREATE INDEX IF NOT EXISTS idx_model_configs_type_default ON model_configs(type, is_default)",
       );
     }
+  }
+
+  if (currentVersion < 22) {
+    try {
+      db.exec(
+        "DELETE FROM model_configs WHERE provider IN ('local-whisper', 'local-mlx')",
+      );
+      db.exec(
+        "DELETE FROM settings WHERE key IN ('mlx_asr_keep_alive_minutes', 'whisper_keep_alive_minutes')",
+      );
+    } catch {}
+  }
+
+  if (currentVersion < 23) {
+    try {
+      db.exec("DROP TABLE IF EXISTS api_keys");
+      db.exec("DELETE FROM model_configs WHERE provider != 'freestyle-cloud'");
+      db.exec(
+        "DELETE FROM settings WHERE key IN ('local_llm_url', 'local_llm_api_key', 'openai_stt_api_key', 'openai_stt_base_url')",
+      );
+    } catch {}
   }
 
   // Upsert schema version
