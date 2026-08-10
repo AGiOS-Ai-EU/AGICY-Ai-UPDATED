@@ -6,8 +6,8 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
-import { agentHomeDir, ensureAgentHome } from "./agent-brain.js";
 
 const FILE_MAX_CHARS = 60_000;
 const BASH_TIMEOUT_MS = 30_000;
@@ -17,23 +17,11 @@ const GREP_MAX_MATCHES = 60;
 const GREP_FILE_MAX_BYTES = 262_144;
 const SKIP_DIRS = new Set(["node_modules", ".git", ".Trash", "Library"]);
 
-export type PathZone = "brain" | "outside";
-
-export function resolveAgentPath(input: string): {
-  full: string;
-  zone: PathZone;
-} {
-  ensureAgentHome();
-  const brain = agentHomeDir();
+export function resolveAgentPath(input: string): { full: string } {
   const full = path.isAbsolute(input)
     ? path.resolve(input)
-    : path.resolve(brain, input);
-  const rel = path.relative(brain, full);
-  const zone: PathZone =
-    rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
-      ? "brain"
-      : "outside";
-  return { full, zone };
+    : path.resolve(homedir(), input);
+  return { full };
 }
 
 export function readAgentFile(
@@ -192,12 +180,11 @@ export function runAgentBash(command: string): Promise<{
   truncated: boolean;
   timedOut: boolean;
 }> {
-  ensureAgentHome();
   return new Promise((resolve) => {
     exec(
       command,
       {
-        cwd: agentHomeDir(),
+        cwd: homedir(),
         timeout: BASH_TIMEOUT_MS,
         maxBuffer: 4 * 1024 * 1024,
         shell: process.env.SHELL || "/bin/sh",

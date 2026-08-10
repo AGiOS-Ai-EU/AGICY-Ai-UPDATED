@@ -1,8 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ensureAgentHome } from "../src/lib/agent-brain.js";
 import {
   editAgentFile,
   globAgentFiles,
@@ -13,74 +12,51 @@ import {
   writeAgentFile,
 } from "../src/lib/agent-os.js";
 
-let dataDir: string;
-let prevDbPath: string | undefined;
+let workDir: string;
 
 beforeEach(() => {
-  dataDir = mkdtempSync(path.join(tmpdir(), "agent-os-"));
-  prevDbPath = process.env.FREESTYLE_DB_PATH;
-  process.env.FREESTYLE_DB_PATH = path.join(dataDir, "db.sqlite");
-  ensureAgentHome();
+  workDir = mkdtempSync(path.join(tmpdir(), "agent-os-"));
 });
 
 afterEach(() => {
-  if (prevDbPath === undefined) delete process.env.FREESTYLE_DB_PATH;
-  else process.env.FREESTYLE_DB_PATH = prevDbPath;
-  rmSync(dataDir, { recursive: true, force: true });
+  rmSync(workDir, { recursive: true, force: true });
 });
 
-describe("path zones", () => {
-  it("relative paths are brain zone", () => {
-    expect(resolveAgentPath("memories/x.md").zone).toBe("brain");
-    expect(resolveAgentPath("todos.md").zone).toBe("brain");
-  });
-
-  it("absolute paths inside brain are brain zone", () => {
-    const inside = path.join(dataDir, "brain", "notes", "a.md");
-    expect(resolveAgentPath(inside).zone).toBe("brain");
-  });
-
-  it("escapes and outside paths are outside zone", () => {
-    expect(resolveAgentPath("../db.sqlite").zone).toBe("outside");
-    expect(resolveAgentPath("/etc/hosts").zone).toBe("outside");
+describe("path resolution", () => {
+  it("absolute paths pass through; relative resolve against home", () => {
+    expect(resolveAgentPath("/etc/hosts").full).toBe("/etc/hosts");
+    expect(resolveAgentPath("Documents/x.txt").full).toBe(
+      path.join(homedir(), "Documents", "x.txt"),
+    );
   });
 });
 
-describe("file ops on any path", () => {
-  it("write/read/edit outside the brain", () => {
-    const target = path.join(dataDir, "elsewhere", "doc.txt");
+describe("file ops", () => {
+  it("write/read/edit on absolute paths", () => {
+    const target = path.join(workDir, "nested", "doc.txt");
     writeAgentFile(target, "hello world\nsecond line\n");
     expect(readAgentFile(target).text).toContain("hello world");
     expect(readAgentFile(target, 2, 1).text).toBe("second line");
     expect(editAgentFile(target, "hello", "goodbye")).toBe("ok");
     expect(readFileSync(target, "utf8")).toContain("goodbye world");
+    expect(editAgentFile(target, "absent", "x")).toBe("not-found");
   });
 
-  it("glob matches nested patterns", () => {
-    writeAgentFile("memories/a.md", "x");
-    writeAgentFile("notes/deep/b.md", "y");
-    const paths = globAgentFiles("**/*.md").map((f) => f.path);
-    expect(paths).toContain("memories/a.md");
-    expect(paths).toContain("notes/deep/b.md");
-    expect(globAgentFiles("memories/*.md").map((f) => f.path)).toEqual([
-      "memories/a.md",
-    ]);
-  });
-
-  it("grep is regex with literal fallback", () => {
-    writeAgentFile("notes/n.md", "Genmaicha tea\nplain line\n");
-    expect(grepAgentFiles("genmai.*tea")[0]?.path).toBe("notes/n.md");
-    expect(grepAgentFiles("((broken")).toEqual([]);
+  it("glob and grep under an absolute root", () => {
+    writeAgentFile(path.join(workDir, "a.md"), "Genmaicha tea");
+    writeAgentFile(path.join(workDir, "deep", "b.md"), "plain");
+    const paths = globAgentFiles("**/*.md", workDir).map((f) => f.path);
+    expect(paths).toContain("a.md");
+    expect(paths).toContain("deep/b.md");
+    expect(grepAgentFiles("genmai.*tea", workDir)[0]?.path).toBe("a.md");
   });
 });
 
 describe("bash", () => {
-  it("runs in the brain cwd and captures output", async () => {
-    writeFileSync(path.join(dataDir, "brain", "hello.txt"), "hi");
-    const res = await runAgentBash("ls && pwd");
+  it("runs in the home cwd and captures output", async () => {
+    const res = await runAgentBash("pwd");
     expect(res.exitCode).toBe(0);
-    expect(res.stdout).toContain("hello.txt");
-    expect(res.stdout).toContain("brain");
+    expect(res.stdout.trim()).toBe(homedir());
   });
 
   it("reports failures and caps output", async () => {

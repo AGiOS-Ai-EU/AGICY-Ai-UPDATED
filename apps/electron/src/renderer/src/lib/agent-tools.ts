@@ -26,42 +26,6 @@ const BASH_ALLOWLIST = new Set([
 
 const BASH_SAFE_SHAPE = /^[a-zA-Z0-9_./\s"'*=:,+-]+$/;
 
-let brainRootPromise: Promise<string | null> | null = null;
-
-async function brainRoot(): Promise<string | null> {
-  if (!brainRootPromise) {
-    brainRootPromise = apiFetch("/api/agent-os/root")
-      .then(async (res) =>
-        res.ok
-          ? (((await res.json()) as { brain?: string }).brain ?? null)
-          : null,
-      )
-      .catch(() => null);
-  }
-  return brainRootPromise;
-}
-
-function normalizePath(input: string): string[] {
-  const out: string[] = [];
-  for (const seg of input.split("/")) {
-    if (!seg || seg === ".") continue;
-    if (seg === "..") out.pop();
-    else out.push(seg);
-  }
-  return out;
-}
-
-async function pathZone(input: string): Promise<"brain" | "outside"> {
-  const root = await brainRoot();
-  if (!root) return "outside";
-  const rootSegs = normalizePath(root);
-  const target = input.startsWith("/")
-    ? normalizePath(input)
-    : normalizePath(`${root}/${input}`);
-  if (target.length < rootSegs.length) return "outside";
-  return rootSegs.every((seg, i) => target[i] === seg) ? "brain" : "outside";
-}
-
 function bashIsReadOnly(command: string): boolean {
   if (!BASH_SAFE_SHAPE.test(command)) return false;
   const first = command.trim().split(/\s+/)[0] ?? "";
@@ -75,6 +39,7 @@ export async function agentToolTier(
   call: AgentToolCall,
 ): Promise<AgentToolTier | null> {
   const input = (call.input ?? {}) as Record<string, unknown>;
+  void input;
   switch (call.toolName) {
     case "current_time":
     case "get_context":
@@ -89,15 +54,9 @@ export async function agentToolTier(
     case "Read":
     case "Write":
     case "Edit":
-      return (await pathZone(str(input, "path") || ".")) === "brain"
-        ? "free"
-        : "confirmed";
     case "Glob":
-    case "Grep": {
-      const root = str(input, "path");
-      if (!root) return "free";
-      return (await pathZone(root)) === "brain" ? "free" : "confirmed";
-    }
+    case "Grep":
+      return "confirmed";
     default:
       return null;
   }
@@ -128,9 +87,9 @@ export function describeAgentAction(call: AgentToolCall): string {
     case "Edit":
       return `Edit the file ${str(input, "path")}`;
     case "Glob":
-      return `List files under ${str(input, "path") || "the brain"}`;
+      return `List files under ${str(input, "path")}`;
     case "Grep":
-      return `Search files under ${str(input, "path") || "the brain"}`;
+      return `Search files under ${str(input, "path")}`;
     default:
       return `Run ${call.toolName.replace(/_/g, " ")}.`;
   }

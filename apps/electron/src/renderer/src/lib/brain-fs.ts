@@ -6,15 +6,22 @@ export interface BrainFile {
   modified: number;
 }
 
+const GET_ROUTES = new Set(["list", "graph", "export"]);
+
 export async function fsCall(
   route: string,
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const res = await apiFetch(`/api/agent-fs/${route}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+    const isGet = GET_ROUTES.has(route);
+    const res = await apiFetch(`/api/brain/${route}`, {
+      method: isGet ? "GET" : "POST",
+      ...(isGet
+        ? {}
+        : {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }),
     });
     if (!res.ok) return null;
     return (await res.json()) as Record<string, unknown>;
@@ -36,7 +43,11 @@ export async function writeBrainFile(
   return res?.ok === true;
 }
 
-export async function listBrainFiles(path?: string): Promise<BrainFile[]> {
-  const res = await fsCall("list", path ? { path } : {});
-  return res?.ok ? ((res.files as BrainFile[]) ?? []) : [];
+export async function listBrainFiles(prefix?: string): Promise<BrainFile[]> {
+  const res = await fsCall("list", {});
+  const files = res?.ok ? ((res.files as BrainFile[]) ?? []) : [];
+  if (!prefix) return files;
+  return files.filter((f) =>
+    f.path.replace(/\\/g, "/").startsWith(`${prefix}/`),
+  );
 }

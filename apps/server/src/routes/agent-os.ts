@@ -1,7 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { agentHomeDir, ensureAgentHome } from "../lib/agent-brain.js";
 import {
   editAgentFile,
   globAgentFiles,
@@ -23,10 +22,6 @@ function failure(err: unknown): { ok: false; reason: string } {
 }
 
 const agentOsRoute = new Hono()
-  .get("/root", (c) => {
-    ensureAgentHome();
-    return c.json({ ok: true, brain: agentHomeDir() });
-  })
   .post(
     "/read",
     zValidator(

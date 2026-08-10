@@ -2,7 +2,6 @@ import { createAppLogger } from "@freestyle-voice/utils";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { agentHomeContext } from "../lib/agent-brain.js";
 import { freestyleCloudUrl } from "../lib/freestyle-cloud.js";
 import { getSessionToken, invalidateSession } from "../lib/sessions.js";
 
@@ -26,13 +25,6 @@ const agentRoute = new Hono().post(
     const token = getSessionToken();
     if (!token) return c.json({ error: "cloud_auth_required" }, 401);
 
-    let context: ReturnType<typeof agentHomeContext> | undefined;
-    try {
-      context = agentHomeContext();
-    } catch (err) {
-      log.warn(`Agent home context unavailable: ${err}`);
-    }
-
     let upstream: Response;
     try {
       upstream = await fetch(`${freestyleCloudUrl()}/v2/agent`, {
@@ -41,7 +33,7 @@ const agentRoute = new Hono().post(
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ messages, context }),
+        body: JSON.stringify({ messages }),
         signal: c.req.raw.signal,
       });
     } catch (err) {

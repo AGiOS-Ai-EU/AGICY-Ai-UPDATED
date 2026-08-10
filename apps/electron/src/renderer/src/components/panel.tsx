@@ -74,6 +74,12 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-Edit": "edited a file",
   "tool-Glob": "listed files",
   "tool-Grep": "searched files",
+  "tool-brain_read": "recalled from its brain",
+  "tool-brain_write": "wrote to its brain",
+  "tool-brain_edit": "updated its brain",
+  "tool-brain_glob": "browsed its brain",
+  "tool-brain_search": "searched its brain",
+  "tool-brain_delete": "forgot something",
 };
 
 type FileView =
