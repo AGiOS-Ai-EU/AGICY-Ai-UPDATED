@@ -259,6 +259,58 @@
   color: var(--tavern-mute);
 }
 
+.tavern-approve {
+  align-self: stretch;
+  border: 1px solid var(--tavern-lantern);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--tavern-parchment);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.tavern-approve-text {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.tavern-approve-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tavern-approve-btn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--tavern-rule);
+  background: var(--tavern-card);
+  color: var(--tavern-ink);
+  cursor: pointer;
+}
+
+.tavern-approve-btn:hover {
+  background: var(--tavern-wash);
+}
+
+.tavern-approve-allow {
+  background: var(--tavern-lantern);
+  border-color: var(--tavern-lantern);
+  color: var(--tavern-card);
+}
+
+.tavern-approve-allow:hover {
+  background: #c47f24;
+}
+
+.tavern-approve-btn:focus-visible {
+  outline: 2px solid var(--tavern-lantern);
+  outline-offset: 2px;
+}
+
 .tavern-composer {
   display: flex;
   align-items: center;

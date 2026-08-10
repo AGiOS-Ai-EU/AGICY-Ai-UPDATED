@@ -3053,11 +3053,7 @@ app.whenReady().then(async () => {
     if (await isSecureInputActive()) {
       return { ok: false, reason: "secure-input" };
     }
-    const pill = mainWindow;
-    if (pill && !pill.isDestroyed() && pill.isFocused()) {
-      pill.blur();
-      await wait(140);
-    }
+    await yieldFocusToUserApp();
     const front = await getFrontmostContext();
     const ours = getFreestyleAppExclusions();
     if (!isRemixTargetAllowed(front.appName, ours, remixPracticeTarget)) {
@@ -3307,12 +3303,9 @@ app.whenReady().then(async () => {
 
   // Re-read selection for typed follow-ups (document may have changed).
   ipcMain.handle("remix:recapture", async () => {
-    // Pill may be key window while typing — yield before Copy or we read our own input.
-    const pill = mainWindow;
-    if (pill && !pill.isDestroyed() && pill.isFocused()) {
-      pill.blur();
-      await wait(140);
-    }
+    // Pill or panel may be key window while typing — yield before Copy or we
+    // read our own input.
+    await yieldFocusToUserApp();
     const front = await getFrontmostContext();
     const ours = getFreestyleAppExclusions();
     const inDocument = isRemixTargetAllowed(
@@ -3572,6 +3565,22 @@ async function runKeystrokeScript(lines: string[]): Promise<boolean> {
   }
 }
 
+/**
+ * Injected keystrokes land in the KEY window, so any focusable Freestyle
+ * window (the pill while typing, the companion panel's composer) must yield
+ * before a Copy/Paste or we read/write our own input field.
+ */
+async function yieldFocusToUserApp(): Promise<void> {
+  let yielded = false;
+  for (const win of [mainWindow, panelWindow]) {
+    if (win && !win.isDestroyed() && win.isFocused()) {
+      win.blur();
+      yielded = true;
+    }
+  }
+  if (yielded) await wait(140);
+}
+
 /** Yield key focus to the document before injecting; false if it can't. */
 async function focusAnchorForInjection(): Promise<boolean> {
   const anchor = remixAnchor;
@@ -3585,11 +3594,7 @@ async function focusAnchorForInjection(): Promise<boolean> {
     hotkeyLog.warn("Remix injection refused: secure input is active.");
     return false;
   }
-  const pill = mainWindow;
-  if (pill && !pill.isDestroyed() && pill.isFocused()) {
-    pill.blur();
-    await wait(140);
-  }
+  await yieldFocusToUserApp();
   let front = await getFrontmostContext();
   const ours = getFreestyleAppExclusions();
   // Practice mode: don't osascript-activate Freestyle (we're already there).

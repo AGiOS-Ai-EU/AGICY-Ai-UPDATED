@@ -4,6 +4,13 @@ import "../tavern.css";
 import { useChat } from "@ai-sdk/react";
 import { Markdown } from "@renderer/components/markdown";
 import { Spark } from "@renderer/components/spark";
+import {
+  type AgentToolCall,
+  agentToolTier,
+  DECLINED_OUTPUT,
+  describeAgentAction,
+  executeAgentTool,
+} from "@renderer/lib/agent-tools";
 import { apiFetch, initApiBase } from "@renderer/lib/api";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
 import { PANEL_TABS, type PanelTab } from "@shared/panel";
@@ -44,19 +51,11 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-current_time": "checked the time",
   "tool-web_search": "searched the web",
   "tool-image_search": "searched for images",
-};
-
-type ClientToolExecutor = () => Record<string, unknown>;
-
-const CLIENT_TOOLS: Record<string, ClientToolExecutor> = {
-  current_time: () => {
-    const now = new Date();
-    return {
-      iso: now.toISOString(),
-      local: now.toLocaleString(),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    };
-  },
+  "tool-get_context": "looked at your screen",
+  "tool-read_document": "read the document",
+  "tool-get_clipboard": "read your clipboard",
+  "tool-set_clipboard": "updated your clipboard",
+  "tool-paste": "pasted at your cursor",
 };
 
 function toolLabel(partType: string): string {
@@ -86,6 +85,12 @@ function ChatMessage({ message }: { message: UIMessage }): React.JSX.Element {
           );
         }
         if (part.type.startsWith("tool-")) {
+          const tool = part as {
+            state?: string;
+            output?: { ok?: boolean; reason?: string };
+          };
+          if (tool.state !== "output-available") return null;
+          if (tool.output?.ok === false) return null;
           return (
             <div key={`${message.id}-${i}`} className="tavern-msg-tool">
               ✦ {toolLabel(part.type)}
@@ -103,6 +108,7 @@ function PanelRoot(): React.JSX.Element {
   const [draft, setDraft] = useState("");
 
   const [notice, setNotice] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<AgentToolCall[]>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const transport = useMemo(
@@ -121,13 +127,25 @@ function PanelRoot(): React.JSX.Element {
   const { messages, sendMessage, status, addToolOutput } = useChat({
     transport,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    onToolCall: ({ toolCall }) => {
-      const run = CLIENT_TOOLS[toolCall.toolName];
-      if (!run) return;
+    onToolCall: async ({ toolCall }) => {
+      const call: AgentToolCall = {
+        toolName: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        input: toolCall.input,
+      };
+      const tier = agentToolTier(call.toolName);
+      if (tier === "confirmed") {
+        setApprovals((prev) => [...prev, call]);
+        return;
+      }
+      const output =
+        tier === "free"
+          ? await executeAgentTool(call)
+          : { ok: false, reason: `unknown tool: ${call.toolName}` };
       addToolOutput({
         tool: toolCall.toolName,
         toolCallId: toolCall.toolCallId,
-        output: run(),
+        output,
       });
     },
     onError: (err) => {
@@ -144,16 +162,31 @@ function PanelRoot(): React.JSX.Element {
 
   const send = (): void => {
     const text = draft.trim();
-    if (!text || tab !== "chat" || busy) return;
+    if (!text || tab !== "chat" || busy || approvals.length > 0) return;
     setNotice(null);
     setDraft("");
     void sendMessage({ text });
   };
 
+  const resolveApproval = (call: AgentToolCall, allowed: boolean): void => {
+    setApprovals((prev) =>
+      prev.filter((a) => a.toolCallId !== call.toolCallId),
+    );
+    void (async () => {
+      const output = allowed ? await executeAgentTool(call) : DECLINED_OUTPUT;
+      addToolOutput({
+        tool: call.toolName,
+        toolCallId: call.toolCallId,
+        output,
+      });
+    })();
+  };
+
   useEffect(() => {
     const el = bodyRef.current;
-    if (el && messages.length > 0) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    if (el && (messages.length > 0 || approvals.length > 0))
+      el.scrollTop = el.scrollHeight;
+  }, [messages, approvals]);
 
   useEffect(() => {
     const offFocus = window.api.onPanelFocusComposer(() => {
@@ -232,6 +265,29 @@ function PanelRoot(): React.JSX.Element {
           <>
             {messages.map((m) => (
               <ChatMessage key={m.id} message={m} />
+            ))}
+            {approvals.map((call) => (
+              <div key={call.toolCallId} className="tavern-approve">
+                <div className="tavern-approve-text">
+                  {describeAgentAction(call)}
+                </div>
+                <div className="tavern-approve-actions">
+                  <button
+                    type="button"
+                    className="tavern-approve-btn tavern-approve-allow"
+                    onClick={() => resolveApproval(call, true)}
+                  >
+                    Allow
+                  </button>
+                  <button
+                    type="button"
+                    className="tavern-approve-btn"
+                    onClick={() => resolveApproval(call, false)}
+                  >
+                    Don't allow
+                  </button>
+                </div>
+              </div>
             ))}
             {status === "submitted" ? (
               <div className="tavern-thinking">…</div>
