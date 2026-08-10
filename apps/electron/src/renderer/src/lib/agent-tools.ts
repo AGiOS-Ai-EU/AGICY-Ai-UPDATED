@@ -8,85 +8,157 @@ export interface AgentToolCall {
   input: unknown;
 }
 
-const TIERS: Record<string, AgentToolTier> = {
-  current_time: "free",
-  get_context: "free",
-  read_document: "free",
-  get_clipboard: "free",
-  list_files: "free",
-  read_file: "free",
-  write_file: "free",
-  edit_file: "free",
-  search_files: "free",
-  set_clipboard: "confirmed",
-  paste: "confirmed",
-};
+const BASH_ALLOWLIST = new Set([
+  "ls",
+  "cat",
+  "grep",
+  "find",
+  "head",
+  "tail",
+  "wc",
+  "pwd",
+  "date",
+  "echo",
+  "which",
+  "file",
+  "du",
+]);
 
-const FS_TOOL_ROUTES: Record<string, string> = {
-  list_files: "list",
-  read_file: "read",
-  write_file: "write",
-  edit_file: "edit",
-  search_files: "search",
-};
+const BASH_SAFE_SHAPE = /^[a-zA-Z0-9_./\s"'*=:,+-]+$/;
 
-async function runFsTool(
-  route: string,
-  body: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const res = await apiFetch(`/api/agent-fs/${route}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return { ok: false, reason: `fs-http-${res.status}` };
-  return (await res.json()) as Record<string, unknown>;
+let brainRootPromise: Promise<string | null> | null = null;
+
+async function brainRoot(): Promise<string | null> {
+  if (!brainRootPromise) {
+    brainRootPromise = apiFetch("/api/agent-os/root")
+      .then(async (res) =>
+        res.ok
+          ? (((await res.json()) as { brain?: string }).brain ?? null)
+          : null,
+      )
+      .catch(() => null);
+  }
+  return brainRootPromise;
 }
 
-export function agentToolTier(toolName: string): AgentToolTier | null {
-  return TIERS[toolName] ?? null;
+function normalizePath(input: string): string[] {
+  const out: string[] = [];
+  for (const seg of input.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") out.pop();
+    else out.push(seg);
+  }
+  return out;
+}
+
+async function pathZone(input: string): Promise<"brain" | "outside"> {
+  const root = await brainRoot();
+  if (!root) return "outside";
+  const rootSegs = normalizePath(root);
+  const target = input.startsWith("/")
+    ? normalizePath(input)
+    : normalizePath(`${root}/${input}`);
+  if (target.length < rootSegs.length) return "outside";
+  return rootSegs.every((seg, i) => target[i] === seg) ? "brain" : "outside";
+}
+
+function bashIsReadOnly(command: string): boolean {
+  if (!BASH_SAFE_SHAPE.test(command)) return false;
+  const first = command.trim().split(/\s+/)[0] ?? "";
+  return BASH_ALLOWLIST.has(first);
+}
+
+const str = (input: Record<string, unknown>, key: string): string =>
+  typeof input[key] === "string" ? (input[key] as string) : "";
+
+export async function agentToolTier(
+  call: AgentToolCall,
+): Promise<AgentToolTier | null> {
+  const input = (call.input ?? {}) as Record<string, unknown>;
+  switch (call.toolName) {
+    case "current_time":
+    case "get_context":
+    case "read_document":
+    case "get_clipboard":
+      return "free";
+    case "set_clipboard":
+    case "paste":
+      return "confirmed";
+    case "Bash":
+      return bashIsReadOnly(str(input, "command")) ? "free" : "confirmed";
+    case "Read":
+    case "Write":
+    case "Edit":
+      return (await pathZone(str(input, "path") || ".")) === "brain"
+        ? "free"
+        : "confirmed";
+    case "Glob":
+    case "Grep": {
+      const root = str(input, "path");
+      if (!root) return "free";
+      return (await pathZone(root)) === "brain" ? "free" : "confirmed";
+    }
+    default:
+      return null;
+  }
 }
 
 export function describeAgentAction(call: AgentToolCall): string {
   const input = (call.input ?? {}) as Record<string, unknown>;
   switch (call.toolName) {
     case "set_clipboard": {
-      const text = typeof input.text === "string" ? input.text : "";
+      const text = str(input, "text");
       const preview = text.length > 120 ? `${text.slice(0, 120)}…` : text;
       return `Put this on your clipboard (${text.length} characters):\n“${preview}”`;
     }
     case "paste":
       return "Paste the clipboard into the app you're using, at your cursor.";
+    case "Bash": {
+      const command = str(input, "command");
+      const preview =
+        command.length > 300 ? `${command.slice(0, 300)}…` : command;
+      return `Run in your shell:\n$ ${preview}`;
+    }
+    case "Read":
+      return `Read the file ${str(input, "path")}`;
+    case "Write": {
+      const text = str(input, "text");
+      return `Write ${text.length} characters to ${str(input, "path")}`;
+    }
+    case "Edit":
+      return `Edit the file ${str(input, "path")}`;
+    case "Glob":
+      return `List files under ${str(input, "path") || "the brain"}`;
+    case "Grep":
+      return `Search files under ${str(input, "path") || "the brain"}`;
     default:
       return `Run ${call.toolName.replace(/_/g, " ")}.`;
   }
+}
+
+async function runOsTool(
+  route: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = await apiFetch(`/api/agent-os/${route}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return { ok: false, reason: `os-http-${res.status}` };
+  return (await res.json()) as Record<string, unknown>;
 }
 
 export async function executeAgentTool(
   call: AgentToolCall,
 ): Promise<Record<string, unknown>> {
   const input = (call.input ?? {}) as Record<string, unknown>;
-  const str = (key: string): string =>
-    typeof input[key] === "string" ? (input[key] as string) : "";
   const badArgs = (expected: string): Record<string, unknown> => ({
     ok: false,
     reason: "bad-args",
     expected,
     received: JSON.stringify(call.input)?.slice(0, 300) ?? "undefined",
   });
-
-  const fsRoute = FS_TOOL_ROUTES[call.toolName];
-  if (fsRoute) {
-    try {
-      return await runFsTool(fsRoute, input);
-    } catch (err) {
-      return {
-        ok: false,
-        reason: "tool-failed",
-        detail: err instanceof Error ? err.message : String(err),
-      };
-    }
-  }
 
   try {
     switch (call.toolName) {
@@ -105,10 +177,48 @@ export async function executeAgentTool(
       case "get_clipboard":
         return { ...(await window.api.remixGetClipboard()) };
       case "set_clipboard":
-        if (!str("text")) return badArgs("{ text: string }");
-        return { ...(await window.api.remixSetClipboard(str("text"))) };
+        if (!str(input, "text")) return badArgs("{ text: string }");
+        return {
+          ...(await window.api.remixSetClipboard(str(input, "text"))),
+        };
       case "paste":
         return { ...(await window.api.remixPasteClipboard()) };
+      case "Bash":
+        if (!str(input, "command")) return badArgs("{ command: string }");
+        return runOsTool("bash", { command: str(input, "command") });
+      case "Read":
+        if (!str(input, "path")) return badArgs("{ path: string }");
+        return runOsTool("read", {
+          path: str(input, "path"),
+          offset: input.offset,
+          limit: input.limit,
+        });
+      case "Write":
+        if (!str(input, "path")) return badArgs("{ path, text }");
+        return runOsTool("write", {
+          path: str(input, "path"),
+          text: str(input, "text"),
+        });
+      case "Edit":
+        if (!str(input, "path") || !str(input, "old"))
+          return badArgs("{ path, old, new }");
+        return runOsTool("edit", {
+          path: str(input, "path"),
+          old: str(input, "old"),
+          new: str(input, "new"),
+        });
+      case "Glob":
+        if (!str(input, "pattern")) return badArgs("{ pattern: string }");
+        return runOsTool("glob", {
+          pattern: str(input, "pattern"),
+          path: str(input, "path") || undefined,
+        });
+      case "Grep":
+        if (!str(input, "query")) return badArgs("{ query: string }");
+        return runOsTool("grep", {
+          query: str(input, "query"),
+          path: str(input, "path") || undefined,
+        });
       default:
         return { ok: false, reason: `unknown tool: ${call.toolName}` };
     }

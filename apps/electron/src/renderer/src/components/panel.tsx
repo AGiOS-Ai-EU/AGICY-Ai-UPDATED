@@ -68,11 +68,12 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-get_clipboard": "read your clipboard",
   "tool-set_clipboard": "updated your clipboard",
   "tool-paste": "pasted at your cursor",
-  "tool-list_files": "looked through the files",
-  "tool-read_file": "read a file",
-  "tool-write_file": "wrote a file",
-  "tool-edit_file": "edited a file",
-  "tool-search_files": "searched the files",
+  "tool-Bash": "ran a command",
+  "tool-Read": "read a file",
+  "tool-Write": "wrote a file",
+  "tool-Edit": "edited a file",
+  "tool-Glob": "listed files",
+  "tool-Grep": "searched files",
 };
 
 type FileView =
@@ -621,7 +622,7 @@ function PanelInner({
         toolCallId: toolCall.toolCallId,
         input: toolCall.input,
       };
-      const tier = agentToolTier(call.toolName);
+      const tier = await agentToolTier(call);
       if (tier === "confirmed") {
         setApprovals((prev) => [...prev, call]);
         return;

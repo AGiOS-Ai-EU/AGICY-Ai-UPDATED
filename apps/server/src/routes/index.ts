@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import { capture, captureException, getDeviceId } from "../lib/posthog.js";
 import agentRoute from "./agent.js";
 import agentFsRoute from "./agent-fs.js";
+import agentOsRoute from "./agent-os.js";
 import agentThreadsRoute from "./agent-threads.js";
 import auth from "./auth.js";
 import billing from "./billing.js";
@@ -76,6 +77,7 @@ const apiRouter = new Hono()
   .route("/agent", agentRoute)
   .route("/agent/thread", agentThreadsRoute)
   .route("/agent-fs", agentFsRoute)
+  .route("/agent-os", agentOsRoute)
   .route("/remix", remixRoute)
   .route("/output", outputRoute)
   .route("/events", eventsRoute)
