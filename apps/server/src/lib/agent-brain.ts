@@ -187,6 +187,95 @@ export function searchHomeFiles(
   return matches;
 }
 
+export interface BrainGraphNode {
+  id: string;
+  group: string;
+  size: number;
+}
+
+export interface BrainGraphLink {
+  source: string;
+  target: string;
+  kind: "index" | "ref";
+}
+
+export function brainGraph(): {
+  nodes: BrainGraphNode[];
+  links: BrainGraphLink[];
+} {
+  ensureAgentHome();
+  const home = agentHomeDir();
+  const files = listHomeFiles();
+  const paths = files.map((f) => f.path.replace(/\\/g, "/"));
+  const pathSet = new Set(paths);
+  const byBasename = new Map<string, string>();
+  for (const p of paths) {
+    const base = p.split("/").pop()?.replace(/\.md$/, "");
+    if (base && !byBasename.has(base)) byBasename.set(base, p);
+  }
+
+  const nodes: BrainGraphNode[] = files.map((f) => {
+    const p = f.path.replace(/\\/g, "/");
+    return {
+      id: p,
+      group: p.includes("/") ? p.split("/")[0] : p.replace(/\.md$/, ""),
+      size: f.size,
+    };
+  });
+
+  const seen = new Set<string>();
+  const links: BrainGraphLink[] = [];
+  const addLink = (
+    source: string,
+    target: string,
+    kind: "index" | "ref",
+  ): void => {
+    if (source === target || !pathSet.has(target)) return;
+    const key = `${source}→${target}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    links.push({ source, target, kind });
+  };
+
+  for (const p of paths) {
+    let raw: string;
+    try {
+      raw = readFileSync(path.join(home, p), "utf8").slice(0, FILE_MAX_CHARS);
+    } catch {
+      continue;
+    }
+    if (p === "BRAIN.md") {
+      for (const candidate of paths) {
+        if (candidate !== "BRAIN.md" && raw.includes(candidate)) {
+          addLink("BRAIN.md", candidate, "index");
+        }
+      }
+      continue;
+    }
+    for (const m of raw.matchAll(/\[\[([^\]]+)\]\]/g)) {
+      const name = m[1].trim().replace(/\.md$/, "");
+      const target = pathSet.has(`${name}.md`)
+        ? `${name}.md`
+        : (byBasename.get(name.split("/").pop() ?? name) ?? null);
+      if (target) addLink(p, target, "ref");
+    }
+    for (const m of raw.matchAll(/\]\(([^)\s]+\.md)\)/g)) {
+      const href = m[1];
+      const dir = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "";
+      const fromDir = path.posix.normalize(dir ? `${dir}/${href}` : href);
+      const fromRoot = path.posix.normalize(href);
+      const resolved = pathSet.has(fromDir)
+        ? fromDir
+        : pathSet.has(fromRoot)
+          ? fromRoot
+          : null;
+      if (resolved) addLink(p, resolved, "ref");
+    }
+  }
+
+  return { nodes, links };
+}
+
 export function agentHomeContext(): {
   brainIndex: string | null;
   tree: string[];

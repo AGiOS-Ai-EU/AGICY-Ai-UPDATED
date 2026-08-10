@@ -124,3 +124,38 @@ describe("file operations", () => {
     expect(existsSync(path.join(dataDir, "home"))).toBe(false);
   });
 });
+
+describe("brain graph", () => {
+  it("links index hooks and cross-references", async () => {
+    const { brainGraph } = await import("../src/lib/agent-brain.js");
+    writeFileSync(
+      resolveHomePath("BRAIN.md"),
+      "# Brain\n\n- memories/tea.md — favorite tea\n- skills/brew.md — brewing steps\n",
+    );
+    writeHomeFile("memories/tea.md", "Genmaicha, see [[brew]] for method.");
+    writeHomeFile(
+      "skills/brew.md",
+      "Steps here, context in [tea](../memories/tea.md).",
+    );
+    writeHomeFile("notes/loose.md", "no links at all");
+    const graph = brainGraph();
+    const ids = graph.nodes.map((n) => n.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "BRAIN.md",
+        "memories/tea.md",
+        "skills/brew.md",
+        "notes/loose.md",
+        "todos.md",
+      ]),
+    );
+    const key = (l: { source: string; target: string; kind: string }) =>
+      `${l.kind}:${l.source}>${l.target}`;
+    const links = graph.links.map(key);
+    expect(links).toContain("index:BRAIN.md>memories/tea.md");
+    expect(links).toContain("index:BRAIN.md>skills/brew.md");
+    expect(links).toContain("ref:memories/tea.md>skills/brew.md");
+    expect(links).toContain("ref:skills/brew.md>memories/tea.md");
+    expect(links.filter((l) => l.includes("loose"))).toHaveLength(0);
+  });
+});

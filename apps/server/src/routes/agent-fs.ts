@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
+  brainGraph,
   editHomeFile,
   ensureAgentHome,
   HomePathError,
@@ -98,6 +99,13 @@ const agentFsRoute = new Hono()
       }
     },
   )
+  .post("/graph", (c) => {
+    try {
+      return c.json({ ok: true, ...brainGraph() });
+    } catch (err) {
+      return c.json(failure(err));
+    }
+  })
   .post(
     "/delete",
     zValidator("json", z.object({ path: relPath })),
