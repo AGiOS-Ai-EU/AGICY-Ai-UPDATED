@@ -3289,6 +3289,8 @@ ipcMain.on("companion:set-form", (_event, form: string) => {
     win.setBounds({ x, y, width: size, height: size });
     win.webContents.send("companion:form", next);
   }
+  // The panel's head badge mirrors the active sprite too.
+  panelWindow?.webContents.send("companion:form", next);
 });
 
 ipcMain.on("sprite:event", (event, ev: unknown) => {

@@ -1,10 +1,4 @@
-export const PANEL_TABS = [
-  "chat",
-  "history",
-  "todos",
-  "notes",
-  "brain",
-] as const;
+export const PANEL_TABS = ["chat", "history", "todos", "notes"] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
 
 export const PANEL_WIDTH = 380;

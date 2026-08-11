@@ -7,6 +7,7 @@ import {
   normalizeLanguageList,
   resolveLanguageOptions,
 } from "@freestyle-voice/validations";
+import { BrainFiles } from "@renderer/components/brain-files";
 import {
   acceleratorsEqual,
   formatAcceleratorKeys,
@@ -28,6 +29,7 @@ import {
   useUpdateName,
   useUpdateProfileFields,
 } from "@renderer/lib/use-profile";
+import { SpriteBadge } from "@renderer/sprites/badge";
 import {
   type CompanionForm,
   DEFAULT_COMPANION_FORM,
@@ -44,6 +46,7 @@ type SettingsPage =
   | "root"
   | "profile"
   | "billing"
+  | "brain"
   | "dictation"
   | "talk"
   | "application"
@@ -53,6 +56,7 @@ type SettingsPage =
 const PAGE_TITLES: Record<Exclude<SettingsPage, "root">, string> = {
   profile: "Profile",
   billing: "Billing & Usage",
+  brain: "Brain",
   dictation: "Dictation",
   talk: "Talk & Summon",
   application: "Application",
@@ -1148,19 +1152,30 @@ function ApplicationPage(): React.JSX.Element {
   return (
     <>
       <SectionLabel>Widget</SectionLabel>
-      <ChoiceRow
-        label="Sprite"
-        value={companionForm}
-        options={Object.values(SPRITES_INFO).map((s) => ({
-          id: s.id,
-          label: s.label,
-        }))}
-        onChange={(id) => {
-          const form = parseCompanionForm(id);
-          setCompanionForm(form);
-          window.api.setCompanionForm(form);
-        }}
-      />
+      <div className="tavern-set-row is-static">
+        <span className="tavern-set-label">Sprite</span>
+        <div className="tavern-sprite-pick">
+          {Object.values(SPRITES_INFO).map((s) => {
+            const id = parseCompanionForm(s.id);
+            return (
+              <button
+                key={s.id}
+                type="button"
+                className={`tavern-sprite-pick-btn${
+                  companionForm === id ? " is-on" : ""
+                }`}
+                onClick={() => {
+                  setCompanionForm(id);
+                  window.api.setCompanionForm(id);
+                }}
+              >
+                <SpriteBadge form={id} size={24} />
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <p className="tavern-set-hint">
         The little companion that lives in the corner of your screen.
       </p>
@@ -1440,6 +1455,13 @@ export function SettingsView({
           <ProfilePage />
         ) : page === "billing" ? (
           <BillingPage />
+        ) : page === "brain" ? (
+          <BrainFiles
+            root=""
+            emptyText="Everything Freestyle knows lives here — memories, notes, skills, todos."
+            newLabel="New file"
+            graphable
+          />
         ) : page === "dictation" ? (
           <DictationPage value={value} setSetting={setSetting} />
         ) : page === "talk" ? (
@@ -1490,6 +1512,7 @@ export function SettingsView({
         detail={auth.user ? (usage.isPro ? "Pro" : "Free") : undefined}
         onClick={() => setPage("billing")}
       />
+      <NavRow label="Brain" onClick={() => setPage("brain")} />
       <NavRow
         label="Dictation"
         detail={value(SETTINGS_KEYS.hotkey) || getDefaultHotkey()}

@@ -2,11 +2,9 @@ import "../overlay.css";
 import "../tavern.css";
 
 import { useChat } from "@ai-sdk/react";
-import { BrainGraph } from "@renderer/components/brain-graph";
 import { Markdown } from "@renderer/components/markdown";
 import { NotesTab } from "@renderer/components/notes-tab";
 import { SettingsView } from "@renderer/components/settings-view";
-import { Spark } from "@renderer/components/spark";
 import { TodosTab } from "@renderer/components/todos-tab";
 import {
   type AgentToolCall,
@@ -17,10 +15,11 @@ import {
 } from "@renderer/lib/agent-tools";
 import { apiFetch, initApiBase } from "@renderer/lib/api";
 import { CloudAuthProvider } from "@renderer/lib/auth-context";
-import { fsCall, type BrainFile as HomeFile } from "@renderer/lib/brain-fs";
 import { createQueryClient } from "@renderer/lib/query";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
 import { useSpriteEmitter } from "@renderer/lib/sprite-emitter";
+import { SpriteBadge } from "@renderer/sprites/badge";
+import { type CompanionForm, DEFAULT_COMPANION_FORM } from "@shared/companion";
 import { PANEL_TABS, type PanelTab } from "@shared/panel";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -29,14 +28,7 @@ import {
   type UIMessage,
 } from "ai";
 import type React from "react";
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 const TAB_LABELS: Record<PanelTab, string> = {
@@ -44,7 +36,6 @@ const TAB_LABELS: Record<PanelTab, string> = {
   history: "History",
   todos: "Todos",
   notes: "Notes",
-  brain: "Brain",
 };
 
 const TAB_PLACEHOLDER: Record<PanelTab, string> = {
@@ -52,16 +43,6 @@ const TAB_PLACEHOLDER: Record<PanelTab, string> = {
   history: "Past conversations land here — pick one to continue it.",
   todos: "Nothing to do yet.",
   notes: "No notes yet.",
-  brain:
-    "Everything Freestyle knows lives here — memories, notes, skills, todos.",
-};
-
-const COMPOSER_PLACEHOLDER: Record<PanelTab, string> = {
-  chat: "Ask anything",
-  history: "Ask anything",
-  todos: "Ask anything",
-  notes: "Ask anything",
-  brain: "Ask anything",
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -87,347 +68,6 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-brain_delete": "forgot something",
   "tool-emote": "emoted",
 };
-
-type FileView =
-  | { kind: "list" }
-  | { kind: "graph" }
-  | { kind: "view"; path: string; text: string }
-  | { kind: "edit"; path: string; draft: string }
-  | { kind: "create"; name: string; draft: string };
-
-function slugify(name: string): string {
-  const segments = name
-    .split("/")
-    .map((seg) =>
-      seg
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, ""),
-    )
-    .filter(Boolean);
-  return segments.join("/") || "untitled";
-}
-
-function FileEditor({
-  label,
-  draft,
-  onDraft,
-  onSave,
-  onCancel,
-}: {
-  label: string;
-  draft: string;
-  onDraft: (text: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}): React.JSX.Element {
-  return (
-    <>
-      <span className="tavern-file-back">{label}</span>
-      <textarea
-        className="tavern-editor"
-        value={draft}
-        onChange={(e) => onDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.stopPropagation();
-            onCancel();
-          }
-        }}
-      />
-      <div className="tavern-approve-actions">
-        <button
-          type="button"
-          className="tavern-approve-btn tavern-approve-allow"
-          onClick={onSave}
-        >
-          Save
-        </button>
-        <button type="button" className="tavern-approve-btn" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    </>
-  );
-}
-
-interface TreeDir {
-  name: string;
-  path: string;
-  dirs: TreeDir[];
-  files: HomeFile[];
-}
-
-function buildTree(files: HomeFile[]): TreeDir {
-  const rootDir: TreeDir = { name: "", path: "", dirs: [], files: [] };
-  const dirFor = (segments: string[]): TreeDir => {
-    let cur = rootDir;
-    let acc = "";
-    for (const seg of segments) {
-      acc = acc ? `${acc}/${seg}` : seg;
-      let next = cur.dirs.find((d) => d.path === acc);
-      if (!next) {
-        next = { name: seg, path: acc, dirs: [], files: [] };
-        cur.dirs.push(next);
-      }
-      cur = next;
-    }
-    return cur;
-  };
-  for (const f of files) {
-    const parts = f.path.replace(/\\/g, "/").split("/");
-    const dir = dirFor(parts.slice(0, -1));
-    dir.files.push({ ...f, path: f.path.replace(/\\/g, "/") });
-  }
-  const sortDir = (d: TreeDir): void => {
-    d.dirs.sort((a, b) => a.name.localeCompare(b.name));
-    d.files.sort((a, b) => a.path.localeCompare(b.path));
-    d.dirs.forEach(sortDir);
-  };
-  sortDir(rootDir);
-  return rootDir;
-}
-
-function FileTree({
-  dir,
-  depth,
-  collapsed,
-  onToggle,
-  onOpen,
-}: {
-  dir: TreeDir;
-  depth: number;
-  collapsed: Set<string>;
-  onToggle: (path: string) => void;
-  onOpen: (path: string) => void;
-}): React.JSX.Element {
-  return (
-    <>
-      {dir.dirs.map((d) => (
-        <Fragment key={d.path}>
-          <button
-            type="button"
-            className="tavern-tree-row tavern-tree-dir"
-            style={{ paddingLeft: 8 + depth * 16 }}
-            onClick={() => onToggle(d.path)}
-          >
-            <span className="tavern-tree-caret">
-              {collapsed.has(d.path) ? "▸" : "▾"}
-            </span>
-            {d.name}
-          </button>
-          {collapsed.has(d.path) ? null : (
-            <FileTree
-              dir={d}
-              depth={depth + 1}
-              collapsed={collapsed}
-              onToggle={onToggle}
-              onOpen={onOpen}
-            />
-          )}
-        </Fragment>
-      ))}
-      {dir.files.map((f) => (
-        <button
-          key={f.path}
-          type="button"
-          className="tavern-tree-row"
-          style={{ paddingLeft: 8 + depth * 16 + 14 }}
-          onClick={() => onOpen(f.path)}
-        >
-          {(f.path.split("/").pop() ?? f.path).replace(/\.md$/, ".md")}
-        </button>
-      ))}
-    </>
-  );
-}
-
-function FilesTab({
-  root,
-  emptyText,
-  newLabel,
-  graphable = false,
-}: {
-  root: string;
-  emptyText: string;
-  newLabel: string;
-  graphable?: boolean;
-}): React.JSX.Element {
-  const [files, setFiles] = useState<HomeFile[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<FileView>(
-    graphable ? { kind: "graph" } : { kind: "list" },
-  );
-
-  const load = useCallback((): void => {
-    void fsCall("list", root ? { path: root } : {}).then((res) => {
-      if (res?.ok) setFiles((res.files as HomeFile[]) ?? []);
-    });
-  }, [root]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const openFile = (path: string): void => {
-    void fsCall("read", { path }).then((res) => {
-      if (res?.ok)
-        setView({ kind: "view", path, text: (res.text as string) ?? "" });
-    });
-  };
-
-  const saveFile = (path: string, text: string): void => {
-    void fsCall("write", { path, text }).then((res) => {
-      if (res?.ok) {
-        load();
-        setView({ kind: "view", path, text });
-      }
-    });
-  };
-
-  if (view.kind === "graph") {
-    return (
-      <>
-        <div className="tavern-note-bar">
-          <button
-            type="button"
-            className="tavern-file-back"
-            onClick={() => setView({ kind: "list" })}
-          >
-            ☰ List
-          </button>
-          <span className="tavern-head-spacer" />
-          <span className="tavern-graph-hint">
-            drag to orbit · click to focus · double-click to open
-          </span>
-        </div>
-        <BrainGraph onOpen={openFile} />
-      </>
-    );
-  }
-
-  if (view.kind === "view") {
-    return (
-      <>
-        <button
-          type="button"
-          className="tavern-file-back"
-          onClick={() => setView({ kind: "list" })}
-        >
-          ← {view.path.replace(/\\/g, "/")}
-        </button>
-        <Markdown text={view.text} />
-        <div className="tavern-approve-actions">
-          <button
-            type="button"
-            className="tavern-approve-btn"
-            onClick={() =>
-              setView({ kind: "edit", path: view.path, draft: view.text })
-            }
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            className="tavern-file-delete"
-            onClick={() => {
-              void fsCall("delete", { path: view.path }).then(() => {
-                setView({ kind: "list" });
-                load();
-              });
-            }}
-          >
-            Delete
-          </button>
-        </div>
-      </>
-    );
-  }
-
-  if (view.kind === "edit") {
-    return (
-      <FileEditor
-        label={view.path.replace(/\\/g, "/")}
-        draft={view.draft}
-        onDraft={(draft) => setView({ ...view, draft })}
-        onSave={() => saveFile(view.path, view.draft)}
-        onCancel={() => openFile(view.path)}
-      />
-    );
-  }
-
-  if (view.kind === "create") {
-    return (
-      <>
-        <input
-          className="tavern-editor-name"
-          value={view.name}
-          placeholder="File name"
-          onChange={(e) => setView({ ...view, name: e.target.value })}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.stopPropagation();
-              setView({ kind: "list" });
-            }
-          }}
-        />
-        <FileEditor
-          label={`${root ? `${root}/` : ""}${slugify(view.name)}.md`}
-          draft={view.draft}
-          onDraft={(draft) => setView({ ...view, draft })}
-          onSave={() =>
-            saveFile(
-              `${root ? `${root}/` : ""}${slugify(view.name)}.md`,
-              view.draft,
-            )
-          }
-          onCancel={() => setView({ kind: "list" })}
-        />
-      </>
-    );
-  }
-
-  return (
-    <>
-      {graphable ? (
-        <button
-          type="button"
-          className="tavern-file-back"
-          onClick={() => setView({ kind: "graph" })}
-        >
-          ◉ Graph
-        </button>
-      ) : null}
-      {files.length === 0 ? (
-        <div className="tavern-empty">{emptyText}</div>
-      ) : (
-        <div className="tavern-tree">
-          <FileTree
-            dir={buildTree(files)}
-            depth={0}
-            collapsed={collapsed}
-            onToggle={(path) =>
-              setCollapsed((prev) => {
-                const next = new Set(prev);
-                if (next.has(path)) next.delete(path);
-                else next.add(path);
-                return next;
-              })
-            }
-            onOpen={openFile}
-          />
-        </div>
-      )}
-      <button
-        type="button"
-        className="tavern-file-new"
-        onClick={() => setView({ kind: "create", name: "", draft: "" })}
-      >
-        ＋ {newLabel}
-      </button>
-    </>
-  );
-}
 
 function toolLabel(partType: string): string {
   return (
@@ -644,6 +284,18 @@ function PanelInner({
   onSwitchThread: (thread: ThreadState) => void;
 }): React.JSX.Element {
   const [tab, setTab] = useState<PanelTab>("chat");
+  const [spriteForm, setSpriteForm] = useState<CompanionForm>(
+    DEFAULT_COMPANION_FORM,
+  );
+
+  useEffect(() => {
+    void window.api
+      .companionForm()
+      .then(setSpriteForm)
+      .catch(() => {});
+    const offForm = window.api.onCompanionForm(setSpriteForm);
+    return () => offForm?.();
+  }, []);
   const [draft, setDraft] = useState("");
 
   const [notice, setNotice] = useState<string | null>(null);
@@ -748,10 +400,20 @@ function PanelInner({
   }, [pinned]);
 
   useEffect(() => {
+    // The composer only exists on the chat tab — dictation and explicit
+    // focus requests must surface it first.
+    const showComposer = (): void => {
+      setSettingsOpen(false);
+      setTab("chat");
+    };
     const offFocus = window.api.onPanelFocusComposer(() => {
-      document.getElementById("panel-composer")?.focus();
+      showComposer();
+      requestAnimationFrame(() =>
+        document.getElementById("panel-composer")?.focus(),
+      );
     });
     const offDictation = window.api.onPanelDictation((ev) => {
+      if (ev.kind !== "error") showComposer();
       if (ev.kind === "error") {
         setNotice(ev.text);
         const base = dictationBaseRef.current;
@@ -809,28 +471,17 @@ function PanelInner({
   return (
     <div className="tavern tavern-panel">
       <div className="tavern-head">
-        <Spark state={busy ? "working" : "idle"} size={11} />
+        <SpriteBadge form={spriteForm} working={busy} size={20} />
         <span className="tavern-head-name">Freestyle</span>
         <span className="tavern-head-spacer" />
-        {chatActive || tab === "history" ? (
-          <button
-            type="button"
-            className="tavern-head-btn"
-            title="New conversation"
-            disabled={pinned}
-            onClick={() => onSwitchThread(newThread())}
-          >
-            ＋ New
-          </button>
-        ) : null}
         <button
           type="button"
-          className="tavern-head-btn"
-          aria-label="Settings"
-          title="Settings"
-          onClick={() => setSettingsOpen((v) => !v)}
+          className="tavern-head-new"
+          title="New conversation"
+          disabled={pinned}
+          onClick={() => onSwitchThread(newThread())}
         >
-          ⚙
+          ＋ New
         </button>
         <button
           type="button"
@@ -848,7 +499,7 @@ function PanelInner({
             key={id}
             type="button"
             role="tab"
-            aria-selected={tab === id}
+            aria-selected={!settingsOpen && tab === id}
             className="tavern-tab"
             onClick={() => {
               setSettingsOpen(false);
@@ -858,6 +509,18 @@ function PanelInner({
             {TAB_LABELS[id]}
           </button>
         ))}
+        <span className="tavern-head-spacer" />
+        <button
+          type="button"
+          role="tab"
+          aria-selected={settingsOpen}
+          aria-label="Settings"
+          title="Settings"
+          className="tavern-tab tavern-tab-gear"
+          onClick={() => setSettingsOpen((v) => !v)}
+        >
+          ⚙
+        </button>
       </div>
 
       <div className="tavern-body" role="tabpanel" ref={bodyRef}>
@@ -910,55 +573,43 @@ function PanelInner({
           <TodosTab />
         ) : tab === "notes" ? (
           <NotesTab />
-        ) : tab === "brain" ? (
-          <FilesTab
-            key="brain"
-            root=""
-            emptyText={TAB_PLACEHOLDER.brain}
-            newLabel="New file"
-            graphable
-          />
         ) : (
-          <>
-            <p className="tavern-label">{TAB_LABELS[tab]}</p>
-            <div className="tavern-empty">{TAB_PLACEHOLDER[tab]}</div>
-          </>
+          <div className="tavern-empty">{TAB_PLACEHOLDER[tab]}</div>
         )}
         {notice ? <p className="tavern-notice">{notice}</p> : null}
       </div>
 
-      <div className="tavern-composer">
-        <button type="button" className="tavern-btn" aria-label="Attach">
-          ＋
-        </button>
-        <textarea
-          id="panel-composer"
-          className="tavern-input"
-          value={draft}
-          rows={1}
-          placeholder={COMPOSER_PLACEHOLDER[tab]}
-          onMouseDown={() => window.api.panelRequestFocus()}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !e.shiftKey &&
-              !e.nativeEvent.isComposing
-            ) {
-              e.preventDefault();
-              send();
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="tavern-btn tavern-btn-send"
-          aria-label="Send"
-          onClick={send}
-        >
-          ↑
-        </button>
-      </div>
+      {chatActive && !settingsOpen ? (
+        <div className="tavern-composer">
+          <textarea
+            id="panel-composer"
+            className="tavern-input"
+            value={draft}
+            rows={1}
+            placeholder="Ask anything"
+            onMouseDown={() => window.api.panelRequestFocus()}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.nativeEvent.isComposing
+              ) {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="tavern-btn tavern-btn-send"
+            aria-label="Send"
+            onClick={send}
+          >
+            ↑
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
