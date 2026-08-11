@@ -149,6 +149,131 @@
   }
 }
 
+.tavern-gate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 20px 28px 18px;
+  text-align: center;
+}
+
+.tavern-gate-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.tavern-gate-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: auto 0;
+  width: 100%;
+}
+
+.tavern-gate-lockup {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 26px;
+}
+
+.tavern-gate-wordmark {
+  font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 23px;
+  letter-spacing: -0.015em;
+  line-height: 1;
+  color: var(--tavern-ink);
+}
+
+.tavern-gate-heading {
+  font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 0.95;
+  margin: 0;
+  color: var(--tavern-ink);
+}
+
+.tavern-gate-heading .tavern-gate-accent {
+  font-style: italic;
+}
+
+.tavern-gate-accent {
+  color: var(--tavern-lantern);
+}
+
+.tavern-gate-sub {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tavern-mute);
+  margin: 0 0 14px;
+  max-width: 260px;
+}
+
+.tavern-gate-sub.is-small {
+  font-size: 12px;
+  margin-bottom: 0;
+}
+
+.tavern-gate-btn {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  width: 100%;
+  max-width: 260px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--tavern-lantern);
+  background: var(--tavern-lantern);
+  color: var(--tavern-card);
+  cursor: pointer;
+  transition: filter 150ms ease;
+}
+
+.tavern-gate-btn:hover {
+  filter: brightness(1.06);
+}
+
+.tavern-gate-code {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  padding: 10px 20px;
+  border: 1px solid var(--tavern-rule);
+  border-radius: 12px;
+  background: var(--tavern-parchment);
+  color: var(--tavern-ink);
+}
+
+.tavern-gate-terms {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--tavern-mute);
+  margin: 0;
+  max-width: 260px;
+}
+
+.tavern-gate-link {
+  font: inherit;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--tavern-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--tavern-rule);
+  cursor: pointer;
+}
+
+.tavern-gate-link:hover {
+  text-decoration-color: var(--tavern-mute);
+}
+
 .tavern-sprite-pick {
   display: flex;
   gap: 6px;
