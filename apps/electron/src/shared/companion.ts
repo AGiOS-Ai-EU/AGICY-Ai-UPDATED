@@ -1,18 +1,20 @@
-import { JEB_WINDOW_SIZE } from "./jeb.js";
+import {
+  DEFAULT_SPRITE,
+  parseSpriteId,
+  SPRITE_IDS,
+  SPRITES_INFO,
+  type SpriteId,
+} from "./sprites.js";
 
-export const COMPANION_WINDOW_SIZE = JEB_WINDOW_SIZE;
+export const COMPANION_WINDOW_SIZE = Math.max(
+  ...Object.values(SPRITES_INFO).map((s) => s.windowSize),
+);
 
-export const COMPANION_FORMS = ["spark", "jeb"] as const;
-export type CompanionForm = (typeof COMPANION_FORMS)[number];
-export const DEFAULT_COMPANION_FORM: CompanionForm = "spark";
+export const COMPANION_FORMS = SPRITE_IDS;
+export type CompanionForm = SpriteId;
+export const DEFAULT_COMPANION_FORM: CompanionForm = DEFAULT_SPRITE;
 
-export function parseCompanionForm(
-  value: string | null | undefined,
-): CompanionForm {
-  return COMPANION_FORMS.includes(value as CompanionForm)
-    ? (value as CompanionForm)
-    : DEFAULT_COMPANION_FORM;
-}
+export const parseCompanionForm = parseSpriteId;
 
 export type CompanionState = "idle" | "working" | "suggestion";
 

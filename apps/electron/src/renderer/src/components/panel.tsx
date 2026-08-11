@@ -5,6 +5,7 @@ import { useChat } from "@ai-sdk/react";
 import { BrainGraph } from "@renderer/components/brain-graph";
 import { Markdown } from "@renderer/components/markdown";
 import { NotesTab } from "@renderer/components/notes-tab";
+import { SettingsView } from "@renderer/components/settings-view";
 import { Spark } from "@renderer/components/spark";
 import { TodosTab } from "@renderer/components/todos-tab";
 import {
@@ -15,9 +16,13 @@ import {
   executeAgentTool,
 } from "@renderer/lib/agent-tools";
 import { apiFetch, initApiBase } from "@renderer/lib/api";
+import { CloudAuthProvider } from "@renderer/lib/auth-context";
 import { fsCall, type BrainFile as HomeFile } from "@renderer/lib/brain-fs";
+import { createQueryClient } from "@renderer/lib/query";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
+import { useSpriteEmitter } from "@renderer/lib/sprite-emitter";
 import { PANEL_TABS, type PanelTab } from "@shared/panel";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithToolCalls,
@@ -80,6 +85,7 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-brain_glob": "browsed its brain",
   "tool-brain_search": "searched its brain",
   "tool-brain_delete": "forgot something",
+  "tool-emote": "emoted",
 };
 
 type FileView =
@@ -642,6 +648,7 @@ function PanelInner({
 
   const [notice, setNotice] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<AgentToolCall[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const dictationBaseRef = useRef<string | null>(null);
 
@@ -703,6 +710,8 @@ function PanelInner({
   });
 
   const busy = status === "submitted" || status === "streaming";
+
+  useSpriteEmitter(messages, approvals.length, busy);
 
   const send = (): void => {
     const text = draft.trim();
@@ -816,6 +825,15 @@ function PanelInner({
         ) : null}
         <button
           type="button"
+          className="tavern-head-btn"
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => setSettingsOpen((v) => !v)}
+        >
+          ⚙
+        </button>
+        <button
+          type="button"
           className="tavern-close"
           aria-label="Close"
           onClick={() => window.api.panelClose()}
@@ -832,7 +850,10 @@ function PanelInner({
             role="tab"
             aria-selected={tab === id}
             className="tavern-tab"
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setSettingsOpen(false);
+              setTab(id);
+            }}
           >
             {TAB_LABELS[id]}
           </button>
@@ -840,7 +861,12 @@ function PanelInner({
       </div>
 
       <div className="tavern-body" role="tabpanel" ref={bodyRef}>
-        {tab === "history" ? (
+        {settingsOpen ? (
+          <SettingsView
+            onClose={() => setSettingsOpen(false)}
+            onThreadsCleared={() => onSwitchThread(newThread())}
+          />
+        ) : tab === "history" ? (
           <ThreadHistory
             currentId={thread.id}
             onPick={(picked) => {
@@ -940,5 +966,14 @@ function PanelInner({
 initApiBase();
 installGlobalErrorHandlers();
 
+const queryClient = createQueryClient();
+
 const container = document.getElementById("root");
-if (container) createRoot(container).render(<PanelRoot />);
+if (container)
+  createRoot(container).render(
+    <QueryClientProvider client={queryClient}>
+      <CloudAuthProvider>
+        <PanelRoot />
+      </CloudAuthProvider>
+    </QueryClientProvider>,
+  );

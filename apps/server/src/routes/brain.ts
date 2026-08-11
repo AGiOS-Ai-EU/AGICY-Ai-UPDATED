@@ -75,6 +75,10 @@ const brainRoute = new Hono()
       await c.req.json(),
     );
     return c.json(payload as object, status as 200);
+  })
+  .post("/clear", async (c) => {
+    const { status, payload } = await forward("clear", "POST", {});
+    return c.json(payload as object, status as 200);
   });
 
 export default brainRoute;

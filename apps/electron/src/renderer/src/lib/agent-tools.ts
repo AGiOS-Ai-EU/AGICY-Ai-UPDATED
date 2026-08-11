@@ -1,4 +1,5 @@
 import { apiFetch } from "@renderer/lib/api";
+import { parseSpriteEmotion } from "@shared/sprite-events";
 
 export type AgentToolTier = "free" | "confirmed";
 
@@ -45,6 +46,7 @@ export async function agentToolTier(
     case "get_context":
     case "read_document":
     case "get_clipboard":
+    case "emote":
       return "free";
     case "set_clipboard":
     case "paste":
@@ -129,6 +131,13 @@ export async function executeAgentTool(
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
       }
+      case "emote": {
+        window.api.spriteEvent({
+          kind: "emote",
+          emotion: parseSpriteEmotion(input.emotion),
+        });
+        return { ok: true };
+      }
       case "get_context":
         return { ...(await window.api.remixGetContext()) };
       case "read_document":
@@ -141,6 +150,12 @@ export async function executeAgentTool(
           ...(await window.api.remixSetClipboard(str(input, "text"))),
         };
       case "paste":
+        // The theater contract: the sprite travels to the caret and swings;
+        // this resolves at the impact frame (or a hard ceiling), so the
+        // paste lands on the hit. A missing sprite resolves immediately.
+        await window.api
+          .spritePerformSync({ name: "paste", toolClass: "deliver" })
+          .catch(() => {});
         return { ...(await window.api.remixPasteClipboard()) };
       case "Bash":
         if (!str(input, "command")) return badArgs("{ command: string }");

@@ -1,6 +1,5 @@
 import "../overlay.css";
 
-import { JebRoot } from "@renderer/components/jeb";
 import { Spark, sparkScaleFor } from "@renderer/components/spark";
 import { initApiBase } from "@renderer/lib/api";
 import {
@@ -8,6 +7,8 @@ import {
   type DictationDestination,
 } from "@renderer/lib/dictation";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
+import { SPRITES } from "@renderer/sprites/registry";
+import { SpriteStage } from "@renderer/sprites/stage";
 import {
   COMPANION_WINDOW_SIZE,
   type CompanionForm,
@@ -331,8 +332,9 @@ function CompanionRoot(): React.JSX.Element | null {
   }, []);
 
   if (!form) return null;
-  return form === "jeb" ? (
-    <JebRoot />
+  const def = SPRITES[form];
+  return def.kind === "sheet" ? (
+    <SpriteStage def={def} state={state} bubble={bubble} />
   ) : (
     <SparkStage
       state={state}

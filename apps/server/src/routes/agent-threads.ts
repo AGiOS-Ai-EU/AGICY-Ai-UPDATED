@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
+  deleteAllThreads,
   deleteThread,
   getThread,
   latestThread,
@@ -25,6 +26,10 @@ const agentThreadsRoute = new Hono()
       return c.json({ ok: true });
     },
   )
+  .post("/clear", (c) => {
+    deleteAllThreads();
+    return c.json({ ok: true });
+  })
   .get("/list", (c) => c.json({ threads: listThreads() }))
   .get("/latest", (c) => c.json({ thread: latestThread() }))
   .get("/:id", (c) => {

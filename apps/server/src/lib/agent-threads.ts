@@ -170,3 +170,7 @@ export function latestThread(): {
 export function deleteThread(threadId: string): void {
   getDb().prepare("DELETE FROM agent_threads WHERE id = ?").run(threadId);
 }
+
+export function deleteAllThreads(): void {
+  getDb().prepare("DELETE FROM agent_threads").run();
+}

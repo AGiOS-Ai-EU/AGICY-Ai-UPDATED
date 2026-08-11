@@ -84,7 +84,6 @@ import {
   isActiveAudioPlaybackMode,
 } from "../shared/audio-playback";
 import {
-  COMPANION_WINDOW_SIZE,
   type CompanionForm,
   type CompanionState,
   parseCompanionForm,
@@ -104,6 +103,7 @@ import {
 } from "../shared/remix";
 import { bearerAuthHeaders } from "../shared/server-auth";
 import { SETTINGS_KEYS } from "../shared/settings-keys";
+import { SPRITES_INFO } from "../shared/sprites";
 import { AudioPlaybackController } from "./audio-control/controller";
 import { recoverDuckedVolumeFromCrash } from "./audio-control/volume-ducker";
 import { HotkeyRecorder } from "./hotkey-recorder";
@@ -136,6 +136,12 @@ import {
 } from "./plugins/index";
 import { initPluginUiHost, invalidatePluginViews } from "./plugins/ui-host";
 import { isRemixTargetAllowed } from "./remix-target";
+import {
+  initSpriteTravel,
+  performSyncAction,
+  resolveSpriteImpact,
+  resolveSpritePerformDone,
+} from "./sprite-travel";
 
 // Test isolation: E2E/probe runs in the unpackaged dev binary would otherwise
 // share the real "Electron" userData (settings.json included) with a running
@@ -2081,7 +2087,7 @@ app.whenReady().then(async () => {
   });
 
   // IPC: hotkey recording — global native listener + renderer DOM on macOS
-  ipcMain.on("hotkey-record:start", () => {
+  ipcMain.on("hotkey-record:start", (event) => {
     // Park remix listener while recording a hotkey.
     if (remixKeyListener) {
       remixKeyListener.stop();
@@ -2095,8 +2101,9 @@ app.whenReady().then(async () => {
     globalShortcut.unregisterAll();
 
     stopHotkeyRecorderProcess();
-    const target = settingsWindow?.webContents ?? null;
-    if (!target) return;
+    // Whichever window asked to record receives the key events — the panel's
+    // settings view and the legacy dashboard both use this channel.
+    const target = event.sender;
 
     hotkeyRecorder = new HotkeyRecorder({
       onModifiers: () => {},
@@ -2333,6 +2340,8 @@ app.whenReady().then(async () => {
   ipcMain.on("updater:install", () => {
     restartAndUpdate();
   });
+
+  ipcMain.handle("app:version", () => app.getVersion());
 
   ipcMain.handle("updater:check", async () => {
     if (is.dev) return null;
@@ -3166,9 +3175,23 @@ let companionHotPollTimer: NodeJS.Timeout | null = null;
 function companionPosition(): { x: number; y: number } {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const { x: waX, y: waY, height } = display.workArea;
+  const info = SPRITES_INFO[companionFormSetting()];
+  // Sheet sprites have transparent margin around the drawn body; the anchor
+  // hangs the window off the work area so the BODY touches the corner.
+  if (info.anchor) {
+    return {
+      x: waX + info.anchor.margin - info.anchor.bodyLeft,
+      y:
+        waY +
+        height -
+        info.windowSize +
+        info.anchor.bodyBottom -
+        info.anchor.margin,
+    };
+  }
   return {
     x: waX,
-    y: waY + height - COMPANION_WINDOW_SIZE,
+    y: waY + height - info.windowSize,
   };
 }
 
@@ -3259,7 +3282,43 @@ ipcMain.handle("companion:form", () => companionFormSetting());
 ipcMain.on("companion:set-form", (_event, form: string) => {
   const next = parseCompanionForm(form);
   writeSettings({ companionForm: next });
-  companionWindow?.webContents.send("companion:form", next);
+  const win = companionWindow;
+  if (win && !win.isDestroyed()) {
+    const size = SPRITES_INFO[next].windowSize;
+    const { x, y } = companionPosition();
+    win.setBounds({ x, y, width: size, height: size });
+    win.webContents.send("companion:form", next);
+  }
+});
+
+ipcMain.on("sprite:event", (event, ev: unknown) => {
+  if (event.sender !== panelWindow?.webContents) return;
+  companionWindow?.webContents.send("companion:sprite-event", ev);
+});
+
+initSpriteTravel({
+  getWindow: () => companionWindow,
+  windowSize: () => SPRITES_INFO[companionFormSetting()].windowSize,
+  homePosition: () => companionPosition(),
+  theaterAvailable: () => SPRITES_INFO[companionFormSetting()].kind === "sheet",
+  travelEnabled: () => SPRITES_INFO[companionFormSetting()].travel === true,
+  sendEvent: (ev) =>
+    companionWindow?.webContents.send("companion:sprite-event", ev),
+});
+
+ipcMain.handle("sprite:perform-sync", (event, payload: unknown) => {
+  if (event.sender !== panelWindow?.webContents) return false;
+  return performSyncAction(payload as { name: string; toolClass: string });
+});
+
+ipcMain.on("sprite:impact", (event, nonce: string) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  resolveSpriteImpact(nonce);
+});
+
+ipcMain.on("sprite:perform-done", (event, nonce: string) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  resolveSpritePerformDone(nonce);
 });
 
 ipcMain.on("companion:set-hot-rect", (event, rect: PillHotRect | null) => {
@@ -3332,7 +3391,11 @@ ipcMain.on("panel:pointer-entered", (event) => {
 // focus to capture the user's document can't dismiss the panel mid-turn.
 ipcMain.on("panel:set-busy", (event, busy: unknown) => {
   if (event.sender !== panelWindow?.webContents) return;
-  panelBusy = busy === true;
+  const next = busy === true;
+  // The corner sprite mirrors the agent loop: this is what puts Jeb at his
+  // laptop (and Spark into its breathing state) while a turn runs.
+  if (next !== panelBusy) setCompanionState(next ? "working" : "idle");
+  panelBusy = next;
   if (panelBusy) cancelPanelHide();
 });
 
@@ -3494,11 +3557,12 @@ function destroyPanelWindow(): void {
 
 function createCompanionWindow(): void {
   if (companionWindow && !companionWindow.isDestroyed()) return;
+  const size = SPRITES_INFO[companionFormSetting()].windowSize;
   const { x, y } = companionPosition();
 
   companionWindow = new BrowserWindow({
-    width: COMPANION_WINDOW_SIZE,
-    height: COMPANION_WINDOW_SIZE,
+    width: size,
+    height: size,
     x,
     y,
     show: false,
