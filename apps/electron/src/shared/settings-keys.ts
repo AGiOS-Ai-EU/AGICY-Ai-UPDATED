@@ -8,7 +8,6 @@ export const SETTINGS_KEYS = {
   cleanupPersonalTone: "cleanup_personal_tone",
   cleanupWorkTone: "cleanup_work_tone",
   remixHotkey: "remix_hotkey",
-  remixBarEnabled: "remix_bar_enabled",
   freestyleCloudPanelExpanded: "freestyle_cloud_panel_expanded",
   hotkey: "hotkey",
   hotkeyMode: "hotkey_mode",
@@ -24,9 +23,7 @@ export const SETTINGS_KEYS = {
   networkProxyUrl: "network_proxy_url",
   outputMode: "output_mode",
   dictationDestination: "dictation_destination",
-  pillCancelButton: "pill_cancel_button",
   soundEnabled: "sound_enabled",
-  theme: "theme",
   translateMode: "translate_mode",
 } as const;
 

@@ -507,6 +507,9 @@ function PanelInner({
         document.getElementById("panel-composer")?.focus(),
       );
     });
+    const offShowSettings = window.api.onPanelShowSettings(() => {
+      setSettingsOpen(true);
+    });
     const offDictation = window.api.onPanelDictation((ev) => {
       if (ev.kind !== "error") showComposer();
       if (ev.kind === "error") {
@@ -540,6 +543,7 @@ function PanelInner({
     });
     return () => {
       offFocus?.();
+      offShowSettings?.();
       offDictation?.();
     };
   }, []);

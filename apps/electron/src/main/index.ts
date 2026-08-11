@@ -134,7 +134,7 @@ import {
   PipelineStage,
   relayEvent,
 } from "./plugins/index";
-import { initPluginUiHost, invalidatePluginViews } from "./plugins/ui-host";
+import { invalidatePluginViews } from "./plugins/ui-host";
 import { isRemixTargetAllowed } from "./remix-target";
 import {
   initSpriteTravel,
@@ -389,7 +389,8 @@ function getServerBaseUrl(): string {
  * views are dropped too, since they hold pages loaded from the previous origin.
  */
 function broadcastServerChanged(): void {
-  settingsWindow?.webContents.send("server:changed");
+  panelWindow?.webContents.send("server:changed");
+  companionWindow?.webContents.send("server:changed");
   invalidatePluginViews();
 }
 
@@ -397,11 +398,6 @@ function broadcastServerChanged(): void {
 let httpServer: any = null;
 let serverPort = DEFAULT_PORT;
 const mainWindow: BrowserWindow | null = null;
-let settingsWindow: BrowserWindow | null = null;
-// In-flight settings-window creation. createSettingsWindow awaits an onboarding
-// probe before it assigns settingsWindow, so this serializes concurrent opens
-// to avoid spawning a second window during that gap.
-let settingsWindowCreating: Promise<void> | null = null;
 let tray: Tray | null = null;
 let keyListener: NativeKeyListener | null = null;
 // Latching flag: records that the native key listener started successfully.
@@ -420,7 +416,7 @@ let remixHotkeyPreference: string | undefined;
 /** False until server settings are read once (don't spawn on defaults). */
 let remixInitialized = false;
 /** Onboarding practice: allow Remix to target Freestyle's own window. */
-let remixPracticeTarget = false;
+const remixPracticeTarget = false;
 const audioPlaybackController = new AudioPlaybackController();
 
 function stopHotkeyRecorderProcess(): void {
@@ -452,10 +448,10 @@ function registerAppProtocol(): void {
       decodeURIComponent(url.pathname),
     );
 
-    // If the path has no file extension, serve the dashboard SPA fallback.
-    // pill.html is loaded directly by its full path and doesn't need a fallback.
+    // The dashboard SPA (and its extensionless routes) is gone; the panel is
+    // the only sensible fallback for a bare path.
     if (!filePath.match(/\.\w+$/)) {
-      filePath = join(__dirname, "../renderer/index.html");
+      filePath = join(__dirname, "../renderer/panel.html");
     }
 
     return net.fetch(pathToFileURL(filePath).toString());
@@ -465,13 +461,6 @@ function registerAppProtocol(): void {
 // The pill's programmatic-move filter is gone with the pill; the remaining
 // caller in the legacy bounds path needs only a no-op.
 function markProgrammaticTarget(_x: number, _y: number): void {}
-
-function getDashboardURL(path = "/"): string {
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    return `${process.env.ELECTRON_RENDERER_URL}${path}`;
-  }
-  return `app://renderer${path}`;
-}
 
 /**
  * How far the window's origin has been pushed out to make room for the
@@ -582,124 +571,19 @@ function getPillAlignmentForCustom(): "custom-top" | "custom-bottom" {
   const midY = display.workArea.y + display.workArea.height / 2;
   return wy < midY ? "custom-top" : "custom-bottom";
 }
-function createSettingsWindow(initialPath?: string): Promise<void> {
-  // Serialize concurrent opens: the first call owns creation, the rest await it.
-  if (settingsWindowCreating) return settingsWindowCreating;
-  if (settingsWindow) return Promise.resolve();
-  const creation = buildSettingsWindow(initialPath).finally(() => {
-    settingsWindowCreating = null;
-  });
-  settingsWindowCreating = creation;
-  return creation;
-}
-
-async function buildSettingsWindow(initialPath?: string): Promise<void> {
-  // Resolve the initial route BEFORE creating the window. The onboarding probe
-  // is an async server call; doing it first means there's no await gap between
-  // assigning `settingsWindow` and using it, so a close (or a concurrent open)
-  // during the probe can't null-deref or show a half-loaded window.
-  const startPath = (await isOnboardingActive())
-    ? "/onboarding"
-    : (initialPath ?? "/today");
-
-  settingsWindow = new BrowserWindow({
-    width: 1152,
-    height: 648,
-    minWidth: 720,
-    minHeight: 480,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === "darwin"
-      ? {
-          backgroundColor: "#00000000",
-          transparent: true,
-          vibrancy: "under-window" as const,
-          visualEffectState: "active" as const,
-        }
-      : {}),
-    titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
-    trafficLightPosition:
-      process.platform === "darwin" ? { x: 16, y: 16 } : undefined,
-    ...(process.platform === "linux" ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
-    },
-  });
-
-  settingsWindow.on("ready-to-show", () => {
-    if (process.platform === "darwin") {
-      app.dock?.show();
-      app.focus({ steal: true });
-    }
-    settingsWindow!.show();
-    settingsWindow!.focus();
-  });
-
-  settingsWindow.on("closed", () => {
-    if (hotkeyRecorder) {
-      stopHotkeyRecorderProcess();
-      scheduleHotkeyRegistration(currentHotkeyAccel ?? undefined);
-    }
-    remixPracticeTarget = false;
-    settingsWindow = null;
-  });
-
-  // Backstop: a full-page navigation tears the onboarding renderer down
-  // without running its unmount cleanup.
-  settingsWindow.webContents.on("did-navigate", () => {
-    remixPracticeTarget = false;
-  });
-
-  settingsWindow.on("enter-full-screen", () => {
-    settingsWindow?.webContents.send("fullscreen:changed", true);
-  });
-
-  settingsWindow.on("leave-full-screen", () => {
-    settingsWindow?.webContents.send("fullscreen:changed", false);
-  });
-
-  settingsWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
-    return { action: "deny" };
-  });
-
-  // Wire the plugin UI host (view manager + host-action/view IPC) to this
-  // window. Discovery, install, and asset serving all live server-side now;
-  // the renderer talks to the server directly for those.
-  initPluginUiHost({
-    window: settingsWindow,
-    getServerBaseUrl,
-    getServerToken,
-    onAction: handlePluginAction,
-  });
-
-  settingsWindow.loadURL(getDashboardURL(startPath));
-}
-
-/** Perform a host action requested by a plugin UI page over the bridge. */
-function handlePluginAction(
-  channel: keyof import("freestyle-voice").HostActions,
-  payload: unknown,
-): void {
-  switch (channel) {
-    case "copy": {
-      const { text } = payload as { text: string };
-      if (text) clipboard.writeText(text);
-      break;
-    }
-    case "toast": {
-      const { message } = payload as { message: string };
-      if (message && Notification.isSupported()) {
-        new Notification({ title: "Freestyle", body: message }).show();
-      }
-      break;
-    }
-    case "navigate": {
-      const { to } = payload as { to: string };
-      settingsWindow?.webContents.send("plugin:navigate", to);
-      break;
-    }
+/** Open the panel with the Settings view showing — the successor to every
+ *  "open the dashboard at /settings" entry point. */
+function openPanelSettings(): void {
+  openPanel({ focusComposer: false });
+  const win = panelWindow;
+  if (!win || win.isDestroyed()) return;
+  win.show();
+  win.focus();
+  const send = (): void => win.webContents.send("panel:show-settings");
+  if (win.webContents.isLoading()) {
+    win.webContents.once("did-finish-load", send);
+  } else {
+    send();
   }
 }
 
@@ -1168,12 +1052,6 @@ async function deliverOutput(
   });
 }
 
-function resetOnboarding(): void {
-  writeSettings({ onboardingComplete: false });
-  updateRemixBar();
-  showSettingsWindow("/onboarding");
-}
-
 // Per-request timeout for main-process API calls to the server.
 const SERVER_SETTING_TIMEOUT_MS = 5000;
 // How long boot waits for the server to answer before registering the hotkey
@@ -1215,31 +1093,6 @@ async function getServerSettings(): Promise<Record<string, string> | null> {
   } catch {
     return null;
   }
-}
-
-/** Number of configured models behind the current server (0 when unreachable). */
-async function getConfiguredModelCount(): Promise<number> {
-  try {
-    const res = await serverClient().api.models.configured.$get(
-      {},
-      { init: { signal: AbortSignal.timeout(SERVER_SETTING_TIMEOUT_MS) } },
-    );
-    if (!res.ok) return 0;
-    const data = (await res.json()) as unknown[];
-    return Array.isArray(data) ? data.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Matches the route decision in buildSettingsWindow. Existing users who have
- * configured models are treated as onboarded even if the lightweight setting
- * predates onboardingComplete.
- */
-async function isOnboardingActive(): Promise<boolean> {
-  if (readSettings().onboardingComplete === true) return false;
-  return (await getConfiguredModelCount()) === 0;
 }
 
 /**
@@ -1297,26 +1150,6 @@ async function resetToneConfiguration(): Promise<void> {
   if (results.some((ok) => !ok)) {
     log.warn("Reset tone configuration failed: one or more settings rejected");
   }
-
-  const tonePath = "/settings/tone";
-  if (!settingsWindow) {
-    void createSettingsWindow(tonePath);
-    return;
-  }
-
-  const url = getDashboardURL(tonePath);
-  const current = settingsWindow.webContents.getURL();
-  if (current.includes(tonePath)) {
-    settingsWindow.webContents.reloadIgnoringCache();
-  } else {
-    void settingsWindow.loadURL(url);
-  }
-  if (process.platform === "darwin") {
-    app.dock?.show();
-    app.focus({ steal: true });
-  }
-  settingsWindow.show();
-  settingsWindow.focus();
 }
 
 async function factoryReset(): Promise<void> {
@@ -1384,22 +1217,6 @@ async function factoryReset(): Promise<void> {
       `${err instanceof Error ? err.message : String(err)}\n\nThe app may be in a partially reset state. Quit and relaunch manually.`,
     );
   }
-}
-
-function showSettingsWindow(path?: string): void {
-  if (!settingsWindow) {
-    void createSettingsWindow(path);
-    return;
-  }
-  if (path) {
-    void settingsWindow.loadURL(getDashboardURL(path));
-  }
-  if (process.platform === "darwin") {
-    app.dock?.show();
-    app.focus({ steal: true });
-  }
-  settingsWindow.show();
-  settingsWindow.focus();
 }
 
 const ACCESSIBILITY_SETTINGS_URL =
@@ -1547,7 +1364,6 @@ function restartAndUpdate(): void {
 /** Mark state as downloading, notify the settings window, and kick off the download. */
 function triggerDownloadUpdate(): void {
   updateDownloadState = "downloading";
-  settingsWindow?.webContents.send("updater:downloading");
   autoUpdater.downloadUpdate().catch((err) => {
     log.warn(`downloadUpdate rejected: ${err}`);
   });
@@ -1620,20 +1436,16 @@ function buildTrayContextMenu(): Menu {
   return Menu.buildFromTemplate([
     {
       label: "Settings",
-      click: () => showSettingsWindow("/settings"),
+      click: () => openPanelSettings(),
     },
     {
       label: "Help",
-      click: () => showSettingsWindow("/help"),
+      click: () => void shell.openExternal("https://freestylevoice.com"),
     },
     buildUpdateMenuItem(),
     ...(is.dev
       ? [
           { type: "separator" as const },
-          {
-            label: "Reset Onboarding",
-            click: resetOnboarding,
-          },
           {
             label: "Reset Tone Configuration",
             click: () => {
@@ -1679,7 +1491,7 @@ function createTray(): void {
   }
 
   tray.on("click", () => {
-    showSettingsWindow();
+    openPanel({ focusComposer: true });
   });
 }
 
@@ -1696,17 +1508,13 @@ function rebuildMenus(): void {
               {
                 label: "Settings",
                 accelerator: "CommandOrControl+,",
-                click: () => showSettingsWindow("/settings"),
+                click: () => openPanelSettings(),
               },
               { type: "separator" as const },
               buildUpdateMenuItem(),
               ...(is.dev
                 ? [
                     { type: "separator" as const },
-                    {
-                      label: "Reset Onboarding",
-                      click: resetOnboarding,
-                    },
                     {
                       label: "Reset Tone Configuration",
                       click: () => {
@@ -1752,7 +1560,7 @@ function rebuildMenus(): void {
       submenu: [
         {
           label: "Freestyle Help",
-          click: () => showSettingsWindow("/help"),
+          click: () => void shell.openExternal("https://freestylevoice.com"),
         },
       ],
     },
@@ -1774,13 +1582,7 @@ if (!gotTheLock) {
 }
 
 app.on("second-instance", () => {
-  if (settingsWindow) {
-    if (settingsWindow.isMinimized()) settingsWindow.restore();
-    settingsWindow.show();
-    settingsWindow.focus();
-  } else {
-    showSettingsWindow();
-  }
+  openPanel({ focusComposer: true });
 });
 
 // This method will be called when Electron has finished
@@ -1843,66 +1645,22 @@ app.whenReady().then(async () => {
   // fresh prefs to the companion, which owns the dictation pipeline.
   ipcMain.on("settings:output-mode-changed", () => broadcastDictationPrefs());
 
-  ipcMain.on("settings:pill-cancel-mode-changed", () => {});
-
   ipcMain.on("settings:audio-ducking-changed", () => broadcastDictationPrefs());
 
   ipcMain.on("settings:audio-playback-mode-changed", () =>
     broadcastDictationPrefs(),
   );
 
-  // IPC: relay cleanup-context changes (llm_cleanup / cleanup tones) from the
-  // dashboard to the pill so it refreshes its cached routing decision instead
-  // of re-fetching /api/settings on every recording start.
-  ipcMain.on("settings:cleanup-context-changed", () => {});
-
-  // IPC: hide the pill window on request from renderer
-  ipcMain.on("pill:hide", () => {
-    hidePill();
-  });
-
-  // IPC: the renderer needs (or no longer needs) room for the status card.
-  ipcMain.on(
-    "pill:set-expanded",
-    (_event, expanded: boolean, expansion?: unknown) => {
-      setPillExpanded(
-        expanded === true,
-        expansion === "remix-chat" ? expansion : "card",
-      );
-    },
-  );
-
-  // null = fully interactive; otherwise click-through outside the rect.
-  ipcMain.on("pill:set-hot-rect", (_event, rect: unknown) => {
-    if (rect === null) {
-      setPillHotRect(null);
-      return;
-    }
-    if (typeof rect !== "object" || rect === null) return;
-    const { x, y, width, height } = rect as Record<string, unknown>;
-    if (
-      typeof x !== "number" ||
-      typeof y !== "number" ||
-      typeof width !== "number" ||
-      typeof height !== "number" ||
-      ![x, y, width, height].every(Number.isFinite)
-    ) {
-      return;
-    }
-    setPillHotRect({ x, y, width, height });
-  });
-
   // IPC: fan out per-frame audio levels from the pill to other windows
   // (e.g. the Today tutorial demo) so they can render a live waveform.
   ipcMain.on("audio:level", (_event, level: number) => {
     if (typeof level !== "number") return;
-    settingsWindow?.webContents.send("audio:level", level);
   });
 
   // IPC: pill notifies that a transcription has finished + been pasted, so
   // history-driven views (Today, History) can refetch without polling.
   ipcMain.on("transcription:done", () => {
-    settingsWindow?.webContents.send("transcription:done");
+    panelWindow?.webContents.send("transcription:done");
   });
 
   ipcMain.on("recording:committed", () => {
@@ -1993,7 +1751,7 @@ app.whenReady().then(async () => {
       cancelId: 1,
     });
     if (response !== 0) return false;
-    showSettingsWindow("/settings/models");
+    openPanel({ focusComposer: true });
     return true;
   });
 
@@ -2011,7 +1769,7 @@ app.whenReady().then(async () => {
       cancelId: 1,
     });
     if (response !== 0) return false;
-    showSettingsWindow("/today?upgrade=1");
+    openPanelSettings();
     return true;
   });
 
@@ -2074,16 +1832,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("permissions:check-linux-setup", async () => {
     if (process.platform !== "linux") return null;
     return checkLinuxSetup();
-  });
-
-  ipcMain.handle("onboarding:complete", () => {
-    return readSettings().onboardingComplete === true;
-  });
-
-  ipcMain.on("onboarding:set-complete", () => {
-    writeSettings({ onboardingComplete: true });
-    remixPracticeTarget = false;
-    updateRemixBar();
   });
 
   // IPC: hotkey recording — global native listener + renderer DOM on macOS
@@ -2190,21 +1938,16 @@ app.whenReady().then(async () => {
 
   // Onboarding already has dedicated permission cards. Existing users instead
   // get one actionable warning once a user-facing window can be shown.
-  void isOnboardingActive().then((onboardingActive) => {
-    updateRemixBar();
+  {
     const warning = startupPermissionWarning(
       process.platform,
-      onboardingActive,
+      false,
       hasCurrentAccessibilityPermission(),
       getCurrentMicrophonePermission(),
     );
     if (warning) {
       void showRequiredPermissionDialog(warning);
     }
-  });
-
-  if (readSettings().showDashboardOnLaunch !== false) {
-    showSettingsWindow();
   }
 
   // -- Auto-update helpers --
@@ -2252,12 +1995,8 @@ app.whenReady().then(async () => {
     autoUpdater.logger = createAppLogger("updater");
 
     autoUpdater.on("update-available", (info) => {
-      settingsWindow?.webContents.send("updater:available", {
-        version: info.version,
-      });
       if (autoUpdater.autoDownload) {
         updateDownloadState = "downloading";
-        settingsWindow?.webContents.send("updater:downloading");
       }
       // Only show a native notification once per discovered version
       if (
@@ -2271,16 +2010,13 @@ app.whenReady().then(async () => {
             ? `Version ${info.version} is downloading…`
             : `Version ${info.version} is available. Open settings to download.`,
         });
-        note.on("click", () => showSettingsWindow("/settings"));
+        note.on("click", () => openPanelSettings());
         note.show();
       }
     });
 
     autoUpdater.on("update-downloaded", (info) => {
       updateDownloadState = "downloaded";
-      settingsWindow?.webContents.send("updater:downloaded", {
-        version: info.version,
-      });
       // Only show a native notification once per version
       if (
         Notification.isSupported() &&
@@ -2291,7 +2027,7 @@ app.whenReady().then(async () => {
           title: "Update Ready to Install",
           body: `Version ${info.version} has been downloaded. Restart to update.`,
         });
-        note.on("click", () => showSettingsWindow("/settings"));
+        note.on("click", () => openPanelSettings());
         note.show();
       }
       // No need to keep polling once the update is downloaded
@@ -2309,12 +2045,7 @@ app.whenReady().then(async () => {
       const msg = err?.message ?? "Update failed";
       if (READ_ONLY_UPDATE_RE.test(msg) && isRunningFromReadOnlyLocation()) {
         showMoveToApplicationsDialog();
-        settingsWindow?.webContents.send("updater:error", {
-          message:
-            "Freestyle is running from a read-only location. Move it to Applications and relaunch.",
-        });
       } else {
-        settingsWindow?.webContents.send("updater:error", { message: msg });
       }
     });
 
@@ -2324,7 +2055,7 @@ app.whenReady().then(async () => {
           title: "Move Freestyle to Applications",
           body: "Freestyle can\u2019t update from this location. Move it to your Applications folder and relaunch.",
         });
-        note.on("click", () => showSettingsWindow("/settings"));
+        note.on("click", () => openPanelSettings());
         note.show();
       }
     } else {
@@ -2385,18 +2116,6 @@ app.whenReady().then(async () => {
     app.setLoginItemSettings({ openAtLogin: enabled });
   });
 
-  // -- Show dashboard on launch setting IPC --
-  ipcMain.handle("settings:show-dashboard-on-launch", () => {
-    return readSettings().showDashboardOnLaunch !== false;
-  });
-
-  ipcMain.on(
-    "settings:set-show-dashboard-on-launch",
-    (_event, enabled: boolean) => {
-      writeSettings({ showDashboardOnLaunch: enabled });
-    },
-  );
-
   // -- Context-aware dictation: get frontmost app + browser context --
   ipcMain.handle("system:frontmost-app", async () => {
     try {
@@ -2421,30 +2140,6 @@ app.whenReady().then(async () => {
     } catch {
       return [];
     }
-  });
-
-  // -- Pill position setting --
-  ipcMain.handle("settings:pill-position", () => {
-    const pos = (readSettings().pillPosition as string) ?? "bottom-center";
-    // For a custom position, derive the correct top/bottom alignment token
-    // from the actual window position relative to its display.
-    if (pos === "custom") return getPillAlignmentForCustom();
-    return pos;
-  });
-
-  ipcMain.on("settings:set-pill-position", (_event, position: string) => {
-    if (position === "custom") {
-      writeSettings({ pillPosition: position });
-    } else {
-      writeSettings({ pillPosition: position, pillCustomPosition: undefined });
-    }
-    // For custom, resolve the live alignment; for presets, send as-is.
-    const broadcast =
-      position === "custom" ? getPillAlignmentForCustom() : position;
-    settingsWindow?.webContents.send(
-      "settings:pill-position-changed",
-      broadcast,
-    );
   });
 
   // Register the hold-to-record hotkey immediately with the default accelerator
@@ -2472,9 +2167,7 @@ app.whenReady().then(async () => {
   // Start microphone activity monitoring
   micListener = new MicListener({
     excludePid: process.pid,
-    onStateChange: (state) => {
-      settingsWindow?.webContents.send("mic:activity-changed", state);
-    },
+    onStateChange: () => {},
   });
   micListener.start();
 
@@ -2673,7 +2366,6 @@ app.whenReady().then(async () => {
     try {
       await pasteClipboardIntoFocusedApp();
       if (remixPracticeTarget) {
-        settingsWindow?.webContents.send("remix:practice-delivered");
       }
       return { ok: true };
     } catch (err) {
@@ -2793,7 +2485,6 @@ app.whenReady().then(async () => {
     try {
       await pasteIntoFocusedApp(text, undefined, { trailingSpace: false });
       if (remixPracticeTarget) {
-        settingsWindow?.webContents.send("remix:practice-delivered");
       }
       return { ok: true };
     } catch (err) {
@@ -2843,13 +2534,6 @@ app.whenReady().then(async () => {
     } finally {
       if (panelYielded) restorePanelFocus();
     }
-  });
-
-  // Onboarding practice: allow targeting Freestyle's own window.
-  ipcMain.on("remix:set-practice-target", (event, active: unknown) => {
-    if (event.sender !== settingsWindow?.webContents) return;
-    remixPracticeTarget = active === true;
-    hotkeyLog.info(`remix practice target: ${remixPracticeTarget}`);
   });
 
   if (process.env.FREESTYLE_E2E === "1") {
@@ -3709,7 +3393,6 @@ function dictationTargets(): BrowserWindow[] {
   const targets: BrowserWindow[] = [];
   if (companionWindow && !companionWindow.isDestroyed())
     targets.push(companionWindow);
-  if (settingsWindow) targets.push(settingsWindow);
   return targets;
 }
 
@@ -4067,7 +3750,7 @@ async function registerHotkey(hotkey?: string): Promise<void> {
           const errorPayload = {
             message: `The hotkey listener stopped working and "${accel}" could not be re-registered. Restart Freestyle or pick a different combination in Settings.`,
           };
-          settingsWindow?.webContents.send("hotkey:error", errorPayload);
+          panelWindow?.webContents.send("hotkey:error", errorPayload);
         }
       },
     });
@@ -4115,7 +3798,7 @@ async function registerHotkey(hotkey?: string): Promise<void> {
           message = `Hotkey "${accel}" requires access to input devices. Run: sudo usermod -aG input $USER — then log out and back in.`;
         }
         const errorPayload = { message };
-        settingsWindow?.webContents.send("hotkey:error", errorPayload);
+        panelWindow?.webContents.send("hotkey:error", errorPayload);
       }
     }
   } catch (err) {
@@ -4157,7 +3840,7 @@ app.on("window-all-closed", () => {
 // Re-open the dashboard when the app is activated (e.g. clicking the dock
 // icon or relaunching) and no dashboard window is currently open.
 app.on("activate", () => {
-  showSettingsWindow();
+  openPanel({ focusComposer: true });
 });
 
 // Gracefully shut down the HTTP server and flush Sentry before quitting
