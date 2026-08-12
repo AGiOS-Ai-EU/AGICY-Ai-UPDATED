@@ -66,6 +66,7 @@
 }
 
 .tavern-panel {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   height: calc(100% - 38px);
@@ -78,30 +79,16 @@
   background-size: 7px 7px;
 }
 
-/* The manga tail: two stacked triangles (outline + fill), pinned toward the
-   sprite waiting below-left of the panel. */
-.tavern-tail-o,
-.tavern-tail-f {
+/* The manga tail: an SVG swoosh growing out of the bubble's bottom border.
+   Its top overlaps the 3px border only; the composer's content is never
+   touched. */
+.tavern-tail {
   position: absolute;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  transform: rotate(14deg);
+  left: 30px;
+  bottom: 0;
+  width: 56px;
+  height: 46px;
   pointer-events: none;
-}
-
-.tavern-tail-o {
-  bottom: 8px;
-  left: 38px;
-  border-width: 32px 30px 0 8px;
-  border-color: var(--tavern-ink) transparent transparent transparent;
-}
-
-.tavern-tail-f {
-  bottom: 16px;
-  left: 43px;
-  border-width: 25px 23px 0 6px;
-  border-color: var(--tavern-card) transparent transparent transparent;
 }
 
 .tavern-head {
@@ -1848,4 +1835,486 @@
 .tavern-todo-streak-sub {
   font-size: 11.5px;
   color: var(--tavern-mute);
+}
+
+/* --- Onboarding: Jeb's intro — stage on top, dialogue strip at the
+   bottom, its manga tail aimed at the real corner sprite. ------------- */
+
+.tavern-onb {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tavern-onb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px 9px;
+}
+
+.tavern-onb-skip {
+  font: inherit;
+  font-size: 11.5px;
+  border: none;
+  background: none;
+  color: var(--tavern-mute);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.tavern-onb-skip:hover {
+  color: var(--tavern-ink);
+}
+
+.tavern-onb-prog {
+  display: flex;
+  gap: 5px;
+  padding: 0 16px 10px;
+  border-bottom: 2px solid var(--tavern-ink);
+}
+
+.tavern-onb-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--tavern-rule);
+  transform: rotate(45deg);
+}
+
+.tavern-onb-dot.is-lit {
+  background: var(--tavern-lantern);
+}
+
+.tavern-onb-stage {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+}
+
+.tavern-onb-bigq {
+  font-family: var(--tavern-px);
+  font-size: 24px;
+  line-height: 1.15;
+  color: var(--tavern-robe);
+}
+
+.tavern-onb-bigq i {
+  font-style: normal;
+  color: var(--tavern-lantern);
+}
+
+.tavern-onb-sub {
+  margin: 0;
+  color: var(--tavern-mute);
+  font-size: 12.5px;
+  max-width: 270px;
+}
+
+.tavern-onb-in {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  border: 2px solid var(--tavern-ink);
+  border-radius: 10px;
+  background: var(--tavern-card);
+  font: inherit;
+  font-size: 13px;
+  color: var(--tavern-ink);
+  box-shadow: 2px 2px 0 rgba(42, 33, 20, 0.2);
+}
+
+.tavern-onb-in:focus {
+  outline: none;
+  border-color: var(--tavern-lantern);
+}
+
+.tavern-onb-in::placeholder {
+  color: var(--tavern-mute);
+}
+
+.tavern-onb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.tavern-onb-chip {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border: 2px solid var(--tavern-rule);
+  border-radius: 9px;
+  background: var(--tavern-card);
+  color: var(--tavern-mute);
+  cursor: pointer;
+}
+
+.tavern-onb-chip:hover {
+  color: var(--tavern-ink);
+}
+
+.tavern-onb-chip.is-on {
+  border-color: var(--tavern-ink);
+  color: var(--tavern-ink);
+  background: var(--tavern-wash);
+  box-shadow: 2px 2px 0 var(--tavern-lantern);
+}
+
+/* The dialogue strip: Jeb's line pinned above the footer, nameplate tab on
+   the border, tail pointing down-left out of the panel at the sprite. */
+.tavern-onb-say {
+  position: relative;
+  margin: 0 14px 14px;
+  border: 2px solid var(--tavern-ink);
+  border-radius: 12px;
+  background: var(--tavern-parchment);
+  box-shadow: 3px 3px 0 rgba(42, 33, 20, 0.35);
+}
+
+.tavern-onb-saytext {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  border: none;
+  background: none;
+  color: var(--tavern-ink);
+  padding: 12px 14px;
+  line-height: 1.6;
+  min-height: 64px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.tavern-onb-who {
+  position: absolute;
+  top: -11px;
+  left: 12px;
+  z-index: 1;
+  background: var(--tavern-ink);
+  color: var(--tavern-card);
+  font-family: var(--tavern-px);
+  font-size: 12px;
+  padding: 1px 10px 2px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+}
+
+.tavern-onb-egg {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  z-index: 1;
+  font-size: 11.5px;
+  color: var(--tavern-mute);
+  border: 1px solid var(--tavern-rule);
+  border-radius: 9px;
+  background: var(--tavern-parchment);
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.tavern-onb-tail-o,
+.tavern-onb-tail-f {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  transform: rotate(16deg);
+  pointer-events: none;
+}
+
+.tavern-onb-tail-o {
+  bottom: -24px;
+  left: 26px;
+  border-width: 26px 24px 0 6px;
+  border-color: var(--tavern-ink) transparent transparent transparent;
+}
+
+.tavern-onb-tail-f {
+  bottom: -17px;
+  left: 30px;
+  border-width: 20px 18px 0 5px;
+  border-color: var(--tavern-parchment) transparent transparent transparent;
+}
+
+.tavern-onb-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--tavern-mute);
+}
+
+.tavern-onb-caret {
+  color: var(--tavern-lantern);
+  animation: tavern-onb-blink 1s steps(1) infinite;
+}
+
+@keyframes tavern-onb-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.tavern-onb-writing {
+  font-style: normal;
+  color: var(--tavern-mute);
+  animation: tavern-onb-blink 1s steps(1) infinite;
+}
+
+.tavern-onb-foot2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 14px;
+}
+
+.tavern-onb-next {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid var(--tavern-ink);
+  border-radius: 10px;
+  background: var(--tavern-card);
+  color: var(--tavern-ink);
+  padding: 6px 15px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--tavern-ink);
+}
+
+.tavern-onb-next:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+.tavern-onb-cta {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 2px solid var(--tavern-ink);
+  background: var(--tavern-lantern);
+  color: var(--tavern-card);
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--tavern-ink);
+}
+
+.tavern-onb-cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Miniature product UI — the stage teaches the real tabs. */
+.tavern-onb-mini {
+  border: 2px solid var(--tavern-ink);
+  border-radius: 12px;
+  background: var(--tavern-card);
+  overflow: hidden;
+  box-shadow: 3px 3px 0 rgba(42, 33, 20, 0.35);
+}
+
+.tavern-onb-mtabs {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px 0;
+  border-bottom: 2px solid var(--tavern-ink);
+  font-size: 11px;
+  color: var(--tavern-mute);
+}
+
+.tavern-onb-mtab {
+  padding: 0 0 7px;
+}
+
+.tavern-onb-mtab.is-on {
+  color: var(--tavern-ink);
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 var(--tavern-lantern);
+}
+
+.tavern-onb-mbody {
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.tavern-onb-mtodo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.tavern-onb-mtodo-main {
+  font-weight: 700;
+}
+
+.tavern-onb-mtodo.is-done span:last-child {
+  color: var(--tavern-mute);
+  text-decoration: line-through;
+}
+
+.tavern-onb-mcheck {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--tavern-ink);
+  box-sizing: border-box;
+}
+
+.tavern-onb-mcheck.is-on {
+  background: var(--tavern-lantern);
+  box-shadow: inset 0 0 0 2px var(--tavern-card);
+}
+
+.tavern-onb-mnote {
+  padding: 7px 10px;
+  border: 1px solid var(--tavern-rule);
+  border-radius: 8px;
+  background: var(--tavern-parchment);
+  font-size: 12px;
+}
+
+.tavern-onb-mnote b {
+  display: block;
+  font-size: 12.5px;
+}
+
+.tavern-onb-mnote i {
+  font-style: normal;
+  color: var(--tavern-mute);
+  font-size: 11px;
+}
+
+.tavern-onb-mnote.is-dim {
+  opacity: 0.55;
+}
+
+.tavern-onb-muser {
+  align-self: flex-end;
+  max-width: 88%;
+  background: var(--tavern-wash);
+  border: 2px solid var(--tavern-ink);
+  border-radius: 11px 11px 4px 11px;
+  padding: 5px 9px;
+  font-size: 12px;
+  box-shadow: 2px 2px 0 var(--tavern-ink);
+}
+
+.tavern-onb-mtool {
+  font-size: 11px;
+  color: var(--tavern-mute);
+}
+
+.tavern-onb-mtool i {
+  font-style: normal;
+  color: var(--tavern-lantern);
+  font-family: var(--tavern-px);
+  font-size: 12px;
+}
+
+.tavern-onb-msrc {
+  font-style: normal;
+  color: var(--tavern-mute);
+  font-size: 11px;
+}
+
+.tavern-onb-mappr {
+  border: 2px solid var(--tavern-ink);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: var(--tavern-parchment);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 3px 3px 0 var(--tavern-lantern);
+  font-size: 12px;
+}
+
+.tavern-onb-mappr-t {
+  font-family: var(--tavern-px);
+  font-size: 14px;
+  color: var(--tavern-rust);
+}
+
+.tavern-onb-mabtn {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.tavern-onb-mabtn span {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 11px;
+  border-radius: 8px;
+  border: 2px solid var(--tavern-ink);
+  background: var(--tavern-card);
+}
+
+.tavern-onb-mabtn .is-go {
+  background: var(--tavern-lantern);
+  border-color: var(--tavern-lantern);
+  color: var(--tavern-card);
+}
+
+/* The corner beat: a miniature of the user's desktop, Jeb at home. */
+.tavern-onb-desk {
+  position: relative;
+  flex: 1;
+  min-height: 180px;
+  border: 2px solid var(--tavern-ink);
+  border-radius: 12px;
+  background: linear-gradient(160deg, #8fa07a, #6f8266 70%);
+  overflow: hidden;
+  box-shadow: 3px 3px 0 rgba(42, 33, 20, 0.35);
+}
+
+.tavern-onb-deskwin {
+  position: absolute;
+  left: 18%;
+  top: 14%;
+  width: 70%;
+  height: 56%;
+  background: #fdfbf3;
+  border-radius: 6px;
+  border: 1px solid #d9d1bd;
+}
+
+.tavern-onb-deskwin i {
+  display: block;
+  height: 9px;
+  border-bottom: 1px solid #ede6d4;
+}
+
+.tavern-onb-deskjeb {
+  position: absolute;
+  left: 10px;
+  bottom: 6px;
+}
+
+.tavern-onb-deskhome {
+  position: absolute;
+  left: 82px;
+  bottom: 26px;
+  font-family: var(--tavern-px);
+  font-size: 11px;
+  color: #f3ead3;
+  text-shadow: 1px 1px 0 #2a211466;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tavern-onb-caret,
+  .tavern-onb-writing {
+    animation: none;
+  }
 }
