@@ -62,6 +62,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  type Display,
   dialog,
   globalShortcut,
   ipcMain,
@@ -89,6 +90,19 @@ import {
   parseCompanionForm,
   parseDictationDestination,
 } from "../shared/companion";
+import {
+  createDictationDisplayRequestTracker,
+  invalidateDictationDisplayRequest,
+  resolveCompanionDisplay,
+  resolvePanelCompanionDisplays,
+} from "../shared/companion-position";
+import {
+  findFocusedSwayNode,
+  getSwayFocusedWindowBounds,
+  parseWindowBounds,
+  type SwayNode,
+  type WindowBounds,
+} from "../shared/focused-window";
 import { getDefaultHotkey } from "../shared/hotkey-defaults";
 import type { OpenAppCandidate } from "../shared/open-apps";
 import {
@@ -857,24 +871,6 @@ async function getLinuxFrontmostApp(): Promise<string | null> {
     );
   }
   return getLinuxX11FrontmostApp();
-}
-
-interface SwayNode {
-  focused?: boolean;
-  name?: string;
-  app_id?: string | null;
-  window_properties?: { class?: string };
-  nodes?: SwayNode[];
-  floating_nodes?: SwayNode[];
-}
-
-function findFocusedSwayNode(node: SwayNode): SwayNode | null {
-  if (node.focused) return node;
-  for (const child of [...(node.nodes ?? []), ...(node.floating_nodes ?? [])]) {
-    const hit = findFocusedSwayNode(child);
-    if (hit) return hit;
-  }
-  return null;
 }
 
 async function getSwayFrontmostApp(): Promise<string | null> {
@@ -2888,9 +2884,10 @@ let companionHotRect: PillHotRect | null = null;
 let companionLastRect: PillHotRect | null = null;
 let companionHotPollTimer: NodeJS.Timeout | null = null;
 
-function companionPosition(): { x: number; y: number } {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const { x: waX, y: waY, height } = display.workArea;
+function companionPosition(display?: Display): { x: number; y: number } {
+  const targetDisplay =
+    display ?? screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { x: waX, y: waY, height } = targetDisplay.workArea;
   const info = SPRITES_INFO[companionFormSetting()];
   // Sheet sprites have transparent margin around the drawn body; the anchor
   // hangs the window off the work area so the BODY touches the corner.
@@ -2909,6 +2906,112 @@ function companionPosition(): { x: number; y: number } {
     x: waX,
     y: waY + height - info.windowSize,
   };
+}
+
+async function getNativeFocusedWindowBounds(
+  binaryName: string,
+  args: string[] = [String(process.pid)],
+): Promise<WindowBounds | null> {
+  const binary = getNativeBinaryPath(binaryName);
+  if (!binary) return null;
+  try {
+    const out = await execAsync(binary, args, 800);
+    const bounds = parseWindowBounds(out);
+    return bounds?.pid === process.pid ? null : bounds;
+  } catch {
+    return null;
+  }
+}
+
+async function getSwayExternalWindowBounds(): Promise<WindowBounds | null> {
+  try {
+    const out = await execAsync("swaymsg", ["-t", "get_tree"], 800);
+    return getSwayFocusedWindowBounds(JSON.parse(out) as SwayNode, process.pid);
+  } catch {
+    return null;
+  }
+}
+
+function focusedWindowBoundsToDip(bounds: WindowBounds): WindowBounds {
+  if (process.platform === "win32") {
+    const rect = screen.screenToDipRect(null, bounds);
+    return {
+      ...rect,
+      ...(bounds.pid === undefined ? {} : { pid: bounds.pid }),
+    };
+  }
+  if (process.platform === "linux" && !isWaylandSession()) {
+    const topLeft = screen.screenToDipPoint(bounds);
+    const bottomRight = screen.screenToDipPoint({
+      x: bounds.x + bounds.width,
+      y: bounds.y + bounds.height,
+    });
+    return {
+      x: topLeft.x,
+      y: topLeft.y,
+      width: bottomRight.x - topLeft.x,
+      height: bottomRight.y - topLeft.y,
+      ...(bounds.pid === undefined ? {} : { pid: bounds.pid }),
+    };
+  }
+  return bounds;
+}
+
+async function getFocusedExternalDisplay(): Promise<Display | null> {
+  const bounds = await (() => {
+    switch (process.platform) {
+      case "darwin":
+        return getNativeFocusedWindowBounds("macos-ax", [
+          "window",
+          String(process.pid),
+        ]);
+      case "win32":
+        return getNativeFocusedWindowBounds("windows-window-bounds");
+      case "linux":
+        return isWaylandSession()
+          ? getSwayExternalWindowBounds()
+          : getNativeFocusedWindowBounds("linux-window-bounds");
+      default:
+        return Promise.resolve(null);
+    }
+  })();
+  return bounds
+    ? screen.getDisplayMatching(focusedWindowBoundsToDip(bounds))
+    : null;
+}
+
+const dictationDisplayRequests = createDictationDisplayRequestTracker();
+
+/**
+ * Associate the visible companion with the target captured for this dictation
+ * session. Cursor is only an immediate fallback; an Accessibility lookup moves
+ * it to the external app's display without following later mouse movement.
+ */
+function anchorCompanionForDictation(): void {
+  const win = companionWindow;
+  if (!win || win.isDestroyed()) return;
+
+  const request = dictationDisplayRequests.begin();
+  const cursorDisplay = screen.getDisplayNearestPoint(
+    screen.getCursorScreenPoint(),
+  );
+  positionCompanionOnDisplay(resolveCompanionDisplay(null, cursorDisplay));
+
+  void getFocusedExternalDisplay().then((focusedDisplay) => {
+    if (!dictationDisplayRequests.isCurrent(request)) return;
+    if (!companionWindow || companionWindow.isDestroyed()) return;
+    positionCompanionOnDisplay(
+      resolveCompanionDisplay(focusedDisplay, cursorDisplay),
+    );
+  });
+}
+
+function positionCompanionOnDisplay(display: Display): void {
+  const win = companionWindow;
+  if (!win || win.isDestroyed()) return;
+  const size = SPRITES_INFO[companionFormSetting()].windowSize;
+  const { x, y } = companionPosition(display);
+  win.setBounds({ x, y, width: size, height: size });
 }
 
 function stopCompanionHotPoll(): void {
@@ -3274,8 +3377,11 @@ let panelBusy = false;
 const PANEL_HIDE_GRACE_MS = 420;
 const PANEL_HOVER_PAD = 24;
 
-function panelPosition(): { x: number; y: number; height: number } {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+function panelPosition(display: Display): {
+  x: number;
+  y: number;
+  height: number;
+} {
   const { x: waX, y: waY, width, height } = display.workArea;
   const x = Math.min(waX + 16, waX + Math.max(0, width - PANEL_WIDTH - 16));
   const available = height - COMPANION_CLEARANCE - PANEL_GAP;
@@ -3286,7 +3392,8 @@ function panelPosition(): { x: number; y: number; height: number } {
 
 function createPanelWindow(): void {
   if (panelWindow && !panelWindow.isDestroyed()) return;
-  const { x, y, height } = panelPosition();
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { x, y, height } = panelPosition(display);
 
   panelWindow = new BrowserWindow({
     width: PANEL_WIDTH,
@@ -3342,8 +3449,15 @@ function openPanel(opts: { focusComposer?: boolean } = {}): void {
   createPanelWindow();
   const win = panelWindow;
   if (!win || win.isDestroyed()) return;
-  const { x, y, height } = panelPosition();
+  invalidateDictationDisplayRequest(dictationDisplayRequests);
+  const cursorDisplay = screen.getDisplayNearestPoint(
+    screen.getCursorScreenPoint(),
+  );
+  const { panelDisplay, companionDisplay } =
+    resolvePanelCompanionDisplays(cursorDisplay);
+  const { x, y, height } = panelPosition(panelDisplay);
   win.setBounds({ x, y, width: PANEL_WIDTH, height });
+  positionCompanionOnDisplay(companionDisplay);
   if (opts.focusComposer) {
     win.show();
     win.focus();
@@ -3576,6 +3690,7 @@ function sendHotkeyDown(): void {
     void showRequiredPermissionDialog(missingPermission);
     return;
   }
+  anchorCompanionForDictation();
   relayServerEvent({ type: FreestyleEventType.RecordingStarted });
   for (const win of dictationTargets()) {
     win.webContents.send("hotkey:down");
