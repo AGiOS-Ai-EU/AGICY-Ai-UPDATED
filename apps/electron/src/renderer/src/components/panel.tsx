@@ -16,10 +16,13 @@ import {
 } from "@renderer/lib/agent-tools";
 import { apiFetch, initApiBase } from "@renderer/lib/api";
 import { CloudAuthProvider, useCloudAuth } from "@renderer/lib/auth-context";
+import { composerAction } from "@renderer/lib/composer-action";
 import { seedMessageFor, starterPrompts } from "@renderer/lib/onboarding-core";
 import { createQueryClient } from "@renderer/lib/query";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
 import { useSpriteEmitter } from "@renderer/lib/sprite-emitter";
+import { highlightToolJson, toolJson } from "@renderer/lib/tool-json";
+import { toolPresentation } from "@renderer/lib/tool-presentation";
 import { SpriteBadge } from "@renderer/sprites/badge";
 import { type CompanionForm, DEFAULT_COMPANION_FORM } from "@shared/companion";
 import { PANEL_TABS, type PanelTab } from "@shared/panel";
@@ -48,43 +51,40 @@ const TAB_PLACEHOLDER: Record<PanelTab, string> = {
   notes: "No notes yet.",
 };
 
-const TOOL_LABELS: Record<string, string> = {
-  "tool-current_time": "checked the time",
-  "tool-web_search": "searched the web",
-  "tool-image_search": "searched for images",
-  "tool-get_context": "looked at your screen",
-  "tool-read_document": "read the document",
-  "tool-get_clipboard": "read your clipboard",
-  "tool-set_clipboard": "updated your clipboard",
-  "tool-paste": "pasted at your cursor",
-  "tool-Bash": "ran a command",
-  "tool-Read": "read a file",
-  "tool-Write": "wrote a file",
-  "tool-Edit": "edited a file",
-  "tool-Glob": "listed files",
-  "tool-Grep": "searched files",
-  "tool-brain_read": "recalled from its brain",
-  "tool-brain_write": "wrote to its brain",
-  "tool-brain_edit": "updated its brain",
-  "tool-brain_glob": "browsed its brain",
-  "tool-brain_search": "searched its brain",
-  "tool-brain_delete": "forgot something",
-  "tool-emote": "emoted",
-};
+function ShikiJson({ value }: { value: unknown }): React.JSX.Element {
+  const source = toolJson(value);
+  const [html, setHtml] = useState<string | null>(null);
 
-function toolLabel(partType: string): string {
-  return (
-    TOOL_LABELS[partType] ?? partType.replace(/^tool-/, "").replace(/_/g, " ")
-  );
-}
+  useEffect(() => {
+    let active = true;
+    setHtml(null);
+    void highlightToolJson(source)
+      .then((highlighted) => {
+        if (active) setHtml(highlighted);
+      })
+      .catch(() => {
+        // A readable, unhighlighted JSON block remains available on failure.
+      });
+    return () => {
+      active = false;
+    };
+  }, [source]);
 
-function toolJson(value: unknown): string {
-  try {
-    const dump = JSON.stringify(value, null, 1) ?? "";
-    return dump.length > 2_000 ? `${dump.slice(0, 2_000)}\n…` : dump;
-  } catch {
-    return String(value);
+  if (!html) {
+    return (
+      <pre className="tavern-tool-code">
+        <code>{source}</code>
+      </pre>
+    );
   }
+
+  return (
+    <div
+      className="tavern-tool-code"
+      // Shiki renders escaped source code; tool-json.test.ts guards this contract.
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 }
 
 function ToolChip({
@@ -97,72 +97,267 @@ function ToolChip({
   output: unknown;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const presentation = toolPresentation(partType);
+  const hasInput =
+    input !== undefined &&
+    input !== null &&
+    (typeof input !== "object" || Object.keys(input).length > 0);
+  const hasOutput =
+    output !== undefined &&
+    output !== null &&
+    (typeof output !== "object" ||
+      Object.keys(output).some((key) => key !== "ok"));
+  const canExpand = hasInput || hasOutput;
+  const activity = (
+    <>
+      <span className="tavern-tool-mark" aria-hidden="true">
+        ◆
+      </span>
+      <span className="tavern-tool-copy">
+        <strong>{presentation.title}</strong>
+        {presentation.detail ? <small>{presentation.detail}</small> : null}
+      </span>
+      <span className="tavern-tool-state">
+        <i aria-hidden="true" /> Done
+      </span>
+      {canExpand ? (
+        <span className="tavern-tool-caret" aria-hidden="true">
+          {open ? "▾" : "▸"}
+        </span>
+      ) : null}
+    </>
+  );
+
+  if (!canExpand) {
+    return <div className="tavern-tool tavern-tool-static">{activity}</div>;
+  }
+
   return (
     <div className="tavern-tool">
       <button
         type="button"
-        className="tavern-msg-tool tavern-tool-toggle"
+        className="tavern-tool-toggle"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
       >
-        <i className="tavern-tool-spark">◆</i> {toolLabel(partType)}{" "}
-        {open ? "▾" : "▸"}
+        {activity}
       </button>
       {open ? (
         <div className="tavern-tool-detail">
-          {input !== undefined && Object.keys(input as object).length > 0 ? (
+          {hasInput ? (
             <>
-              <span className="tavern-tool-heading">Input</span>
-              <pre className="tavern-tool-block">{toolJson(input)}</pre>
+              <span className="tavern-tool-heading">Request</span>
+              <ShikiJson value={input} />
             </>
           ) : null}
-          <span className="tavern-tool-heading">Output</span>
-          <pre className="tavern-tool-block">{toolJson(output)}</pre>
+          {hasOutput ? (
+            <>
+              <span className="tavern-tool-heading">Result</span>
+              <ShikiJson value={output} />
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-function ChatMessage({ message }: { message: UIMessage }): React.JSX.Element {
+function isPlaceholderText(text: string): boolean {
+  return text.trim() === "...";
+}
+
+function messageText(message: UIMessage): string {
+  return message.parts
+    .flatMap((part) =>
+      part.type === "text" && !isPlaceholderText(part.text) && part.text
+        ? [part.text]
+        : [],
+    )
+    .join("\n\n");
+}
+
+function MessageActions({
+  role,
+  copied,
+  disabled,
+  onCopy,
+  onEdit,
+  onRegenerate,
+}: {
+  role: UIMessage["role"];
+  copied: boolean;
+  disabled: boolean;
+  onCopy: () => void;
+  onEdit?: () => void;
+  onRegenerate?: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="tavern-msg-actions">
+      <button
+        type="button"
+        className={`tavern-msg-action${copied ? " is-copied" : ""}`}
+        onClick={onCopy}
+        aria-label={copied ? "Message copied" : "Copy message"}
+        title={copied ? "Copied" : "Copy message"}
+      >
+        <span aria-hidden="true">{copied ? "✓" : "⧉"}</span>
+      </button>
+      {role === "user" && onEdit ? (
+        <button
+          type="button"
+          className="tavern-msg-action"
+          disabled={disabled}
+          onClick={onEdit}
+          aria-label="Edit and resend message"
+          title="Edit and resend"
+        >
+          <span aria-hidden="true">✎</span>
+        </button>
+      ) : null}
+      {role === "assistant" && onRegenerate ? (
+        <button
+          type="button"
+          className="tavern-msg-action"
+          disabled={disabled}
+          onClick={onRegenerate}
+          aria-label="Regenerate response"
+          title="Regenerate response"
+        >
+          <span aria-hidden="true">↻</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ChatMessage({
+  message,
+  copied,
+  disabled,
+  editing,
+  editDraft,
+  onCopy,
+  onEdit,
+  onEditDraftChange,
+  onCancelEdit,
+  onResendEdit,
+  onRegenerate,
+}: {
+  message: UIMessage;
+  copied: boolean;
+  disabled: boolean;
+  editing: boolean;
+  editDraft: string;
+  onCopy: () => void;
+  onEdit: () => void;
+  onEditDraftChange: (text: string) => void;
+  onCancelEdit: () => void;
+  onResendEdit: () => void;
+  onRegenerate: () => void;
+}): React.JSX.Element {
+  const text = messageText(message);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing) editInputRef.current?.focus();
+  }, [editing]);
+
   if (message.role === "user") {
-    const text = message.parts
-      .filter((p) => p.type === "text")
-      .map((p) => p.text)
-      .join("");
-    return <div className="tavern-msg-user">{text}</div>;
+    return (
+      <div className="tavern-msg tavern-msg-user-wrap">
+        {editing ? (
+          <div className="tavern-msg-edit">
+            <textarea
+              className="tavern-msg-edit-input"
+              value={editDraft}
+              rows={2}
+              ref={editInputRef}
+              aria-label="Edit message"
+              onMouseDown={() => window.api.panelRequestFocus()}
+              onChange={(event) => onEditDraftChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  event.preventDefault();
+                  onResendEdit();
+                }
+              }}
+            />
+            <div className="tavern-msg-edit-actions">
+              <button type="button" onClick={onCancelEdit}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="is-primary"
+                disabled={!editDraft.trim() || disabled}
+                onClick={onResendEdit}
+              >
+                Send again
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="tavern-msg-user">{text}</div>
+            <MessageActions
+              role={message.role}
+              copied={copied}
+              disabled={disabled}
+              onCopy={onCopy}
+              onEdit={onEdit}
+            />
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
-    <>
-      {message.parts.map((part, i) => {
-        if (part.type === "text") {
-          if (!part.text) return null;
-          return (
-            <div key={`${message.id}-${i}`} className="tavern-msg-assistant">
-              <Markdown text={part.text} />
-            </div>
-          );
-        }
-        if (part.type.startsWith("tool-")) {
-          const tool = part as {
-            state?: string;
-            input?: unknown;
-            output?: { ok?: boolean; reason?: string };
-          };
-          if (tool.state !== "output-available") return null;
-          if (tool.output?.ok === false) return null;
-          return (
-            <ToolChip
-              key={`${message.id}-${i}`}
-              partType={part.type}
-              input={tool.input}
-              output={tool.output}
-            />
-          );
-        }
-        return null;
-      })}
-    </>
+    <div className="tavern-msg tavern-msg-assistant-wrap">
+      <div className="tavern-msg-assistant-content">
+        {message.parts.map((part, i) => {
+          if (part.type === "text") {
+            if (!part.text || isPlaceholderText(part.text)) return null;
+            return (
+              <div key={`${message.id}-${i}`} className="tavern-msg-assistant">
+                <Markdown text={part.text} />
+              </div>
+            );
+          }
+          if (part.type.startsWith("tool-")) {
+            const tool = part as {
+              state?: string;
+              input?: unknown;
+              output?: { ok?: boolean; reason?: string };
+            };
+            if (tool.state !== "output-available") return null;
+            if (tool.output?.ok === false) return null;
+            return (
+              <ToolChip
+                key={`${message.id}-${i}`}
+                partType={part.type}
+                input={tool.input}
+                output={tool.output}
+              />
+            );
+          }
+          return null;
+        })}
+      </div>
+      {text ? (
+        <MessageActions
+          role={message.role}
+          copied={copied}
+          disabled={disabled}
+          onCopy={onCopy}
+          onRegenerate={onRegenerate}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -432,6 +627,9 @@ function PanelInner({
 
   const [notice, setNotice] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<AgentToolCall[]>([]);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const dictationBaseRef = useRef<string | null>(null);
@@ -450,58 +648,56 @@ function PanelInner({
     [thread.id],
   );
 
-  const { messages, sendMessage, status, addToolOutput } = useChat({
-    id: thread.id,
-    messages: thread.messages,
-    transport,
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    onFinish: ({ messages: finished }) => {
-      if (finished.length === 0) return;
-      const last = finished[finished.length - 1];
-      if (last?.role !== "assistant") return;
-      const text = last.parts
-        .filter((p) => p.type === "text")
-        .map((p) => (p as { text: string }).text)
-        .join(" ")
-        .trim();
-      if (!text) return;
-      window.api.agentTurnFinished({
-        threadId: thread.id,
-        excerpt: text.slice(0, 140),
-      });
-    },
-    onToolCall: async ({ toolCall }) => {
-      const call: AgentToolCall = {
-        toolName: toolCall.toolName,
-        toolCallId: toolCall.toolCallId,
-        input: toolCall.input,
-      };
-      const tier = await agentToolTier(call);
-      if (tier === "confirmed") {
-        setApprovals((prev) => [...prev, call]);
-        return;
-      }
-      const output =
-        tier === "free"
-          ? await executeAgentTool(call)
-          : { ok: false, reason: `unknown tool: ${call.toolName}` };
-      addToolOutput({
-        tool: toolCall.toolName,
-        toolCallId: toolCall.toolCallId,
-        output,
-      });
-    },
-    onError: (err) => {
-      setNotice(
-        err.message.includes("cloud_auth_required") ||
-          err.message.includes("401")
-          ? "Sign in to Freestyle Cloud to chat."
-          : err.message,
-      );
-    },
-  });
+  const { messages, sendMessage, regenerate, stop, status, addToolOutput } =
+    useChat({
+      id: thread.id,
+      messages: thread.messages,
+      transport,
+      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+      onFinish: ({ messages: finished }) => {
+        if (finished.length === 0) return;
+        const last = finished[finished.length - 1];
+        if (last?.role !== "assistant") return;
+        const text = messageText(last);
+        if (!text) return;
+        window.api.agentTurnFinished({
+          threadId: thread.id,
+          excerpt: text.slice(0, 140),
+        });
+      },
+      onToolCall: async ({ toolCall }) => {
+        const call: AgentToolCall = {
+          toolName: toolCall.toolName,
+          toolCallId: toolCall.toolCallId,
+          input: toolCall.input,
+        };
+        const tier = await agentToolTier(call);
+        if (tier === "confirmed") {
+          setApprovals((prev) => [...prev, call]);
+          return;
+        }
+        const output =
+          tier === "free"
+            ? await executeAgentTool(call, thread.id)
+            : { ok: false, reason: `unknown tool: ${call.toolName}` };
+        addToolOutput({
+          tool: toolCall.toolName,
+          toolCallId: toolCall.toolCallId,
+          output,
+        });
+      },
+      onError: (err) => {
+        setNotice(
+          err.message.includes("cloud_auth_required") ||
+            err.message.includes("401")
+            ? "Sign in to Freestyle Cloud to chat."
+            : err.message,
+        );
+      },
+    });
 
   const busy = status === "submitted" || status === "streaming";
+  const action = composerAction(status);
 
   useSpriteEmitter(messages, approvals.length, busy);
 
@@ -513,12 +709,70 @@ function PanelInner({
     void sendMessage({ text });
   };
 
+  const stopGeneration = (): void => {
+    if (!busy) return;
+    stop();
+  };
+
+  const copyMessage = (message: UIMessage): void => {
+    const text = messageText(message);
+    if (!text) return;
+    void window.api
+      .remixSetClipboard(text)
+      .then((result) => {
+        if (!result.ok) throw new Error("copy-failed");
+        setCopiedMessageId(message.id);
+        window.setTimeout(
+          () =>
+            setCopiedMessageId((current) =>
+              current === message.id ? null : current,
+            ),
+          1_500,
+        );
+      })
+      .catch(() => setNotice("Could not copy that message."));
+  };
+
+  const startEditingMessage = (message: UIMessage): void => {
+    const text = messageText(message);
+    if (message.role !== "user" || !text || busy || approvals.length > 0)
+      return;
+    setEditingMessageId(message.id);
+    setEditDraft(text);
+  };
+
+  const cancelEditingMessage = (): void => {
+    setEditingMessageId(null);
+    setEditDraft("");
+  };
+
+  const resendEditedMessage = (): void => {
+    const text = editDraft.trim();
+    if (!editingMessageId || !text || busy || approvals.length > 0) return;
+    const messageId = editingMessageId;
+    cancelEditingMessage();
+    setNotice(null);
+    void sendMessage({ text, messageId }).catch(() => {
+      setNotice("Could not resend that message.");
+    });
+  };
+
+  const regenerateMessage = (message: UIMessage): void => {
+    if (message.role !== "assistant" || busy || approvals.length > 0) return;
+    setNotice(null);
+    void regenerate({ messageId: message.id }).catch(() => {
+      setNotice("Could not regenerate that response.");
+    });
+  };
+
   const resolveApproval = (call: AgentToolCall, allowed: boolean): void => {
     setApprovals((prev) =>
       prev.filter((a) => a.toolCallId !== call.toolCallId),
     );
     void (async () => {
-      const output = allowed ? await executeAgentTool(call) : DECLINED_OUTPUT;
+      const output = allowed
+        ? await executeAgentTool(call, thread.id)
+        : DECLINED_OUTPUT;
       addToolOutput({
         tool: call.toolName,
         toolCallId: call.toolCallId,
@@ -739,7 +993,20 @@ function PanelInner({
           ) : showChat ? (
             <>
               {messages.map((m) => (
-                <ChatMessage key={m.id} message={m} />
+                <ChatMessage
+                  key={m.id}
+                  message={m}
+                  copied={copiedMessageId === m.id}
+                  disabled={pinned}
+                  editing={editingMessageId === m.id}
+                  editDraft={editDraft}
+                  onCopy={() => copyMessage(m)}
+                  onEdit={() => startEditingMessage(m)}
+                  onEditDraftChange={setEditDraft}
+                  onCancelEdit={cancelEditingMessage}
+                  onResendEdit={resendEditedMessage}
+                  onRegenerate={() => regenerateMessage(m)}
+                />
               ))}
               {approvals.map((call) => (
                 <div key={call.toolCallId} className="tavern-approve">
@@ -824,11 +1091,12 @@ function PanelInner({
             />
             <button
               type="button"
-              className="tavern-btn tavern-btn-send"
-              aria-label="Send"
-              onClick={send}
+              className={`tavern-btn tavern-btn-send${action === "stop" ? " is-stop" : ""}`}
+              aria-label={action === "stop" ? "Stop generating" : "Send"}
+              title={action === "stop" ? "Stop generating" : "Send"}
+              onClick={action === "stop" ? stopGeneration : send}
             >
-              ↑
+              {action === "stop" ? "■" : "↑"}
             </button>
           </div>
         ) : null}

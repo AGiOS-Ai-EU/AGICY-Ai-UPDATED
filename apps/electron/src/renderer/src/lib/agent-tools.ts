@@ -1,4 +1,11 @@
 import { apiFetch } from "@renderer/lib/api";
+import {
+  approveConnectorAction,
+  connectorToolActionName,
+  executeConnectorAction,
+  isConnectorToolName,
+  isReadOnlyConnectorToolName,
+} from "@renderer/lib/connectors";
 import { parseSpriteEmotion } from "@shared/sprite-events";
 
 export type AgentToolTier = "free" | "confirmed";
@@ -41,6 +48,8 @@ export async function agentToolTier(
 ): Promise<AgentToolTier | null> {
   const input = (call.input ?? {}) as Record<string, unknown>;
   void input;
+  if (isConnectorToolName(call.toolName))
+    return isReadOnlyConnectorToolName(call.toolName) ? "free" : "confirmed";
   switch (call.toolName) {
     case "current_time":
     case "get_context":
@@ -54,10 +63,11 @@ export async function agentToolTier(
     case "Bash":
       return bashIsReadOnly(str(input, "command")) ? "free" : "confirmed";
     case "Read":
-    case "Write":
-    case "Edit":
     case "Glob":
     case "Grep":
+      return "free";
+    case "Write":
+    case "Edit":
       return "confirmed";
     default:
       return null;
@@ -66,6 +76,12 @@ export async function agentToolTier(
 
 export function describeAgentAction(call: AgentToolCall): string {
   const input = (call.input ?? {}) as Record<string, unknown>;
+  if (isConnectorToolName(call.toolName)) {
+    const action =
+      connectorToolActionName(call.toolName).replace(/_/g, " ").toLowerCase() ||
+      "connected-app action";
+    return `Use a connected app to ${action}.`;
+  }
   switch (call.toolName) {
     case "set_clipboard": {
       const text = str(input, "text");
@@ -112,6 +128,7 @@ async function runOsTool(
 
 export async function executeAgentTool(
   call: AgentToolCall,
+  threadId?: string,
 ): Promise<Record<string, unknown>> {
   const input = (call.input ?? {}) as Record<string, unknown>;
   const badArgs = (expected: string): Record<string, unknown> => ({
@@ -122,6 +139,20 @@ export async function executeAgentTool(
   });
 
   try {
+    if (isConnectorToolName(call.toolName)) {
+      if (!threadId) return { ok: false, reason: "missing-thread" };
+      const approval = await approveConnectorAction({
+        threadId,
+        toolName: call.toolName,
+        input,
+      });
+      return await executeConnectorAction({
+        approvalToken: approval.approvalToken,
+        threadId,
+        toolName: call.toolName,
+        input,
+      });
+    }
     switch (call.toolName) {
       case "current_time": {
         const now = new Date();
