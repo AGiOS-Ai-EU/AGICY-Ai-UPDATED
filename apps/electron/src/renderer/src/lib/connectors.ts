@@ -17,16 +17,47 @@ export type ConnectorConnection = {
   statusReason: string | null;
 };
 
+export type ConnectorWorkflow = { name: string; prompt: string };
+
+export type ConnectorAuthMode = "oauth" | "api_key";
+
+export type ConnectorAuthField = {
+  name: string;
+  displayName: string;
+  description?: string;
+  required: boolean;
+};
+
 export type ConnectorCatalogItem = {
   slug: string;
   name: string;
   logo?: string;
+  description?: string;
+  categories?: string[];
+  toolsCount?: number;
+  triggersCount?: number;
+  appUrl?: string;
+  authMode?: ConnectorAuthMode;
+  authFields?: ConnectorAuthField[];
+  workflows?: ConnectorWorkflow[];
   connection: ConnectorConnection | null;
 };
 
 export type ConnectorCatalogPage = {
   connectors: ConnectorCatalogItem[];
   nextCursor: string | null;
+  totalItems?: number | null;
+};
+
+export type ConnectorToolSummary = {
+  name: string;
+  description?: string;
+  readOnly: boolean;
+};
+
+export type ConnectorDetails = ConnectorCatalogItem & {
+  tools: ConnectorToolSummary[];
+  workflows: ConnectorWorkflow[];
 };
 
 export function isConnectorToolName(name: string): boolean {
@@ -76,14 +107,43 @@ async function responseJson<T>(response: Response): Promise<T> {
 export async function listConnectorCatalog({
   cursor,
   limit = 24,
+  search,
 }: {
   cursor?: string;
   limit?: number;
+  search?: string;
 } = {}): Promise<ConnectorCatalogPage> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set("cursor", cursor);
+  if (search) params.set("search", search);
   return responseJson<ConnectorCatalogPage>(
     await apiFetch(`/api/connectors/catalog?${params.toString()}`),
+  );
+}
+
+export async function listConnectorConnections(): Promise<
+  ConnectorConnection[]
+> {
+  const data = await responseJson<{ connections: ConnectorConnection[] }>(
+    await apiFetch("/api/connectors"),
+  );
+  return data.connections;
+}
+
+export async function listSuggestedConnectors(): Promise<
+  ConnectorCatalogItem[]
+> {
+  const data = await responseJson<{ connectors: ConnectorCatalogItem[] }>(
+    await apiFetch("/api/connectors/suggested"),
+  );
+  return data.connectors;
+}
+
+export async function getConnectorDetails(
+  toolkit: string,
+): Promise<ConnectorDetails> {
+  return responseJson<ConnectorDetails>(
+    await apiFetch(`/api/connectors/${encodeURIComponent(toolkit)}/details`),
   );
 }
 
@@ -96,6 +156,22 @@ export async function connectToolkit(toolkit: string): Promise<void> {
   const opened = await window.api.openExternal(data.connectUrl);
   if (!opened)
     throw new Error("Could not open your browser to connect this app.");
+}
+
+/** API-key apps skip the browser: the key goes straight to the cloud, which
+ * verifies it with Composio and returns the now-active connection. */
+export async function connectToolkitWithCredentials(
+  toolkit: string,
+  credentials: Record<string, string>,
+): Promise<ConnectorConnection | null> {
+  const data = await responseJson<{ connection: ConnectorConnection | null }>(
+    await apiFetch(`/api/connectors/${encodeURIComponent(toolkit)}/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credentials }),
+    }),
+  );
+  return data.connection;
 }
 
 export async function connectorStatus(
