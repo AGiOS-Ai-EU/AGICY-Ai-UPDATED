@@ -26,7 +26,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "3d-force-graph": "^1.80.0",
     "@ai-sdk/react": "^3.0.44",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
@@ -41,9 +40,7 @@
     "hono": "^4.12.22",
     "react-markdown": "^9.1.0",
     "remark-gfm": "^4.0.0",
-    "shiki": "^3.23.0",
-    "three": "0.185.1",
-    "three-spritetext": "^1.10.0"
+    "shiki": "^3.23.0"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
@@ -51,7 +48,6 @@
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^5.1.1",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
