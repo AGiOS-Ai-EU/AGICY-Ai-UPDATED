@@ -274,7 +274,7 @@ export function beatLines(beat: BeatId, ctx: BeatContext): BeatScene {
     case "name":
       return {
         lines: [
-          "I'm Jeb. Retired samurai, current corner of your screen. My job is simple: nothing important slips past you.",
+          "I'm Jeb. Retired samurai, currently I live in the corner of your screen. My job is simple, to make sure nothing important slips past you.",
           "First, a name. I don't take work from strangers.",
         ],
         hint: "Whatever you'd actually answer to.",

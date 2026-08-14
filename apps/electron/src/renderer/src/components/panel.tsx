@@ -486,7 +486,8 @@ function SignInGate(): React.JSX.Element {
           </span>
         </div>
         <h1 className="tavern-gate-heading">
-          welcome <span className="tavern-gate-accent">back.</span>
+          never forget{" "}
+          <span className="tavern-gate-accent">important things</span> again.
         </h1>
         <p className="tavern-gate-sub">Sign in to your Freestyle account</p>
         {auth.signingIn ? (
