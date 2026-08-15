@@ -1138,75 +1138,54 @@
   cursor: default;
 }
 
-.tavern-strip {
+.tavern-sched-actions {
   display: flex;
-  align-items: stretch;
-  gap: 0;
-  margin: 0 12px 6px;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tavern-sched-action {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 6px;
   border: 1px solid var(--tavern-rule);
-  border-radius: 9px;
-  background: var(--tavern-card);
-  overflow: hidden;
-}
-
-.tavern-strip-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 10px;
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
   background: none;
-  border: none;
-  color: var(--tavern-ink);
-  cursor: pointer;
-}
-
-.tavern-strip-main:hover:not(:disabled) {
-  background: var(--tavern-wash);
-}
-
-.tavern-strip-main:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.tavern-strip-mark {
-  color: var(--tavern-lantern);
-  flex-shrink: 0;
-  font-size: 10px;
-}
-
-.tavern-strip-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tavern-strip-x {
-  flex-shrink: 0;
-  padding: 0 9px;
-  font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  background: none;
-  border: none;
-  border-left: 1px solid var(--tavern-rule);
   color: var(--tavern-mute);
   cursor: pointer;
 }
 
-.tavern-strip-x:hover {
+.tavern-sched-action:hover:not(:disabled) {
   color: var(--tavern-ink);
+  border-color: var(--tavern-ink);
 }
 
-.tavern-strip-main:focus-visible,
-.tavern-strip-x:focus-visible {
+.tavern-sched-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tavern-sched-action.is-danger {
+  color: var(--tavern-rust);
+  border-color: var(--tavern-rust);
+}
+
+.tavern-sched-action:focus-visible,
+.tavern-notif.is-openable:focus-visible {
   outline: 2px solid var(--tavern-lantern);
-  outline-offset: -2px;
+  outline-offset: 2px;
+}
+
+.tavern-notif.is-openable {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tavern-notif.is-openable:hover {
+  border-color: var(--tavern-ink);
 }
 
 .tavern-thread-filter {

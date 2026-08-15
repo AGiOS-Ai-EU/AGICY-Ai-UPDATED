@@ -11,7 +11,6 @@ import { OnboardingGate, useOnboarding } from "@renderer/components/onboarding";
 import { OpenerCards } from "@renderer/components/opener-cards";
 import { SettingsView } from "@renderer/components/settings-view";
 import { Spark } from "@renderer/components/spark";
-import { SuggestionStrip } from "@renderer/components/suggestion-strip";
 import { TodosTab } from "@renderer/components/todos-tab";
 import {
   type AgentToolCall,
@@ -486,6 +485,21 @@ function dateGroup(ts: number): string {
       ? { month: "long", day: "numeric" }
       : { month: "long", day: "numeric", year: "numeric" };
   return date.toLocaleDateString(undefined, opts);
+}
+
+async function openThreadById(threadId: string): Promise<ThreadState | null> {
+  try {
+    const res = await apiFetch(`/api/agent/thread/${threadId}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      thread: { id: string; messages: UIMessage[] } | null;
+    };
+    return data.thread
+      ? { id: data.thread.id, messages: data.thread.messages }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function newThread(): ThreadState {
@@ -1107,6 +1121,13 @@ function PanelInner({
           {settingsOpen ? (
             <SettingsView
               onClose={() => setSettingsOpen(false)}
+              onOpenThread={(threadId) => {
+                setSettingsOpen(false);
+                setTab("chat");
+                void openThreadById(threadId).then((picked) => {
+                  if (picked) onSwitchThread(picked);
+                });
+              }}
               onThreadsCleared={() => onSwitchThread(newThread())}
               onReplayIntro={() => {
                 setSettingsOpen(false);
@@ -1211,47 +1232,36 @@ function PanelInner({
         </div>
 
         {chatActive && !settingsOpen ? (
-          <>
-            {showChat && !pinned ? (
-              <SuggestionStrip
-                busy={busy}
-                onPrompt={(text) => {
-                  setNotice(null);
-                  void sendMessage({ text });
-                }}
-              />
-            ) : null}
-            <div className="tavern-composer">
-              <textarea
-                id="panel-composer"
-                className="tavern-input"
-                value={draft}
-                rows={1}
-                placeholder="Ask anything"
-                onMouseDown={() => window.api.panelRequestFocus()}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    !e.shiftKey &&
-                    !e.nativeEvent.isComposing
-                  ) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className={`tavern-btn tavern-btn-send${action === "stop" ? " is-stop" : ""}`}
-                aria-label={action === "stop" ? "Stop generating" : "Send"}
-                title={action === "stop" ? "Stop generating" : "Send"}
-                onClick={action === "stop" ? stopGeneration : send}
-              >
-                {action === "stop" ? "■" : "↑"}
-              </button>
-            </div>
-          </>
+          <div className="tavern-composer">
+            <textarea
+              id="panel-composer"
+              className="tavern-input"
+              value={draft}
+              rows={1}
+              placeholder="Ask anything"
+              onMouseDown={() => window.api.panelRequestFocus()}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing
+                ) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className={`tavern-btn tavern-btn-send${action === "stop" ? " is-stop" : ""}`}
+              aria-label={action === "stop" ? "Stop generating" : "Send"}
+              title={action === "stop" ? "Stop generating" : "Send"}
+              onClick={action === "stop" ? stopGeneration : send}
+            >
+              {action === "stop" ? "■" : "↑"}
+            </button>
+          </div>
         ) : null}
       </div>
       <PanelTail />
