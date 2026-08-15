@@ -11,6 +11,7 @@ import { OnboardingGate, useOnboarding } from "@renderer/components/onboarding";
 import { OpenerCards } from "@renderer/components/opener-cards";
 import { SettingsView } from "@renderer/components/settings-view";
 import { Spark } from "@renderer/components/spark";
+import { SuggestionStrip } from "@renderer/components/suggestion-strip";
 import { TodosTab } from "@renderer/components/todos-tab";
 import {
   type AgentToolCall,
@@ -44,6 +45,7 @@ import {
 import { highlightToolJson, toolJson } from "@renderer/lib/tool-json";
 import {
   connectorToolkitSlug,
+  type ToolPhase,
   toolPresentation,
 } from "@renderer/lib/tool-presentation";
 import { SpriteBadge } from "@renderer/sprites/badge";
@@ -151,13 +153,15 @@ function ToolChip({
   partType,
   input,
   output,
+  phase = "done",
 }: {
   partType: string;
   input: unknown;
   output: unknown;
+  phase?: ToolPhase;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const presentation = toolPresentation(partType);
+  const presentation = toolPresentation(partType, phase);
   const hasInput =
     input !== undefined &&
     input !== null &&
@@ -167,7 +171,7 @@ function ToolChip({
     output !== null &&
     (typeof output !== "object" ||
       Object.keys(output).some((key) => key !== "ok"));
-  const canExpand = hasInput || hasOutput;
+  const canExpand = (hasInput || hasOutput) && phase !== "running";
   const activity = (
     <>
       <ToolMark partType={partType} />
@@ -183,12 +187,21 @@ function ToolChip({
     </>
   );
 
+  const tone =
+    phase === "running"
+      ? " is-running"
+      : phase === "declined" || phase === "failed"
+        ? " is-inert"
+        : "";
+
   if (!canExpand) {
-    return <div className="tavern-tool tavern-tool-static">{activity}</div>;
+    return (
+      <div className={`tavern-tool tavern-tool-static${tone}`}>{activity}</div>
+    );
   }
 
   return (
-    <div className="tavern-tool">
+    <div className={`tavern-tool${tone}`}>
       <button
         type="button"
         className="tavern-tool-toggle"
@@ -399,14 +412,48 @@ function ChatMessage({
               input?: unknown;
               output?: { ok?: boolean; reason?: string };
             };
+            // Rendering only completed calls left a 16-step run looking like
+            // one pulsing dot, and hid every refusal from the transcript.
+            if (
+              tool.state === "input-streaming" ||
+              tool.state === "input-available"
+            ) {
+              return (
+                <ToolChip
+                  key={`${message.id}-${i}`}
+                  partType={part.type}
+                  input={undefined}
+                  output={undefined}
+                  phase="running"
+                />
+              );
+            }
+            if (tool.state === "output-error") {
+              return (
+                <ToolChip
+                  key={`${message.id}-${i}`}
+                  partType={part.type}
+                  input={tool.input}
+                  output={tool.output}
+                  phase="failed"
+                />
+              );
+            }
             if (tool.state !== "output-available") return null;
-            if (tool.output?.ok === false) return null;
+            const failed = tool.output?.ok === false;
             return (
               <ToolChip
                 key={`${message.id}-${i}`}
                 partType={part.type}
                 input={tool.input}
                 output={tool.output}
+                phase={
+                  failed
+                    ? tool.output?.reason === "user-declined"
+                      ? "declined"
+                      : "failed"
+                    : "done"
+                }
               />
             );
           }
@@ -1164,36 +1211,47 @@ function PanelInner({
         </div>
 
         {chatActive && !settingsOpen ? (
-          <div className="tavern-composer">
-            <textarea
-              id="panel-composer"
-              className="tavern-input"
-              value={draft}
-              rows={1}
-              placeholder="Ask anything"
-              onMouseDown={() => window.api.panelRequestFocus()}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  !e.shiftKey &&
-                  !e.nativeEvent.isComposing
-                ) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-            />
-            <button
-              type="button"
-              className={`tavern-btn tavern-btn-send${action === "stop" ? " is-stop" : ""}`}
-              aria-label={action === "stop" ? "Stop generating" : "Send"}
-              title={action === "stop" ? "Stop generating" : "Send"}
-              onClick={action === "stop" ? stopGeneration : send}
-            >
-              {action === "stop" ? "■" : "↑"}
-            </button>
-          </div>
+          <>
+            {showChat && !pinned ? (
+              <SuggestionStrip
+                busy={busy}
+                onPrompt={(text) => {
+                  setNotice(null);
+                  void sendMessage({ text });
+                }}
+              />
+            ) : null}
+            <div className="tavern-composer">
+              <textarea
+                id="panel-composer"
+                className="tavern-input"
+                value={draft}
+                rows={1}
+                placeholder="Ask anything"
+                onMouseDown={() => window.api.panelRequestFocus()}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className={`tavern-btn tavern-btn-send${action === "stop" ? " is-stop" : ""}`}
+                aria-label={action === "stop" ? "Stop generating" : "Send"}
+                title={action === "stop" ? "Stop generating" : "Send"}
+                onClick={action === "stop" ? stopGeneration : send}
+              >
+                {action === "stop" ? "■" : "↑"}
+              </button>
+            </div>
+          </>
         ) : null}
       </div>
       <PanelTail />
