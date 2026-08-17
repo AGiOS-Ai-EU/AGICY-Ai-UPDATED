@@ -17,6 +17,28 @@ export function resolveCompanionDisplay<T extends CompanionDisplay>(
 }
 
 /**
+ * Dictation keeps the visible panel alongside the companion on the target
+ * display, while leaving a hidden panel alone.
+ */
+export function resolveDictationWindowDisplays<T extends CompanionDisplay>(
+  dictationDisplay: T,
+  panelVisible: boolean,
+): { panelDisplay: T | null; companionDisplay: T } {
+  return {
+    panelDisplay: panelVisible ? dictationDisplay : null,
+    companionDisplay: dictationDisplay,
+  };
+}
+
+/** The current dictation target wins over a parked cursor when opening a panel. */
+export function resolveDictationPanelDisplay<T extends CompanionDisplay>(
+  dictationDisplay: T | null,
+  cursorDisplay: T,
+): T {
+  return dictationDisplay ?? cursorDisplay;
+}
+
+/**
  * Opening the panel establishes the shared display for the panel and its
  * companion, even if the companion was previously anchored for dictation.
  */

@@ -94,6 +94,8 @@ import {
   createDictationDisplayRequestTracker,
   invalidateDictationDisplayRequest,
   resolveCompanionDisplay,
+  resolveDictationPanelDisplay,
+  resolveDictationWindowDisplays,
   resolvePanelCompanionDisplays,
 } from "../shared/companion-position";
 import {
@@ -139,6 +141,7 @@ import {
   setTravelling,
   showNotifications,
 } from "./notification-window";
+import { PanelRendererMessageQueue } from "./panel-renderer-message-queue";
 import {
   copySelectionFromFocusedApp,
   isWaylandSession,
@@ -3036,6 +3039,7 @@ async function getFocusedExternalDisplay(): Promise<Display | null> {
 }
 
 const dictationDisplayRequests = createDictationDisplayRequestTracker();
+let activeDictationDisplay: Display | null = null;
 
 /**
  * Associate the visible companion with the target captured for this dictation
@@ -3050,15 +3054,27 @@ function anchorCompanionForDictation(): void {
   const cursorDisplay = screen.getDisplayNearestPoint(
     screen.getCursorScreenPoint(),
   );
-  positionCompanionOnDisplay(resolveCompanionDisplay(null, cursorDisplay));
+  positionDictationWindows(resolveCompanionDisplay(null, cursorDisplay));
 
   void getFocusedExternalDisplay().then((focusedDisplay) => {
     if (!dictationDisplayRequests.isCurrent(request)) return;
     if (!companionWindow || companionWindow.isDestroyed()) return;
-    positionCompanionOnDisplay(
+    positionDictationWindows(
       resolveCompanionDisplay(focusedDisplay, cursorDisplay),
     );
   });
+}
+
+function positionDictationWindows(display: Display): void {
+  activeDictationDisplay = display;
+  const panelVisible =
+    !!panelWindow && !panelWindow.isDestroyed() && panelWindow.isVisible();
+  const { panelDisplay, companionDisplay } = resolveDictationWindowDisplays(
+    display,
+    panelVisible,
+  );
+  if (panelDisplay) positionPanelOnDisplay(panelDisplay);
+  positionCompanionOnDisplay(companionDisplay);
 }
 
 function positionCompanionOnDisplay(display: Display): void {
@@ -3443,24 +3459,16 @@ ipcMain.on("companion:hover", (event) => {
   openPanel({ trigger: "hover" });
 });
 
-let pendingDictation: { kind: string; text: string } | null = null;
-
 function forwardDictation(
   kind: "partial" | "final" | "error",
   text: string,
 ): void {
   const win = panelWindow;
   if (!win || win.isDestroyed()) return;
-  if (win.webContents.isLoading()) {
-    pendingDictation = { kind, text };
-    win.webContents.once("did-finish-load", () => {
-      if (!pendingDictation) return;
-      win.webContents.send("panel:dictation", pendingDictation);
-      pendingDictation = null;
-    });
-    return;
-  }
-  win.webContents.send("panel:dictation", { kind, text });
+  panelRendererMessages.send({
+    channel: "panel:dictation",
+    payload: { kind, text },
+  });
 }
 
 ipcMain.on("panel:open-for-dictation", (event) => {
@@ -3481,6 +3489,11 @@ ipcMain.on("panel:dictation-final", (event, text: string) => {
 ipcMain.on("panel:dictation-error", (event, message: string) => {
   if (event.sender !== companionWindow?.webContents) return;
   forwardDictation("error", message);
+});
+
+ipcMain.on("panel:renderer-ready", (event) => {
+  if (event.sender !== panelWindow?.webContents) return;
+  panelRendererMessages.markReady();
 });
 
 ipcMain.on("panel:close", (event) => {
@@ -3530,6 +3543,15 @@ ipcMain.on("panel:request-focus", (event) => {
 let panelWindow: BrowserWindow | null = null;
 let panelHideTimer: NodeJS.Timeout | null = null;
 let panelBusy = false;
+const panelRendererMessages = new PanelRendererMessageQueue((message) => {
+  const win = panelWindow;
+  if (!win || win.isDestroyed()) return;
+  if (message.channel === "panel:dictation") {
+    win.webContents.send(message.channel, message.payload);
+    return;
+  }
+  win.webContents.send(message.channel);
+});
 const PANEL_HIDE_GRACE_MS = 420;
 const PANEL_HOVER_PAD = 24;
 
@@ -3544,6 +3566,13 @@ function panelPosition(display: Display): {
   const panelHeight = Math.max(320, Math.min(PANEL_HEIGHT, available));
   const y = Math.max(waY, waY + height - COMPANION_CLEARANCE - panelHeight);
   return { x, y, height: panelHeight };
+}
+
+function positionPanelOnDisplay(display: Display): void {
+  const win = panelWindow;
+  if (!win || win.isDestroyed()) return;
+  const { x, y, height } = panelPosition(display);
+  win.setBounds({ x, y, width: PANEL_WIDTH, height });
 }
 
 function createPanelWindow(): void {
@@ -3573,12 +3602,20 @@ function createPanelWindow(): void {
       backgroundThrottling: false,
     },
   });
+  panelRendererMessages.reset();
 
   panelWindow.setAlwaysOnTop(true, "screen-saver");
   panelWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   panelWindow.on("closed", () => {
     panelWindow = null;
+    panelRendererMessages.reset();
   });
+  panelWindow.webContents.on(
+    "did-start-navigation",
+    (_event, _url, _isInPlace, isMainFrame) => {
+      if (isMainFrame) panelRendererMessages.handleNavigationStart();
+    },
+  );
   // Losing focus is the only signal that "hover off then hide" can rely on
   // once the composer has been clicked: pointer-leave alone is ignored while
   // the panel is focused, so re-check on blur. Agent tool calls blur the
@@ -3622,19 +3659,23 @@ function openPanel(
   if (!wasVisible) {
     captureMain("panel_opened", { trigger: opts.trigger ?? "other" });
   }
-  invalidateDictationDisplayRequest(dictationDisplayRequests);
   const cursorDisplay = screen.getDisplayNearestPoint(
     screen.getCursorScreenPoint(),
   );
+  const dictationTriggered = opts.trigger === "dictation";
+  if (!dictationTriggered)
+    invalidateDictationDisplayRequest(dictationDisplayRequests);
+  const targetDisplay = dictationTriggered
+    ? resolveDictationPanelDisplay(activeDictationDisplay, cursorDisplay)
+    : cursorDisplay;
   const { panelDisplay, companionDisplay } =
-    resolvePanelCompanionDisplays(cursorDisplay);
-  const { x, y, height } = panelPosition(panelDisplay);
-  win.setBounds({ x, y, width: PANEL_WIDTH, height });
+    resolvePanelCompanionDisplays(targetDisplay);
+  positionPanelOnDisplay(panelDisplay);
   positionCompanionOnDisplay(companionDisplay);
   if (opts.focusComposer) {
     win.show();
     win.focus();
-    win.webContents.send("panel:focus-composer");
+    panelRendererMessages.send({ channel: "panel:focus-composer" });
   } else {
     win.showInactive();
   }
