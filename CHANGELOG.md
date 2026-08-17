@@ -1,4 +1,11 @@
 # Changelog
+## 0.8.1
+
+### New Features ✨
+
+- (analytics) Count todos and notes as they are added by @matteo8p in [#612](https://github.com/freestyle-voice/freestyle/pull/612)
+- Surface product updates when new versions come out by @matteo8p in [#613](https://github.com/freestyle-voice/freestyle/pull/613)
+
 ## 0.8.0
 
 ### New Features ✨
