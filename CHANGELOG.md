@@ -1,4 +1,17 @@
 # Changelog
+## 0.8.2
+
+### New Features ✨
+
+- (scheduled) Read tasks from cloud scheduler by @MathurAditya724 in [#609](https://github.com/freestyle-voice/freestyle/pull/609)
+- Freestyle readme by @matteo8p in [#615](https://github.com/freestyle-voice/freestyle/pull/615)
+
+### Bug Fixes 🐛
+
+- (desktop) Improve dictation and companion feedback by @MathurAditya724 in [#623](https://github.com/freestyle-voice/freestyle/pull/623)
+- (panel) Keep agent hotkey panel with spirit by @MathurAditya724 in [#624](https://github.com/freestyle-voice/freestyle/pull/624)
+- (tray) Enlarge Freestyle menu-bar icon by @MathurAditya724 in [#625](https://github.com/freestyle-voice/freestyle/pull/625)
+
 ## 0.8.1
 
 ### New Features ✨
