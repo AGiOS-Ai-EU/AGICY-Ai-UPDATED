@@ -1,4 +1,10 @@
 # Changelog
+## 0.8.3
+
+### Bug Fixes 🐛
+
+- (dictation) Serve renderers from app:// and recover stuck transcriptions by @matteo8p in [#616](https://github.com/freestyle-voice/freestyle/pull/616)
+
 ## 0.8.2
 
 ### New Features ✨
