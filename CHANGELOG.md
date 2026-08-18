@@ -1,4 +1,20 @@
 # Changelog
+## 0.8.6
+
+### New Features ✨
+
+- (scheduled) Scheduled tasks live in the Brain tab, fully editable, with Run now by @matteo8p in [#642](https://github.com/freestyle-voice/freestyle/pull/642)
+
+### Bug Fixes 🐛
+
+- (electron) Handle aborted notification stream cleanup by @MathurAditya724 in [#640](https://github.com/freestyle-voice/freestyle/pull/640)
+- (panel) Keep History filters while briefs load by @MathurAditya724 in [#644](https://github.com/freestyle-voice/freestyle/pull/644)
+
+### Internal Changes 🔧
+
+- (brand) Retag Freestyle as "The intelligent reminders app" by @matteo8p in [#643](https://github.com/freestyle-voice/freestyle/pull/643)
+- Correct spelling of "roadmap" in ROADMAP.md by @yadgire7 in [#639](https://github.com/freestyle-voice/freestyle/pull/639)
+
 ## 0.8.5
 
 ### Bug Fixes 🐛
