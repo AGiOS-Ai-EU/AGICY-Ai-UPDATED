@@ -1,4 +1,22 @@
 # Changelog
+## 0.8.5
+
+### Bug Fixes 🐛
+
+#### Electron
+
+- Notification bubble lands far from Jeb / Spark by @matteo8p in [#635](https://github.com/freestyle-voice/freestyle/pull/635)
+- Onboarding snaps back to receipt when first agent task starts by @matteo8p in [#634](https://github.com/freestyle-voice/freestyle/pull/634)
+
+#### Panel
+
+- Running tool calls render as the same collapsible chip by @matteo8p in [#637](https://github.com/freestyle-voice/freestyle/pull/637)
+- Wrap chat markdown so code blocks can't cause horizontal scroll by @matteo8p in [#636](https://github.com/freestyle-voice/freestyle/pull/636)
+
+### Internal Changes 🔧
+
+- (dictation) Cover cold-session quick commits by @MathurAditya724 in [#631](https://github.com/freestyle-voice/freestyle/pull/631)
+
 ## 0.8.4
 
 ### Bug Fixes 🐛
