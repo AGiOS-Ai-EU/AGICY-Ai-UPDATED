@@ -1,4 +1,10 @@
 # Changelog
+## 0.8.7
+
+### New Features ✨
+
+- (agent) Run every tool without approval; connector tools execute server-side by @matteo8p in [#646](https://github.com/freestyle-voice/freestyle/pull/646)
+
 ## 0.8.6
 
 ### New Features ✨
