@@ -1,4 +1,26 @@
 # Changelog
+## 0.8.8
+
+### New Features ✨
+
+- (panel) Drag the panel's right edge to resize it, width persists by @matteo8p in [#651](https://github.com/freestyle-voice/freestyle/pull/651)
+
+### Bug Fixes 🐛
+
+#### Scheduled
+
+- Reliability fixes for run-now, notifications, and thread opening by @matteo8p in [#654](https://github.com/freestyle-voice/freestyle/pull/654)
+- Give Run now polling headroom for server-queued runs by @matteo8p in [#652](https://github.com/freestyle-voice/freestyle/pull/652)
+- Run now polls the cloud run instead of holding the request open by @matteo8p in [#650](https://github.com/freestyle-voice/freestyle/pull/650)
+
+#### Other
+
+- (notifications) Bubbles stay until opened or dismissed by @matteo8p in [#649](https://github.com/freestyle-voice/freestyle/pull/649)
+
+### Internal Changes 🔧
+
+- Remove the quiet-hours feature by @matteo8p in [#653](https://github.com/freestyle-voice/freestyle/pull/653)
+
 ## 0.8.7
 
 ### New Features ✨
