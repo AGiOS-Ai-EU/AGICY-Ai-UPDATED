@@ -64,7 +64,7 @@ import {
   type UIMessage,
 } from "ai";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 const TAB_LABELS: Record<PanelTab, string> = {
@@ -673,14 +673,21 @@ function PanelRoot(): React.JSX.Element {
   const [thread, setThread] = useState<ThreadState | null>(null);
   const queryClient = useQueryClient();
   const latestQuery = useQuery(latestThreadQueryOptions());
+  const selectionRef = useRef(0);
+
+  const switchThread = useCallback((next: ThreadState) => {
+    selectionRef.current += 1;
+    setThread(next);
+  }, []);
 
   useEffect(() => {
     const off = window.api.onPanelOpenThread((threadId) => {
+      const selection = ++selectionRef.current;
       void invalidateThreads(queryClient);
       void getThread(threadId)
         .catch(() => null)
         .then((picked) => {
-          if (!picked) return;
+          if (!picked || selectionRef.current !== selection) return;
           queryClient.setQueryData(queryKeys.threads.detail(threadId), picked);
           setThread(picked);
         });
@@ -698,12 +705,12 @@ function PanelRoot(): React.JSX.Element {
 
   useEffect(() => {
     if (latestQuery.isPending) return;
-    setThread(latestQuery.data ?? newThread());
+    setThread((current) => current ?? latestQuery.data ?? newThread());
   }, [latestQuery.data, latestQuery.isPending]);
 
   if (!thread) return <div className="tavern tavern-panel" />;
   return (
-    <PanelInner key={thread.id} thread={thread} onSwitchThread={setThread} />
+    <PanelInner key={thread.id} thread={thread} onSwitchThread={switchThread} />
   );
 }
 
@@ -772,71 +779,83 @@ function PanelInner({
     [thread.id],
   );
 
-  const { messages, sendMessage, regenerate, stop, status, addToolOutput } =
-    useChat({
-      id: thread.id,
-      messages: thread.messages,
-      transport,
-      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-      onFinish: ({ messages: finished }) => {
-        queryClient.setQueryData(queryKeys.threads.detail(thread.id), {
-          id: thread.id,
-          messages: finished,
+  const {
+    messages,
+    sendMessage,
+    regenerate,
+    stop,
+    status,
+    addToolOutput,
+    setMessages,
+  } = useChat({
+    id: thread.id,
+    messages: thread.messages,
+    transport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onFinish: ({ messages: finished }) => {
+      queryClient.setQueryData(queryKeys.threads.detail(thread.id), {
+        id: thread.id,
+        messages: finished,
+      });
+      void invalidateThreads(queryClient);
+      if (finished.length === 0) return;
+      const last = finished[finished.length - 1];
+      if (last?.role !== "assistant") return;
+      if (touchesBrain(last)) {
+        resetBrainCache();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.brain.all });
+      }
+      if (touchesScheduled(last)) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.scheduled.tasks,
         });
-        void invalidateThreads(queryClient);
-        if (finished.length === 0) return;
-        const last = finished[finished.length - 1];
-        if (last?.role !== "assistant") return;
-        if (touchesBrain(last)) {
-          resetBrainCache();
-          void queryClient.invalidateQueries({ queryKey: queryKeys.brain.all });
-        }
-        if (touchesScheduled(last)) {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.scheduled.tasks,
-          });
-        }
-        const text = messageText(last);
-        if (!text) return;
-        window.api.agentTurnFinished({
-          threadId: thread.id,
-          excerpt: text.slice(0, 140),
-        });
-      },
-      onToolCall: async ({ toolCall }) => {
-        const call: AgentToolCall = {
-          toolName: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-          input: toolCall.input,
-        };
-        const tier = await agentToolTier(call);
-        if (tier === "confirmed") {
-          setApprovals((prev) => [...prev, call]);
-          return;
-        }
-        const output =
-          tier === "free"
-            ? await executeAgentTool(call)
-            : { ok: false, reason: `unknown tool: ${call.toolName}` };
-        addToolOutput({
-          tool: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-          output,
-        });
-      },
-      onError: (err) => {
-        const message = typeof err.message === "string" ? err.message : "";
-        setNotice(
-          message.includes("cloud_auth_required") || message.includes("401")
-            ? "Sign in to Freestyle Cloud to chat."
-            : message.includes("thread_too_long")
-              ? "This conversation is too long to continue. Start a new one from the menu."
-              : message && message !== "[object Object]"
-                ? message
-                : "That didn't go through. Try again.",
-        );
-      },
-    });
+      }
+      const text = messageText(last);
+      if (!text) return;
+      window.api.agentTurnFinished({
+        threadId: thread.id,
+        excerpt: text.slice(0, 140),
+      });
+    },
+    onToolCall: async ({ toolCall }) => {
+      const call: AgentToolCall = {
+        toolName: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        input: toolCall.input,
+      };
+      const tier = await agentToolTier(call);
+      if (tier === "confirmed") {
+        setApprovals((prev) => [...prev, call]);
+        return;
+      }
+      const output =
+        tier === "free"
+          ? await executeAgentTool(call)
+          : { ok: false, reason: `unknown tool: ${call.toolName}` };
+      addToolOutput({
+        tool: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        output,
+      });
+    },
+    onError: (err) => {
+      const message = typeof err.message === "string" ? err.message : "";
+      setNotice(
+        message.includes("cloud_auth_required") || message.includes("401")
+          ? "Sign in to Freestyle Cloud to chat."
+          : message.includes("thread_too_long")
+            ? "This conversation is too long to continue. Start a new one from the menu."
+            : message && message !== "[object Object]"
+              ? message
+              : "That didn't go through. Try again.",
+      );
+    },
+  });
+
+  useEffect(() => {
+    if (status === "submitted" || status === "streaming") return;
+    if (thread.messages.length > messages.length) setMessages(thread.messages);
+  }, [thread.messages, messages.length, setMessages, status]);
 
   const startedRef = useRef(thread.messages.length > 0);
   useEffect(() => {
@@ -1302,6 +1321,12 @@ function PanelInner({
               root=""
               emptyText={TAB_PLACEHOLDER.brain}
               newLabel="New file"
+              onOpenThread={(threadId) => {
+                setTab("chat");
+                void openThreadById(threadId).then((picked) => {
+                  if (picked) onSwitchThread(picked);
+                });
+              }}
             />
           ) : chatActive ? (
             <OpenerCards
