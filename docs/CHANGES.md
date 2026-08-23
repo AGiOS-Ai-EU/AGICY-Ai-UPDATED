@@ -250,3 +250,21 @@ Original gala/Dubai close-ups replaced by NY editorial set in Gate 10.
 | `docs/assets/phone-masks/editorial-3.json` | Mask fractions for compositor |
 
 **Nav change:** Horizontal text tabs → floating left glass rail. Secondary tabs (Todos, Notes, Brain, Apps) in rail **More** menu.
+
+---
+
+## Gate 12 — Mobile README hybrid compositor batch
+
+| File | Change |
+|------|--------|
+| `docs/assets/updated-mobile-hybrid-1.png` | **New** — 1200×675, ~958 KB. Café interview, Search + PRIMARY cards |
+| `docs/assets/updated-mobile-hybrid-2.png` | **New** — 1200×675, ~821 KB. Over-shoulder, waveform + PRIMARY |
+| `docs/assets/updated-mobile-hybrid-3.png` | **New** — 1200×675, ~720 KB. Hands hero, CONTESTED |
+| `docs/assets/phone-masks/editorial-{1,2,3}.json` | Tuned screen bezels (debug-overlay verified) |
+| `scripts/compose-mobile-hybrid.py` | Batch mode, 3 scene variants, screen clip |
+| `docs/assets/updated-mobile-editorial-*.png` | **Removed** — superseded by hybrid set |
+| `README.md` | Usage → Mobile updated |
+
+**Mask tuning:** Red debug rectangles on NY editorial bases; tightened y1 on images 2–3 to exclude sweater/table bleed.
+
+**Desktop screenshot:** Skipped — dev server not captured in this pass. Capture manually: Search tab with CONTESTED mock, save as `docs/assets/updated-desktop-hybrid-search.png`.

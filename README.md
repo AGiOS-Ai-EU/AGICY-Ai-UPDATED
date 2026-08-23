@@ -66,24 +66,24 @@ Typed queries in the Search tab work the same way — voice is the primary path 
 
 ### Mobile
 
-Same flow on phone: hold the hotkey, speak, read claim cards. Editorial illustrations below — not live app screenshots. Mobile client is not shipped in this repo; overlays show intended certificate utility (claim cards, primary rate, CONTESTED divergence).
+Same flow on phone: hold the hotkey, speak, read claim cards. Hybrid UI below — glass nav rail + certificate Search content, composited inside the phone screen. **Mobile client is a concept**; the hybrid shell + certificate Search tab is **shipped in the Electron panel** (commit `2060245`).
 
 <p align="center">
-  <img alt="NY café: woman shows UPDATED Search on phone to colleague; floating claim cards with PRIMARY chips" src="docs/assets/updated-mobile-editorial-1.png" width="960" />
+  <img alt="Café interview: hybrid UI clipped on phone — Search query and PRIMARY claim cards" src="docs/assets/updated-mobile-hybrid-1.png" width="960" />
   <br />
-  <sub>Interview gesture — voice query on phone, claim-card stack annotated beside screen (PRIMARY 2/5).</sub>
+  <sub>Café interview — glass rail, certificate claim cards, primary rate 2/5 (screen-mask compositor).</sub>
 </p>
 
 <p align="center">
-  <img alt="Over-shoulder: hands hold phone with waveform ribbon and primary-source rate header" src="docs/assets/updated-mobile-editorial-2.png" width="960" />
+  <img alt="Over-shoulder: hold hotkey waveform and PRIMARY claim card on hybrid phone UI" src="docs/assets/updated-mobile-hybrid-2.png" width="960" />
   <br />
-  <sub>Over-shoulder — hold hotkey, voice → search ribbon, primary-source rate 1/5.</sub>
+  <sub>Over-shoulder — hold hotkey, voice waveform, primary rate 1/5.</sub>
 </p>
 
 <p align="center">
-  <img alt="Hands hero: phone shows CONTESTED state with annotation lines to similarity and age strip" src="docs/assets/updated-mobile-editorial-3.png" width="960" />
+  <img alt="Hands hero: CONTESTED divergence and certificate claim card inside phone bezel" src="docs/assets/updated-mobile-hybrid-3.png" width="960" />
   <br />
-  <sub>Hands hero — CONTESTED divergence, provider sections, magazine annotation marks.</sub>
+  <sub>Hands hero — CONTESTED state, provider sections, PRIMARY card clipped in screen.</sub>
 </p>
 
 ---
