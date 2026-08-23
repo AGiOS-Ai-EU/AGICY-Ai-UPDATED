@@ -206,15 +206,15 @@ One line per step, file path only:
 
 ---
 
-## 8. License discrepancy (resolve before commercial ship)
+## 8. License (verified for beta)
 
 | Source | License stated |
 |--------|----------------|
-| `LICENSE` in this repo | **MIT** (Freestyle copyright 2026) |
-| GitHub API (`freestyle-voice/freestyle`) | **MIT** |
-| Build brief | **FSL-1.1-ALv2** |
+| `LICENSE` in this repo | **MIT** (Freestyle + AGICY.Ai copyright) |
+| GitHub API (`freestyle-voice/freestyle`) | **MIT** (since upstream PR #103, May 2026) |
+| Internal build brief (historical) | **FSL-1.1-ALv2** — **obsolete**; upstream relicensed to MIT before this fork |
 
-**Action:** Confirm with upstream and counsel before rebranding README as FSL. Gate 1 instruction to cite FSL may be wrong for **this** checkout — do not change `LICENSE` without explicit approval.
+**Status:** MIT is correct for this derivative. Do **not** restore FSL unless counsel confirms a different upstream lineage. See `NOTICE` for attribution.
 
 ---
 

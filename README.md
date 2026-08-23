@@ -25,7 +25,7 @@
 
 **Hold a hotkey. Speak a question. Read the sources.**
 
-UPDATED is a voice-first desktop search instrument by AGICY.Ai. It turns a spoken or typed question into certificate-style claim cards with a primary-source rate and an explicit **CONTESTED** state when providers diverge.
+UPDATED is a voice-first desktop search instrument by AGICY.Ai. It turns a spoken or typed question into certificate-style result cards (one card per search citation plus a provider summary) with a primary-source rate and an explicit **CONTESTED** state when providers diverge. Cards format search snippets and titles — there is no LLM claim extraction in this beta.
 
 ## Choose your language
 
@@ -83,14 +83,27 @@ The app also retains dictation mode: the same speech pipeline can paste transcri
 
 | Surface | Behavior |
 | --- | --- |
-| Dictation mode | Hotkey → microphone → cloud STT → paste or clipboard |
-| Search mode | Hotkey → microphone → multi-provider search → sourced claim cards |
+| Dictation mode | Hotkey → microphone → Freestyle Cloud STT → paste or clipboard |
+| Search mode | Hotkey → microphone → Freestyle Cloud STT → multi-provider search → citation cards |
 | Primary-source rate | Shown as `primary / total`, including `0 / N` |
 | CONTESTED | Jaccard similarity below `0.35`; providers remain separated |
 | Search history | Last 30 queries stored locally and available to re-run |
 | Brave key | Optional; encrypted with Electron `safeStorage` |
 
-Without a Brave Search API key, mock providers demonstrate the CONTESTED interface. Voice transcription currently requires a Freestyle Cloud sign-in and an internet connection.
+Without a Brave Search API key, mock providers demonstrate the CONTESTED interface locally.
+
+## Third-party services and privacy
+
+This beta is **not** fully local-first for voice:
+
+| Service | Required for | Data sent |
+| --- | --- | --- |
+| **Freestyle Cloud** (`freestyle.sh`) | Voice transcription and optional text cleanup | Microphone audio, transcript text, account session |
+| **Brave Search** (optional) | Live web search | Search query text and your API key (stored encrypted locally) |
+
+Voice transcription requires a **Freestyle Cloud sign-in** and an internet connection. On-device STT providers present in upstream Freestyle are removed in this fork (database migration v23). Search history and divergence logs stay on your machine; voice data does not.
+
+**Business note:** UPDATED depends on Freestyle Cloud remaining available under its current terms. A service change, outage, or pricing shift would affect dictation and search-voice flows until an alternative STT path is wired.
 
 ## Build from source
 
@@ -123,4 +136,6 @@ Not yet wired: modifier-plus-hotkey mode switching, a third live search provider
 
 ## License and credits
 
-[MIT](LICENSE). UPDATED is a fork of [freestyle-voice/freestyle](https://github.com/freestyle-voice/freestyle). Upstream `@freestyle-voice/*` package names and Freestyle Cloud references remain where required for compatibility; the distributed desktop product is **UPDATED**.
+[MIT](LICENSE) — same license as upstream [freestyle-voice/freestyle](https://github.com/freestyle-voice/freestyle) (MIT since upstream PR #103, May 2026). See [NOTICE](NOTICE) for attribution and third-party service disclosure.
+
+UPDATED is a derivative fork of Freestyle. Upstream `@freestyle-voice/*` package names and Freestyle Cloud references remain where required for compatibility; the distributed desktop product is **UPDATED**.

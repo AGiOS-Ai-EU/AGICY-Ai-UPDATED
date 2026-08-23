@@ -156,11 +156,11 @@ PostgreSQL, Prisma, Better Auth, Graphile Worker, Pi, Docker sandboxes.
 
 ---
 
-## License (verify before commercial ship)
+## License (verified for beta)
 
-**Current upstream + this fork:** `LICENSE` is **MIT** (Freestyle copyright 2026).
+**Current upstream + this fork:** `LICENSE` is **MIT** (Freestyle + AGICY.Ai copyright).
 
-If you were quoted **FSL-1.1-ALv2**, that may refer to another branch, roadmap, or product.
+Upstream `freestyle-voice/freestyle` relicensed to MIT in May 2026 (PR #103). An older **FSL-1.1-ALv2** reference in internal build docs is obsolete for this checkout. See `NOTICE`.
 Re-read `LICENSE` on every upstream merge before selling a competing dictation product.
 
 ---
