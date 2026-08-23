@@ -38,6 +38,34 @@ Design tokens live in `packages/updated-design` — paper, ink, graphite, 2px ra
 
 ---
 
+## Usage
+
+Hold the dictation hotkey (default **Right Alt**), speak your question, then read claim cards in the panel **Search** tab. In **Search** input mode the same hotkey routes STT output to search instead of paste.
+
+<p align="center">
+  <img
+    alt="Two professionals at a desk — one holds Right Alt while speaking a question; certificate-style claim cards appear beside them"
+    src="docs/assets/updated-usage-hold-speak.png"
+    width="960"
+  />
+  <br />
+  <sub>Hold hotkey → speak → claim cards (Search mode). Illustration uses UPDATED paper/ink tokens; not a live app screenshot.</sub>
+</p>
+
+<p align="center">
+  <img
+    alt="Close-up: finger on Right Alt, voice waveform, PRIMARY and CONTESTED claim cards with source strip"
+    src="docs/assets/updated-usage-search-flow.png"
+    width="960"
+  />
+  <br />
+  <sub>Certificate cards: PRIMARY chip, source count and date strip, CONTESTED when dual providers diverge (mock pair without a Brave key).</sub>
+</p>
+
+Typed queries in the Search tab work the same way — voice is the primary path shown here.
+
+---
+
 ## Quick start
 
 ```powershell

@@ -190,3 +190,17 @@ pnpm biome check packages/search apps/server/src/lib/search apps/server/src/rout
 3. Upload `docs/assets/updated-github-hero.png` (1280×640, PNG &lt; 1 MB)
 
 **Not fully wired (Gate 8+):** modifier+hotkey mode flip; third live provider; divergence CSV / in-app viewer; LLM claim extraction; single-widget shell merge.
+
+---
+
+## Gate 8 — README usage imagery
+
+| File | Change |
+|------|--------|
+| `docs/assets/updated-usage-hold-speak.png` | **New** — 1200×675, ~922 KB. Editorial scene: European professionals at desk, hotkey hold + voice question, certificate UI chrome. |
+| `docs/assets/updated-usage-search-flow.png` | **New** — 1280×720, ~856 KB. Close-up: keyboard hotkey, waveform, PRIMARY / CONTESTED claim cards. |
+| `README.md` | **Usage** section with both images and plain captions |
+
+**Generation:** Cursor `GenerateImage` (certificate/lab prompts; palette from `packages/updated-design/tokens.css` and `updated-github-hero.png` reference). Resized/optimized with Pillow — no SVG companions (raster editorial only).
+
+**GitHub social preview (manual):** Social preview remains a single image. Keep `docs/assets/updated-github-hero.png` as the repo OG unless you upload a composite manually at Settings → Social preview. Usage PNGs are README-only.
