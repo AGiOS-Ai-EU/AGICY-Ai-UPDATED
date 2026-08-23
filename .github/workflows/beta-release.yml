@@ -1,4 +1,4 @@
-name: Publish unsigned desktop beta
+name: Publish desktop beta
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       version:
         description: Version from apps/electron/package.json
         required: true
-        default: 0.9.0-beta.2
+        default: 0.9.0-beta.3
 
 permissions:
   contents: write
@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.value }}
+      signing: ${{ steps.signing.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
       - id: version
@@ -32,6 +33,14 @@ jobs:
             exit 1
           fi
           echo "value=$expected" >> "$GITHUB_OUTPUT"
+      - id: signing
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.WINDOWS_CERT_BASE64 }}" && -n "${{ secrets.APPLE_CERT_BASE64 }}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
 
   build-linux:
     needs: validate
@@ -47,7 +56,7 @@ jobs:
       - run: pnpm turbo build --filter=@freestyle-voice/server
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev libxext-dev libglib2.0-dev cmake libx11-xcb-dev binutils
-      - name: Build unsigned Linux installers
+      - name: Build Linux installers
         working-directory: apps/electron
         run: pnpm run build:linux
       - name: Verify packaged native binaries
@@ -75,11 +84,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo build --filter=@freestyle-voice/server
       - uses: ilammy/msvc-dev-cmd@v1
-      - name: Build unsigned Windows installers
+      - name: Import Windows code signing certificate
+        if: ${{ secrets.WINDOWS_CERT_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String("${{ secrets.WINDOWS_CERT_BASE64 }}")
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\updated.pfx", $bytes)
+          echo "WIN_CSC_LINK=$env:RUNNER_TEMP\updated.pfx" >> $env:GITHUB_ENV
+          echo "CSC_LINK=$env:RUNNER_TEMP\updated.pfx" >> $env:GITHUB_ENV
+          echo "CSC_KEY_PASSWORD=${{ secrets.WINDOWS_CERT_PASSWORD }}" >> $env:GITHUB_ENV
+      - name: Build Windows installers
         working-directory: apps/electron
         run: pnpm run build:win
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WINDOWS_CERT_BASE64 != '' && 'true' || 'false' }}
       - name: Verify packaged native binaries
         working-directory: apps/electron
         run: node scripts/verify-native-binaries.mjs
@@ -105,11 +123,29 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo build --filter=@freestyle-voice/server
-      - name: Build unsigned macOS installers
+      - name: Import macOS code signing certificate
+        if: ${{ secrets.APPLE_CERT_BASE64 != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.APPLE_CERT_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/updated.p12"
+          echo "CSC_LINK=$RUNNER_TEMP/updated.p12" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=${{ secrets.APPLE_CERT_PASSWORD }}" >> "$GITHUB_ENV"
+      - name: Build macOS installers
         working-directory: apps/electron
-        run: pnpm run build:mac
+        run: |
+          pnpm run compile:native
+          pnpm exec electron-vite build
+          if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            pnpm exec electron-builder --mac --publish never -c.mac.notarize=true
+          else
+            pnpm exec electron-builder --mac --publish never
+          fi
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.APPLE_CERT_BASE64 != '' && 'true' || 'false' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - name: Verify packaged native binaries
         working-directory: apps/electron
         run: node scripts/verify-native-binaries.mjs
@@ -139,16 +175,18 @@ jobs:
           prerelease: true
           generate_release_notes: true
           body: |
-            ## UPDATED unsigned beta
+            ## UPDATED beta ${{ needs.validate.outputs.version }}
 
             UPDATED is a voice-first desktop search instrument by AGICY.Ai.
 
             1. Download the installer for Windows, macOS, or Linux.
-            2. Hold the platform hotkey and speak.
-            3. Read sourced claim cards, the primary-source rate, and CONTESTED results.
+            2. Sign in with your AGICY account for hosted voice transcription.
+            3. Hold the platform hotkey and speak.
 
-            ### Important
+            ### Code signing
 
-            This beta is not code-signed or notarized yet. Windows SmartScreen and macOS Gatekeeper may show a warning. Only download installers from this GitHub release.
+            When repository secrets `WINDOWS_CERT_BASE64`, `APPLE_CERT_BASE64`, and related passwords are configured, CI produces signed Windows and notarized macOS builds. Otherwise installers are unsigned — Windows SmartScreen and macOS Gatekeeper may warn on first launch.
+
+            Only download installers from this GitHub release or [agicy.ai/updated](https://agicy.ai/updated).
           files: release-assets/*
           fail_on_unmatched_files: true

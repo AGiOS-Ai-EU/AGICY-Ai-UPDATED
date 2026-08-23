@@ -17,10 +17,7 @@ License:  MIT License (see LICENSE)
 
 Third-party services (runtime)
 ------------------------------
-Voice transcription and text cleanup in the shipped beta use Freestyle Cloud
-(freestyle.sh). Audio and transcript text are sent to that service when you are
-signed in. Search uses Brave Search when you configure an API key; otherwise
-mock providers demonstrate the UI locally.
+Voice transcription in beta.3+ uses **AGICY hosted STT** (Deepgram EU via agicy.ai) when you sign in with your AGICY account. Search uses Brave Search when you configure an API key; otherwise mock providers demonstrate the UI locally. Legacy Freestyle Cloud code paths remain in the tree but are not required for voice in the default configuration.
 
 See README.md § "Third-party services and privacy" for user-facing disclosure.
 

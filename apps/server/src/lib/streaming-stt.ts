@@ -1,3 +1,5 @@
+import { AGICY_HOSTED_PROVIDER_ID } from "./agicy-platform.js";
+import { getAgicySessionToken } from "./agicy-session.js";
 import { FREESTYLE_CLOUD_PROVIDER_ID } from "./freestyle-cloud.js";
 import { getSessionToken } from "./sessions.js";
 import { getProvider, supportsSessionTransport } from "./streaming/registry.js";
@@ -14,11 +16,12 @@ export {
 } from "./streaming/registry.js";
 export type { StreamCallbacks, StreamSession } from "./streaming/types.js";
 
-export type VoiceProviderCategory = "freestyle_cloud";
+export type VoiceProviderCategory = "agicy_hosted" | "freestyle_cloud";
 
 export function voiceProviderCategory(
-  _providerId: string,
+  providerId: string,
 ): VoiceProviderCategory {
+  if (providerId === AGICY_HOSTED_PROVIDER_ID) return "agicy_hosted";
   return "freestyle_cloud";
 }
 
@@ -71,6 +74,11 @@ export function openStreamingSession(opts: {
 }
 
 export function getApiKeyForProvider(providerId: string): string | null {
-  if (providerId !== FREESTYLE_CLOUD_PROVIDER_ID) return null;
-  return getSessionToken();
+  if (providerId === AGICY_HOSTED_PROVIDER_ID) {
+    return getAgicySessionToken();
+  }
+  if (providerId === FREESTYLE_CLOUD_PROVIDER_ID) {
+    return getSessionToken();
+  }
+  return null;
 }

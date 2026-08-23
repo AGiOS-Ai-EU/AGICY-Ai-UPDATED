@@ -2,6 +2,8 @@ import { sanitizeTranscriptText } from "@freestyle-voice/stt";
 import { createAppLogger } from "@freestyle-voice/utils";
 import { upgradeWebSocket } from "@hono/node-server";
 import { Hono } from "hono";
+import { AGICY_HOSTED_PROVIDER_ID } from "../lib/agicy-platform.js";
+import { invalidateAgicySession } from "../lib/agicy-session.js";
 import { getRewritePromptContext } from "../lib/editor/rewrite-context.js";
 import {
   FREESTYLE_CLOUD_PROVIDER_ID,
@@ -289,11 +291,15 @@ const stream = new Hono().get(
       if (!apiKey) {
         ws.send(
           JSON.stringify(
-            voice.provider === FREESTYLE_CLOUD_PROVIDER_ID
+            voice.provider === AGICY_HOSTED_PROVIDER_ID ||
+              voice.provider === FREESTYLE_CLOUD_PROVIDER_ID
               ? {
                   type: "error",
                   code: "cloud_auth_required",
-                  message: "Sign in to Freestyle Transcribe",
+                  message:
+                    voice.provider === AGICY_HOSTED_PROVIDER_ID
+                      ? "Sign in with your AGICY account"
+                      : "Sign in to Freestyle Transcribe",
                 }
               : {
                   type: "error",
@@ -725,7 +731,13 @@ const stream = new Hono().get(
             try {
               session.close();
             } catch {}
-            if (code === "cloud_auth_required") invalidateSession();
+            if (code === "cloud_auth_required") {
+              if (voice.provider === AGICY_HOSTED_PROVIDER_ID) {
+                invalidateAgicySession();
+              } else {
+                invalidateSession();
+              }
+            }
             failSession(ws, message, code);
           },
           onClose: () => {

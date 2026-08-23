@@ -1,7 +1,9 @@
+import { AgicyHostedTranscriptionProvider } from "./providers/agicy-hosted.js";
 import { FreestyleCloudTranscriptionProvider } from "./providers/freestyle-cloud.js";
 import type { TranscriptionProvider } from "./types.js";
 
 const providers: TranscriptionProvider[] = [
+  new AgicyHostedTranscriptionProvider(),
   new FreestyleCloudTranscriptionProvider(),
 ];
 
