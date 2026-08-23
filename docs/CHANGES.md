@@ -187,7 +187,7 @@ pnpm biome check packages/search apps/server/src/lib/search apps/server/src/rout
 
 1. Open https://github.com/AGiOS-Ai-EU/UPDATED/settings
 2. Scroll to **Social preview** → **Edit** → **Upload an image…**
-3. Upload `docs/assets/updated-github-hero.png` (1280×640, PNG &lt; 1 MB)
+3. Upload `docs/assets/updated-github-hero.png` (1080×720, PNG &lt; 1 MB)
 
 **Not fully wired (Gate 8+):** modifier+hotkey mode flip; third live provider; divergence CSV / in-app viewer; LLM claim extraction; single-widget shell merge.
 
@@ -350,4 +350,26 @@ Manual smoke: run two searches in Search tab → Recent shows both with CONTESTE
 | `docs/assets/updated-github-hero.svg` | Unchanged abstract vector; **PNG is canonical** for README + Social preview |
 
 **Compositing:** Single-pass GenerateImage editorial (UI rendered on laptop screen in prompt); Pillow resize **1080×720**, PNG optimize (**~1002 KB**).
+
+---
+
+## Gate 17 — Animated README hero — streaming text with app fonts
+
+| File | Change |
+|------|--------|
+| `docs/assets/updated-github-hero.gif` | **New** — 800×533, 38 frames @ 10 fps, ~4.3 MB; query + claim stream on laptop screen |
+| `docs/assets/updated-github-hero.webp` | **New** — ~228 KB loop (optional smaller format) |
+| `docs/assets/hero-laptop-mask.json` | Laptop screen bbox (normalized) for UI compositing |
+| `docs/assets/fonts/*.ttf` | Newsreader, Instrument Sans, Martian Mono (Google Fonts variable TTF) |
+| `scripts/render-hero-animation.py` | **New** — frame renderer; composites hybrid UI into hero mask |
+| `README.md` | Hero `<img>` → GIF; static PNG + WebP fallback links in subcaption |
+| `docs/assets/updated-github-hero.png` | **Kept** — static fallback + GitHub Social preview |
+
+**Animation beats:** query types “Cyprus annual return” → primary rate **2 / 5** → PRIMARY claim card streams → EU-hosted chip fades in. Editorial photo static; only in-screen UI animates.
+
+**Fonts (match `packages/updated-design/tokens.css`):** Newsreader (claims/rate), Instrument Sans (query/UI), Martian Mono (chips/metadata).
+
+**Mask @ 800×533:** x=129 y=244 w=304 h=188 radius=9 (normalized x0=0.162 y0=0.458 x1=0.542 y1=0.812).
+
+**Regenerate:** `python scripts/render-hero-animation.py`
 

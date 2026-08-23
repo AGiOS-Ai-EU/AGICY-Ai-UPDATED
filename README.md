@@ -1,11 +1,11 @@
 <p align="center">
   <img
-    alt="Two professionals at a desk — woman speaks into UPDATED on laptop while holding Right Alt; hybrid Search panel with Cyprus annual return and PRIMARY 2/5 (UPDATED by AGICY.Ai)"
-    src="docs/assets/updated-github-hero.png"
+    alt="Two professionals at a desk — woman uses UPDATED on laptop; query and PRIMARY claim text stream in the hybrid Search panel (UPDATED by AGICY.Ai)"
+    src="docs/assets/updated-github-hero.gif"
     width="960"
   />
   <br />
-  <sub>People using UPDATED — hold hotkey, speak, read certificate claim cards on laptop. EU-hosted &#183; GDPR-aligned.</sub>
+  <sub>Animated — query and claim text stream in Search panel. People using UPDATED on laptop. EU-hosted &#183; GDPR-aligned. <a href="docs/assets/updated-github-hero.png">Static PNG</a> &#183; <a href="docs/assets/updated-github-hero.webp">WebP</a></sub>
 </p>
 
 <p align="center">

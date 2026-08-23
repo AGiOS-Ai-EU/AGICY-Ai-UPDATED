@@ -1,0 +1,9 @@
+{
+  "x0": 0.162,
+  "y0": 0.458,
+  "x1": 0.542,
+  "y1": 0.812,
+  "radius_frac": 0.018,
+  "_base": "updated-github-hero.png",
+  "_note": "Woman laptop screen bbox (normalized). UI animates inside; editorial desk static."
+}
