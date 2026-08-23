@@ -11,6 +11,7 @@ import { Markdown } from "@renderer/components/markdown";
 import { NotesTab } from "@renderer/components/notes-tab";
 import { OnboardingGate, useOnboarding } from "@renderer/components/onboarding";
 import { OpenerCards } from "@renderer/components/opener-cards";
+import { PanelRail } from "@renderer/components/panel-rail";
 import { SearchTab } from "@renderer/components/search-tab";
 import { SettingsView } from "@renderer/components/settings-view";
 import { Spark } from "@renderer/components/spark";
@@ -49,12 +50,7 @@ import {
 import { SpriteBadge } from "@renderer/sprites/badge";
 import { type CompanionForm, DEFAULT_COMPANION_FORM } from "@shared/companion";
 import type { InputMode } from "@shared/dictation-prefs";
-import {
-  PANEL_MAX_WIDTH,
-  PANEL_MIN_WIDTH,
-  PANEL_TABS,
-  type PanelTab,
-} from "@shared/panel";
+import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, type PanelTab } from "@shared/panel";
 import { SPRITES_INFO } from "@shared/sprites";
 import {
   QueryClientProvider,
@@ -69,16 +65,6 @@ import {
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-
-const TAB_LABELS: Record<PanelTab, string> = {
-  chat: "Chat",
-  search: "Search",
-  history: "History",
-  todos: "Todos",
-  notes: "Notes",
-  brain: "Brain",
-  apps: "Apps",
-};
 
 const TAB_PLACEHOLDER: Record<PanelTab, string> = {
   chat: "Ask anything, or point at something on screen.",
@@ -1084,6 +1070,168 @@ function PanelInner({
   const chatActive = tab === "chat";
   const showChat = chatActive && messages.length > 0;
 
+  const selectTab = (id: PanelTab): void => {
+    capture("panel_tab_opened", { tab: id });
+    setSettingsOpen(false);
+    setCapabilitiesOpen(false);
+    setTab(id);
+  };
+
+  const panelBody = (
+    <>
+      {capabilitiesOpen ? (
+        <>
+          <button
+            type="button"
+            className="tavern-file-back"
+            onClick={() => setCapabilitiesOpen(false)}
+          >
+            ← What UPDATED can do
+          </button>
+          <Capabilities
+            onPrompt={(text) => {
+              setCapabilitiesOpen(false);
+              setNotice(null);
+              void sendMessage({ text });
+            }}
+            onOpenApps={() => {
+              setCapabilitiesOpen(false);
+              setTab("apps");
+            }}
+          />
+        </>
+      ) : settingsOpen ? (
+        <SettingsView
+          onClose={() => setSettingsOpen(false)}
+          onOpenThread={(threadId) => {
+            setSettingsOpen(false);
+            setTab("chat");
+            void openThreadById(threadId).then((picked) => {
+              if (picked) onSwitchThread(picked);
+            });
+          }}
+          onThreadsCleared={() => {
+            void invalidateThreads(queryClient);
+            onSwitchThread(newThread());
+          }}
+          onReplayIntro={() => {
+            setSettingsOpen(false);
+            onboarding.replay();
+          }}
+        />
+      ) : tab === "search" ? (
+        <SearchTab
+          inputMode={inputMode}
+          onInputModeChange={(mode) => {
+            setInputMode(mode);
+            void window.api.setInputMode(mode);
+          }}
+          externalQuery={voiceSearchQuery}
+          onExternalQueryHandled={() => setVoiceSearchQuery(null)}
+        />
+      ) : tab === "history" ? (
+        <ThreadHistory
+          currentId={thread.id}
+          onPick={(picked) => {
+            if (picked.id === thread.id) setTab("chat");
+            else onSwitchThread(picked);
+          }}
+        />
+      ) : tab === "apps" ? (
+        <ConnectedApps
+          onUseWorkflow={(prompt) => {
+            setTab("chat");
+            if (pinned) return;
+            setNotice(null);
+            void sendMessage({ text: prompt });
+          }}
+        />
+      ) : showChat ? (
+        <>
+          {messages.map((m) => (
+            <ChatMessage
+              key={m.id}
+              message={m}
+              copied={copiedMessageId === m.id}
+              disabled={pinned}
+              editing={editingMessageId === m.id}
+              editDraft={editDraft}
+              onCopy={() => copyMessage(m)}
+              onEdit={() => startEditingMessage(m)}
+              onEditDraftChange={setEditDraft}
+              onCancelEdit={cancelEditingMessage}
+              onResendEdit={resendEditedMessage}
+              onRegenerate={() => regenerateMessage(m)}
+            />
+          ))}
+          {approvals.map((call) => (
+            <div key={call.toolCallId} className="tavern-approve">
+              <span className="tavern-approve-title">
+                {SPRITES_INFO[spriteForm].label.toLowerCase()} wants to act
+              </span>
+              <div className="tavern-approve-text">
+                {describeAgentAction(call)}
+              </div>
+              <div className="tavern-approve-actions">
+                <button
+                  type="button"
+                  className="tavern-approve-btn tavern-approve-allow"
+                  onClick={() => resolveApproval(call, true)}
+                >
+                  Allow
+                </button>
+                <button
+                  type="button"
+                  className="tavern-approve-btn"
+                  onClick={() => resolveApproval(call, false)}
+                >
+                  Don't allow
+                </button>
+              </div>
+            </div>
+          ))}
+          {awaitingText ? (
+            <div
+              className="tavern-stream-wait"
+              role="status"
+              aria-label="Thinking"
+            >
+              <Spark state="idle" size={11} />
+            </div>
+          ) : null}
+        </>
+      ) : tab === "todos" ? (
+        <TodosTab mascot={SPRITES_INFO[spriteForm].label} />
+      ) : tab === "notes" ? (
+        <NotesTab />
+      ) : tab === "brain" ? (
+        <BrainFiles
+          root=""
+          emptyText={TAB_PLACEHOLDER.brain}
+          newLabel="New file"
+          onOpenThread={(threadId) => {
+            setTab("chat");
+            void openThreadById(threadId).then((picked) => {
+              if (picked) onSwitchThread(picked);
+            });
+          }}
+        />
+      ) : chatActive ? (
+        <OpenerCards
+          busy={busy}
+          onShowAll={() => setCapabilitiesOpen(true)}
+          onPrompt={(text) => {
+            setNotice(null);
+            void sendMessage({ text });
+          }}
+        />
+      ) : (
+        <div className="tavern-empty">{TAB_PLACEHOLDER[tab]}</div>
+      )}
+      {notice ? <p className="tavern-notice">{notice}</p> : null}
+    </>
+  );
+
   // Signed out, the gate is the entire panel — no head, no tabs, no way to
   // reach the agent. While auth status resolves, show nothing rather than
   // flashing the gate at signed-in users.
@@ -1135,281 +1283,113 @@ function PanelInner({
   }
 
   return (
-    <div className="tavern-shell">
-      <div className="tavern tavern-panel">
-        <div className="tavern-head">
-          <SpriteBadge form={spriteForm} working={busy} size={22} />
-          <span className="tavern-head-name">
-            updated<i>.</i>
-          </span>
-          <span className="tavern-head-spacer" />
-          {updateStatus.version ? (
-            <button
-              type="button"
-              className={`tavern-head-update${
-                updateStatus.downloadState === "downloaded" ? " is-ready" : ""
-              }`}
-              title={
-                updateStatus.downloadState === "downloaded"
-                  ? `Version ${updateStatus.version} is ready — restart to update`
-                  : updateStatus.downloadState === "downloading"
-                    ? `Version ${updateStatus.version} is downloading`
-                    : `Version ${updateStatus.version} is available`
-              }
-              disabled={updateStatus.downloadState === "downloading"}
-              onClick={() => {
-                if (updateStatus.downloadState === "downloaded") {
-                  window.api.installUpdate();
-                } else {
-                  window.api.downloadUpdate();
-                }
-              }}
-            >
-              {updateStatus.downloadState === "downloaded"
-                ? "Restart to update"
-                : updateStatus.downloadState === "downloading"
-                  ? "Downloading…"
-                  : "Update"}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="tavern-head-new"
-            title="New conversation"
-            disabled={pinned}
-            onClick={() => onSwitchThread(newThread())}
-          >
-            ＋ New
-          </button>
-          <button
-            type="button"
-            className="tavern-close"
-            aria-label="Close"
-            onClick={() => window.api.panelClose()}
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="tavern-tabs" role="tablist">
-          {PANEL_TABS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={!settingsOpen && tab === id}
-              className="tavern-tab"
-              onClick={() => {
-                capture("panel_tab_opened", { tab: id });
-                setSettingsOpen(false);
-                setCapabilitiesOpen(false);
-                setTab(id);
-              }}
-            >
-              {TAB_LABELS[id]}
-            </button>
-          ))}
-          <span className="tavern-head-spacer" />
-          <button
-            type="button"
-            role="tab"
-            aria-selected={settingsOpen}
-            aria-label="Settings"
-            title="Settings"
-            className="tavern-tab tavern-tab-gear"
-            onClick={() => setSettingsOpen((v) => !v)}
-          >
-            ⚙
-          </button>
-        </div>
-
-        <div className="tavern-body" role="tabpanel" ref={bodyRef}>
-          {capabilitiesOpen ? (
-            <>
+    <div className="tavern-shell updated-hybrid-shell">
+      <PanelRail
+        tab={tab}
+        settingsOpen={settingsOpen}
+        onSelectTab={selectTab}
+        onToggleSettings={() => {
+          setCapabilitiesOpen(false);
+          setSettingsOpen((v) => !v);
+        }}
+      />
+      <div className="updated-glass-frame">
+        <div className="tavern tavern-panel">
+          <div className="tavern-head">
+            <SpriteBadge form={spriteForm} working={busy} size={22} />
+            <span className="tavern-head-name">
+              updated<i>.</i>
+            </span>
+            <span className="tavern-head-spacer" />
+            {updateStatus.version ? (
               <button
                 type="button"
-                className="tavern-file-back"
-                onClick={() => setCapabilitiesOpen(false)}
-              >
-                ← What UPDATED can do
-              </button>
-              <Capabilities
-                onPrompt={(text) => {
-                  setCapabilitiesOpen(false);
-                  setNotice(null);
-                  void sendMessage({ text });
-                }}
-                onOpenApps={() => {
-                  setCapabilitiesOpen(false);
-                  setTab("apps");
-                }}
-              />
-            </>
-          ) : settingsOpen ? (
-            <SettingsView
-              onClose={() => setSettingsOpen(false)}
-              onOpenThread={(threadId) => {
-                setSettingsOpen(false);
-                setTab("chat");
-                void openThreadById(threadId).then((picked) => {
-                  if (picked) onSwitchThread(picked);
-                });
-              }}
-              onThreadsCleared={() => {
-                void invalidateThreads(queryClient);
-                onSwitchThread(newThread());
-              }}
-              onReplayIntro={() => {
-                setSettingsOpen(false);
-                onboarding.replay();
-              }}
-            />
-          ) : tab === "search" ? (
-            <SearchTab
-              inputMode={inputMode}
-              onInputModeChange={(mode) => {
-                setInputMode(mode);
-                void window.api.setInputMode(mode);
-              }}
-              externalQuery={voiceSearchQuery}
-              onExternalQueryHandled={() => setVoiceSearchQuery(null)}
-            />
-          ) : tab === "history" ? (
-            <ThreadHistory
-              currentId={thread.id}
-              onPick={(picked) => {
-                if (picked.id === thread.id) setTab("chat");
-                else onSwitchThread(picked);
-              }}
-            />
-          ) : tab === "apps" ? (
-            <ConnectedApps
-              onUseWorkflow={(prompt) => {
-                setTab("chat");
-                // Sending past a pending approval strands the tool call, which
-                // leaves an unanswerable tool_use in the thread forever.
-                if (pinned) return;
-                setNotice(null);
-                void sendMessage({ text: prompt });
-              }}
-            />
-          ) : showChat ? (
-            <>
-              {messages.map((m) => (
-                <ChatMessage
-                  key={m.id}
-                  message={m}
-                  copied={copiedMessageId === m.id}
-                  disabled={pinned}
-                  editing={editingMessageId === m.id}
-                  editDraft={editDraft}
-                  onCopy={() => copyMessage(m)}
-                  onEdit={() => startEditingMessage(m)}
-                  onEditDraftChange={setEditDraft}
-                  onCancelEdit={cancelEditingMessage}
-                  onResendEdit={resendEditedMessage}
-                  onRegenerate={() => regenerateMessage(m)}
-                />
-              ))}
-              {approvals.map((call) => (
-                <div key={call.toolCallId} className="tavern-approve">
-                  <span className="tavern-approve-title">
-                    {SPRITES_INFO[spriteForm].label.toLowerCase()} wants to act
-                  </span>
-                  <div className="tavern-approve-text">
-                    {describeAgentAction(call)}
-                  </div>
-                  <div className="tavern-approve-actions">
-                    <button
-                      type="button"
-                      className="tavern-approve-btn tavern-approve-allow"
-                      onClick={() => resolveApproval(call, true)}
-                    >
-                      Allow
-                    </button>
-                    <button
-                      type="button"
-                      className="tavern-approve-btn"
-                      onClick={() => resolveApproval(call, false)}
-                    >
-                      Don't allow
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {awaitingText ? (
-                <div
-                  className="tavern-stream-wait"
-                  role="status"
-                  aria-label="Thinking"
-                >
-                  <Spark state="idle" size={11} />
-                </div>
-              ) : null}
-            </>
-          ) : tab === "todos" ? (
-            <TodosTab mascot={SPRITES_INFO[spriteForm].label} />
-          ) : tab === "notes" ? (
-            <NotesTab />
-          ) : tab === "brain" ? (
-            <BrainFiles
-              root=""
-              emptyText={TAB_PLACEHOLDER.brain}
-              newLabel="New file"
-              onOpenThread={(threadId) => {
-                setTab("chat");
-                void openThreadById(threadId).then((picked) => {
-                  if (picked) onSwitchThread(picked);
-                });
-              }}
-            />
-          ) : chatActive ? (
-            <OpenerCards
-              busy={busy}
-              onShowAll={() => setCapabilitiesOpen(true)}
-              onPrompt={(text) => {
-                setNotice(null);
-                void sendMessage({ text });
-              }}
-            />
-          ) : (
-            <div className="tavern-empty">{TAB_PLACEHOLDER[tab]}</div>
-          )}
-          {notice ? <p className="tavern-notice">{notice}</p> : null}
-        </div>
-
-        {chatActive && !settingsOpen && !capabilitiesOpen ? (
-          <div className="tavern-composer">
-            <textarea
-              id="panel-composer"
-              className="tavern-input"
-              value={draft}
-              rows={1}
-              placeholder="Ask anything"
-              onMouseDown={() => window.api.panelRequestFocus()}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  !e.shiftKey &&
-                  !e.nativeEvent.isComposing
-                ) {
-                  e.preventDefault();
-                  send();
+                className={`tavern-head-update${
+                  updateStatus.downloadState === "downloaded" ? " is-ready" : ""
+                }`}
+                title={
+                  updateStatus.downloadState === "downloaded"
+                    ? `Version ${updateStatus.version} is ready — restart to update`
+                    : updateStatus.downloadState === "downloading"
+                      ? `Version ${updateStatus.version} is downloading`
+                      : `Version ${updateStatus.version} is available`
                 }
-              }}
-            />
+                disabled={updateStatus.downloadState === "downloading"}
+                onClick={() => {
+                  if (updateStatus.downloadState === "downloaded") {
+                    window.api.installUpdate();
+                  } else {
+                    window.api.downloadUpdate();
+                  }
+                }}
+              >
+                {updateStatus.downloadState === "downloaded"
+                  ? "Restart to update"
+                  : updateStatus.downloadState === "downloading"
+                    ? "Downloading…"
+                    : "Update"}
+              </button>
+            ) : null}
             <button
               type="button"
-              className={`tavern-btn tavern-btn-send${action === "stop" ? " is-stop" : ""}`}
-              aria-label={action === "stop" ? "Stop generating" : "Send"}
-              title={action === "stop" ? "Stop generating" : "Send"}
-              onClick={action === "stop" ? stopGeneration : send}
+              className="tavern-head-new"
+              title="New conversation"
+              disabled={pinned}
+              onClick={() => onSwitchThread(newThread())}
             >
-              {action === "stop" ? "■" : "↑"}
+              ＋ New
+            </button>
+            <button
+              type="button"
+              className="tavern-close"
+              aria-label="Close"
+              onClick={() => window.api.panelClose()}
+            >
+              ×
             </button>
           </div>
-        ) : null}
+
+          <div
+            className="tavern-body updated-certificate-body"
+            role="tabpanel"
+            ref={bodyRef}
+          >
+            {panelBody}
+          </div>
+
+          {chatActive && !settingsOpen && !capabilitiesOpen ? (
+            <div className="tavern-composer">
+              <textarea
+                id="panel-composer"
+                className="tavern-input"
+                value={draft}
+                rows={1}
+                placeholder="Ask anything"
+                onMouseDown={() => window.api.panelRequestFocus()}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className={`tavern-btn tavern-btn-send${action === "stop" ? " is-stop" : ""}`}
+                aria-label={action === "stop" ? "Stop generating" : "Send"}
+                title={action === "stop" ? "Stop generating" : "Send"}
+                onClick={action === "stop" ? stopGeneration : send}
+              >
+                {action === "stop" ? "■" : "↑"}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
       <PanelTail />
       <PanelResizeHandle />

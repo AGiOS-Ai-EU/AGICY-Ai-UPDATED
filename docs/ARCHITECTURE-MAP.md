@@ -35,7 +35,7 @@
 | `DESIGN.md` | Upstream design brief (warm paper, editorial, **explicitly rejects glassmorphism**) |
 | `apps/electron/src/renderer/src/tavern.css` | **Active** runtime CSS (~4k lines, “tavern” theme) |
 | `apps/electron/src/renderer/src/overlay.css` | Transparent window roots |
-| `apps/electron/src/renderer/src/glass.css` | **Fork-only** glass overlay (conflicts with Gate 1 brief — remove or gate in Phase 2) |
+| `apps/electron/src/renderer/src/glass.css` | **Retired** — hybrid shell uses `updated-hybrid-shell.css` instead |
 
 Gate 1 asks to replace tokens in `freestyle-design`; **first step is either add that package or retarget `tavern.css` + a new `updated-design` token file** — decide before Phase 2.
 
@@ -56,7 +56,7 @@ Gate 1 asks to replace tokens in `freestyle-design`; **first step is either add 
 | Window | HTML | Component | Purpose |
 |--------|------|-----------|---------|
 | Companion | `companion.html` | `components/companion.tsx` | Floating spark/sprite + dictation bubble |
-| Panel | `panel.html` | `components/panel.tsx` | Chat, settings, connectors, scheduled tasks |
+| Panel | `panel.html` | `components/panel.tsx` | Chat, Search, settings — **hybrid glass shell + vertical icon rail** (`panel-rail.tsx`); certificate content zone for Search |
 | Notification | `notification.html` | `components/notification.tsx` | Toast stack |
 
 All three: `frame: false`, `transparent: true`, `alwaysOnTop: true`, `skipTaskbar: true` (see `createPanelWindow`, `createCompanionWindow` in main `index.ts`).

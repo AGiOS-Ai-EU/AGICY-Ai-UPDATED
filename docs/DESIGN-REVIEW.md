@@ -12,7 +12,25 @@
 | **Is UPDATED production UI glassmorphism?** | **No.** Shipped Electron panel + Search UI is **certificate / paper** — flat fields, 0.5px hairlines, 2px radius, no blur, no glow. |
 | **Does user’s desktop reference match UPDATED?** | **No.** Reference shows frosted-glass settings + floating vertical icon rail — closer to upstream Freestyle / a third-party mock, not Gate 1–6 UPDATED. |
 | **Why mobile editorial image 3 looks wrong?** | Compositor draws UI as **floating rectangles on the photo**, not **inset inside the phone bezel**; wrong proportions; generic white cards; annotation clutter. |
-| **Design tension?** | **Yes.** Gate 1 brief + README explicitly reject glass; user reference now asks for liquid glass + side rail. Decision required before next image batch. |
+| **Design tension?** ~~Yes~~ **Resolved (Gate 11):** Hybrid — glass shell + certificate content.
+
+---
+
+## Decision: Hybrid (Gate 11)
+
+**User choice:** Glass **shell** (nav rail, panel frame, settings backdrop) + certificate **content** (Search claim cards, primary rate, CONTESTED, age strip).
+
+| Surface | Treatment |
+|---------|-----------|
+| Vertical nav rail | Frosted glass pill, 20px radius, detached left |
+| Panel frame | Light glass blur, neutral cool tint from `--updated-paper` |
+| Search body | Flat `--updated-paper`, claim cards unchanged |
+| Claim cards | Certificate only — no blur |
+
+Implementation: `packages/updated-design/tokens.css` (glass tokens), `updated-hybrid-shell.css`, `components/panel-rail.tsx`, `panel.tsx` layout.
+
+Mobile spec: `docs/MOBILE-HYBRID-SPEC.md`  
+Compositor: `scripts/compose-mobile-hybrid.py` (screen-mask clip)
 
 ---
 

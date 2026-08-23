@@ -1,17 +1,32 @@
 /**
- * UPDATED design tokens — Gate 1 canonical palette.
- * Import after overlay.css; overrides tavern.css variables without glass.
+ * UPDATED design tokens — Gate 1 certificate + hybrid glass shell.
+ *
+ * Surface map:
+ *   GLASS SHELL  — panel frame, vertical nav rail, settings chrome backdrop
+ *   CERTIFICATE  — Search claim cards, primary rate, CONTESTED, age strip, body scroll
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Martian+Mono:wght@400..600&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&display=swap");
 
 :root {
-  /* Core surfaces */
+  /* ── Certificate content (flat paper — never blur) ── */
   --updated-paper: #f7f8f6;
   --updated-ink: #16211f;
   --updated-graphite: #5c6663;
   --updated-rule: #d6dbd7;
   --updated-field: #ffffff;
+
+  /* ── Glass shell (nav rail, panel frame — frosted, not purple) ── */
+  --updated-glass-bg: color-mix(in srgb, var(--updated-paper) 68%, transparent);
+  --updated-glass-bg-strong: color-mix(in srgb, var(--updated-field) 82%, transparent);
+  --updated-glass-border: color-mix(in srgb, var(--updated-rule) 75%, var(--updated-ink) 6%);
+  --updated-glass-blur: 20px;
+  --updated-glass-blur-strong: 28px;
+  --updated-glass-specular: inset 0 1px 0 color-mix(in srgb, #ffffff 42%, transparent);
+  --updated-glass-shadow: 0 8px 32px color-mix(in srgb, var(--updated-ink) 8%, transparent);
+  --updated-glass-radius: 16px;
+  --updated-glass-rail-radius: 20px;
+  --updated-glass-rail-width: 52px;
 
   /* Spacing & shape */
   --updated-space-base: 4px;

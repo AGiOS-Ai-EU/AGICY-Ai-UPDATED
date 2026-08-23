@@ -1,0 +1,186 @@
+/**
+ * Hybrid shell — glass frame + vertical nav rail.
+ * Certificate content lives in .updated-certificate-body (see updated-design.css).
+ */
+
+.updated-hybrid-shell {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: calc(var(--updated-space-rhythm) * 1.5);
+  height: 100%;
+  padding: calc(var(--updated-space-rhythm) * 1.5) 0
+    calc(var(--updated-space-rhythm) * 1.5) calc(var(--updated-space-rhythm) * 1.5);
+  box-sizing: border-box;
+}
+
+/* Floating vertical icon rail — detached pill */
+.updated-glass-rail {
+  flex: 0 0 var(--updated-glass-rail-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--updated-space-base) * 1.5);
+  padding: calc(var(--updated-space-rhythm) * 1.5) calc(var(--updated-space-base) * 2);
+  margin-top: calc(var(--updated-space-rhythm) * 2);
+  margin-bottom: calc(var(--updated-space-rhythm) * 6);
+  border: var(--updated-hairline) solid var(--updated-glass-border);
+  border-radius: var(--updated-glass-rail-radius);
+  background: var(--updated-glass-bg);
+  backdrop-filter: blur(var(--updated-glass-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--updated-glass-blur)) saturate(1.15);
+  box-shadow: var(--updated-glass-shadow), var(--updated-glass-specular);
+  align-self: center;
+}
+
+.updated-glass-rail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: var(--updated-hairline) solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--updated-graphite);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.updated-glass-rail-btn:hover {
+  color: var(--updated-ink);
+  background: color-mix(in srgb, var(--updated-field) 55%, transparent);
+}
+
+.updated-glass-rail-btn[aria-selected="true"] {
+  color: var(--updated-ink);
+  background: var(--updated-glass-bg-strong);
+  border-color: var(--updated-glass-border);
+  box-shadow: var(--updated-glass-specular);
+}
+
+.updated-glass-rail-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.updated-glass-rail-divider {
+  width: 24px;
+  height: var(--updated-hairline);
+  background: var(--updated-glass-border);
+  margin: calc(var(--updated-space-base) * 0.5) 0;
+}
+
+.updated-glass-rail-spacer {
+  flex: 1;
+  min-height: calc(var(--updated-space-rhythm) * 2);
+}
+
+.updated-glass-rail-overflow {
+  position: relative;
+}
+
+.updated-glass-rail-menu {
+  position: absolute;
+  left: calc(100% + calc(var(--updated-space-rhythm) * 1.5));
+  bottom: 0;
+  min-width: 120px;
+  padding: calc(var(--updated-space-base) * 1.5);
+  border: var(--updated-hairline) solid var(--updated-glass-border);
+  border-radius: var(--updated-glass-radius);
+  background: var(--updated-glass-bg-strong);
+  backdrop-filter: blur(var(--updated-glass-blur-strong)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--updated-glass-blur-strong)) saturate(1.15);
+  box-shadow: var(--updated-glass-shadow), var(--updated-glass-specular);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--updated-space-base) * 0.5);
+  z-index: 20;
+}
+
+.updated-glass-rail-menu-btn {
+  font: 500 11px var(--updated-font-ui);
+  text-align: left;
+  padding: calc(var(--updated-space-base) * 2) calc(var(--updated-space-rhythm) * 1.5);
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--updated-ink);
+  cursor: pointer;
+}
+
+.updated-glass-rail-menu-btn:hover,
+.updated-glass-rail-menu-btn.is-active {
+  background: color-mix(in srgb, var(--updated-field) 70%, transparent);
+}
+
+/* Main panel — frosted frame wrapping certificate content */
+.updated-glass-frame {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 calc(var(--updated-space-rhythm) * 1.5)
+    calc(var(--updated-space-rhythm) * 5) 0;
+  border: var(--updated-hairline) solid var(--updated-glass-border);
+  border-radius: var(--updated-glass-radius);
+  background: var(--updated-glass-bg);
+  backdrop-filter: blur(var(--updated-glass-blur)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--updated-glass-blur)) saturate(1.1);
+  box-shadow: var(--updated-glass-shadow), var(--updated-glass-specular);
+  overflow: hidden;
+}
+
+.updated-hybrid-shell .tavern-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  background-image: none;
+  height: auto;
+}
+
+.updated-hybrid-shell .tavern-head {
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--updated-glass-bg-strong) 60%, transparent);
+  border-bottom: var(--updated-hairline) solid var(--updated-glass-border);
+}
+
+.updated-certificate-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--updated-paper);
+}
+
+.updated-hybrid-shell .tavern-tabs {
+  display: none;
+}
+
+.updated-hybrid-shell .tavern-composer {
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--updated-glass-bg-strong) 50%, transparent);
+  border-top: var(--updated-hairline) solid var(--updated-glass-border);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+}
+
+.updated-hybrid-shell .tavern-resize-handle {
+  right: calc(var(--updated-space-rhythm) * 1.5);
+}

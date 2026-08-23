@@ -231,3 +231,22 @@ Original gala/Dubai close-ups replaced by NY editorial set in Gate 10.
 | `README.md` | **Usage → Mobile** rewritten for editorial set |
 
 **Generation:** Hybrid pipeline — Cursor `GenerateImage` for NY editorial base photos (1 attempt each; hands verified acceptable), then programmatic Pillow overlays for pixel-perfect certificate UI (paper `#f8f6f1`, ink `#1a1814`, graphite `#5c5850`, PRIMARY/CONTESTED chips, age strip, annotation rules). No microphones. Wardrobe: camel coat, navy blazer, cream knit — not gala leather.
+
+---
+
+## Gate 11 — Hybrid design (glass shell + certificate content)
+
+| File | Change |
+|------|--------|
+| `packages/updated-design/tokens.css` | Glass shell tokens (`--updated-glass-*`) documented alongside certificate tokens |
+| `apps/electron/src/renderer/src/updated-hybrid-shell.css` | **New** — frosted rail + frame; certificate body zone |
+| `apps/electron/src/renderer/src/components/panel-rail.tsx` | **New** — vertical icon rail (Chat, Search, History, Settings, More overflow) |
+| `apps/electron/src/renderer/src/components/panel.tsx` | Hybrid layout; horizontal tabs removed |
+| `apps/electron/src/renderer/src/updated-design.css` | Import hybrid shell |
+| `apps/electron/src/renderer/src/search-results.css` | Comment — claim cards stay certificate |
+| `docs/MOBILE-HYBRID-SPEC.md` | **New** — mobile rail + compositor dimensions |
+| `docs/DESIGN-REVIEW.md` | Decision: Hybrid section |
+| `scripts/compose-mobile-hybrid.py` | **New** — screen-mask clip, glass rail + certificate UI |
+| `docs/assets/phone-masks/editorial-3.json` | Mask fractions for compositor |
+
+**Nav change:** Horizontal text tabs → floating left glass rail. Secondary tabs (Todos, Notes, Brain, Apps) in rail **More** menu.

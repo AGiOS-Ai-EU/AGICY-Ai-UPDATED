@@ -1,9 +1,10 @@
 /**
- * UPDATED runtime theme — certificate aesthetic layered on tavern.css.
+ * UPDATED runtime theme — hybrid: glass shell + certificate content.
  * Loaded after tavern.css; retires glass.css overrides.
  */
 
 @import "@updated/design/tokens.css";
+@import "./updated-hybrid-shell.css";
 
 .tavern {
   background: var(--updated-paper);

@@ -1,6 +1,6 @@
 /**
- * Certificate layout for search claim cards — Gate 4.
- * Uses @updated/design tokens only; no glass, blur, glow, or shadows.
+ * Certificate layout for search claim cards — Gate 4 / hybrid content zone.
+ * Claim cards stay flat paper (no blur). Glass shell wraps panel in updated-hybrid-shell.css.
  */
 
 .updated-search {
