@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748B?style=flat-square" alt="MIT License" /></a>
-  <a href="https://github.com/AGiOS-Ai-EU/UPDATED/releases"><img src="https://img.shields.io/badge/release-0.9.0--beta.1-C9894A?style=flat-square" alt="UPDATED 0.9.0 beta 1" /></a>
+  <a href="https://github.com/AGiOS-Ai-EU/UPDATED/releases"><img src="https://img.shields.io/badge/release-0.9.0--beta.2-C9894A?style=flat-square" alt="UPDATED 0.9.0 beta 2" /></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-1A1A2E?style=flat-square" alt="Windows, macOS, Linux" />
   <img src="https://img.shields.io/badge/shell-Electron-1A1A2E?style=flat-square" alt="Electron" />
 </p>
@@ -46,9 +46,9 @@ Download only from the official [UPDATED Releases](https://github.com/AGiOS-Ai-E
 
 | System | Installer | Default hotkey |
 | --- | --- | --- |
-| Windows | `UPDATED-0.9.0-beta.1-setup.exe` | Right Alt |
-| macOS | `UPDATED-0.9.0-beta.1.dmg` | Fn |
-| Linux | `UPDATED-0.9.0-beta.1.AppImage` or `.deb` | Ctrl + Alt + Space |
+| Windows | `UPDATED-0.9.0-beta.2-setup.exe` | Right Alt |
+| macOS | `UPDATED-0.9.0-beta.2.dmg` | Fn |
+| Linux | `UPDATED-0.9.0-beta.2.AppImage` or `.deb` | Ctrl + Alt + Space |
 
 > [!WARNING]
 > This first beta is not code-signed or notarized. Windows SmartScreen and macOS Gatekeeper may warn before opening it. Verify that the download comes from `AGiOS-Ai-EU/UPDATED`.
