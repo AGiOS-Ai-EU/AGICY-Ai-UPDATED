@@ -207,13 +207,27 @@ pnpm biome check packages/search apps/server/src/lib/search apps/server/src/rout
 
 ---
 
-## Gate 9 — Mobile usage imagery (gala style)
+## Gate 9 — Mobile usage imagery (gala style) — **superseded**
+
+| File | Status |
+|------|--------|
+| `docs/assets/updated-mobile-hold-speak-1.png` | **Deleted** (Gate 10) |
+| `docs/assets/updated-mobile-hold-speak-2.png` | **Deleted** (Gate 10) |
+| `docs/assets/updated-mobile-hold-speak-3.png` | **Deleted** (Gate 10) |
+
+Original gala/Dubai close-ups replaced by NY editorial set in Gate 10.
+
+---
+
+## Gate 10 — Mobile usage imagery (NY editorial + composited UI)
 
 | File | Change |
 |------|--------|
-| `docs/assets/updated-mobile-hold-speak-1.png` | **New** — 1120×630, ~988 KB. Scene A: woman shows phone with UPDATED claim cards to man — medium close-up, gala backdrop. |
-| `docs/assets/updated-mobile-hold-speak-2.png` | **New** — 1080×608, ~952 KB. Scene B: two people side by side, each holding phone with Search UI + waveform. |
-| `docs/assets/updated-mobile-hold-speak-3.png` | **New** — 1120×630, ~1008 KB. Scene C: single-subject close-up, thumb on hotkey, “Cyprus annual return” query. |
-| `README.md` | **Usage → Mobile** sub-section with three images |
+| `docs/assets/updated-mobile-hold-speak-*.png` | **Removed** via `git rm` |
+| `docs/assets/updated-mobile-editorial-1.png` | **New** — 1200×675, ~931 KB. Café interview gesture, Brooklyn bokeh, floating claim cards + PRIMARY 2/5. |
+| `docs/assets/updated-mobile-editorial-2.png` | **New** — 1280×720, ~907 KB. Over-shoulder, waveform ribbon, primary rate 1/5. |
+| `docs/assets/updated-mobile-editorial-3.png` | **New** — 1280×720, ~763 KB. Hands hero, CONTESTED UI, annotation lines. |
+| `scripts/compose-mobile-editorial.py` | **New** — Pillow compositor for certificate UI overlays |
+| `README.md` | **Usage → Mobile** rewritten for editorial set |
 
-**Generation:** Cursor `GenerateImage` with dual references — user gala style guide (`Gemini_Generated_Image_oldnjz…jpg`) + `updated-github-hero.png` for UPDATED UI tokens. Prompts: no microphones, smartphones with certificate UI (paper `#f8f6f1`, ink `#1a1814`, graphite `#5c5850`), closer camera, UPDATED glass branding (not crypto). Resized/optimized with Pillow.
+**Generation:** Hybrid pipeline — Cursor `GenerateImage` for NY editorial base photos (1 attempt each; hands verified acceptable), then programmatic Pillow overlays for pixel-perfect certificate UI (paper `#f8f6f1`, ink `#1a1814`, graphite `#5c5850`, PRIMARY/CONTESTED chips, age strip, annotation rules). No microphones. Wardrobe: camel coat, navy blazer, cream knit — not gala leather.

@@ -66,24 +66,24 @@ Typed queries in the Search tab work the same way — voice is the primary path 
 
 ### Mobile
 
-Same flow on phone: hold the hotkey, speak, read claim cards. Illustrations below — not live app screenshots. Mobile client is not shipped in this repo; UI chrome matches the desktop certificate tokens.
+Same flow on phone: hold the hotkey, speak, read claim cards. Editorial illustrations below — not live app screenshots. Mobile client is not shipped in this repo; overlays show intended certificate utility (claim cards, primary rate, CONTESTED divergence).
 
 <p align="center">
-  <img alt="Gala close-up: woman shows UPDATED Search claim cards on phone to colleague" src="docs/assets/updated-mobile-hold-speak-1.png" width="960" />
+  <img alt="NY café: woman shows UPDATED Search on phone to colleague; floating claim cards with PRIMARY chips" src="docs/assets/updated-mobile-editorial-1.png" width="960" />
   <br />
-  <sub>Hold hotkey on phone → speak → show claim cards to a colleague.</sub>
+  <sub>Interview gesture — voice query on phone, claim-card stack annotated beside screen (PRIMARY 2/5).</sub>
 </p>
 
 <p align="center">
-  <img alt="Two professionals side by side, each holding phone with UPDATED Search and waveform" src="docs/assets/updated-mobile-hold-speak-2.png" width="960" />
+  <img alt="Over-shoulder: hands hold phone with waveform ribbon and primary-source rate header" src="docs/assets/updated-mobile-editorial-2.png" width="960" />
   <br />
-  <sub>Side by side: each holds hotkey, speaks, reads PRIMARY rate and CONTESTED state on screen.</sub>
+  <sub>Over-shoulder — hold hotkey, voice → search ribbon, primary-source rate 1/5.</sub>
 </p>
 
 <p align="center">
-  <img alt="Close-up: thumb on phone hotkey, Cyprus annual return query and waveform on UPDATED UI" src="docs/assets/updated-mobile-hold-speak-3.png" width="960" />
+  <img alt="Hands hero: phone shows CONTESTED state with annotation lines to similarity and age strip" src="docs/assets/updated-mobile-editorial-3.png" width="960" />
   <br />
-  <sub>Close-up: hotkey hold, voice waveform, query visible — claim cards below.</sub>
+  <sub>Hands hero — CONTESTED divergence, provider sections, magazine annotation marks.</sub>
 </p>
 
 ---
