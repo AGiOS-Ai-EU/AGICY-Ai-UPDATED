@@ -202,7 +202,9 @@ flowchart TB
 
 **STT:** Restore provider registry from pre-v23 upstream; default suggest Deepgram EU.
 
-**Auth:** None. Mirror existing Brave search keychain pattern:
+**Auth:** None. Mirror existing Brave search keychain pattern.
+
+> **Auth audit (8cfdce5a):** Phase 1 requires **no `agicy-platform` changes** — Supabase at `auth.agicy.ai` has no desktop OAuth, and Freestyle JWTs are not swappable. All Phase 1 work stays in this repo.
 
 - New `apps/electron/src/main/stt-keychain.ts`
 - IPC: `stt:set-key`, `stt:clear-key`, `stt:key-status`
@@ -396,6 +398,44 @@ Phase 3 may host STT at `stt.agicy.ai` (Deepgram EU or Speechmatics **behind** A
 
 **Default key strategy (recommended):** Search works with **0 keys** on mock; voice needs **1 STT key** (Deepgram EU); cleanup **optional**; Phase 3 replaces BYOK with AGICY account for users who prefer hosted STT.
 
+### 9.6 Copperway — two credential layers (agicy-platform)
+
+Copperway (`proxy.agicy.com/v1`, marketed at `agicy.ai/gateway`) is **LLM-only**. Supported first-class routes today: `/v1/chat/completions`, `/v1/images`. No `/v1/audio/transcriptions`, Deepgram WebSocket, or embeddings handler — **UPDATED cannot use Copperway for STT** until Phase 3 `stt.agicy.ai` (or a future gateway STT route).
+
+| Layer | What the client sends | Where it lives | Used for |
+|-------|----------------------|----------------|----------|
+| **Gateway workspace secret** | `Authorization: Bearer <workspace_api_secret>` | Dashboard → API keys (`/dashboard/api`); hashed in `proxy_configurations` | Authenticates calls to Copperway |
+| **Upstream BYOK** (optional) | Never sent by desktop — server-side only | Dashboard → Connections → BYOK vault (`/api/byok`, encrypted with `PROXY_VAULT_KEY`) | Which LLM upstream Copperway bills against |
+
+**BYOK providers in Copperway vault** (`src/lib/byokProviders.ts`): OpenAI, Anthropic, Google Gemini, Moonshot, Cerebras, **Groq** (voice/cleanup stack), Mistral, DeepSeek. **Deepgram is not a BYOK provider** — STT stays a separate key path in UPDATED.
+
+**Upstream key resolution** (`resolveUpstreamKey.ts`): signed-in user's BYOK → workspace OpenAI vault → server env (`GROQ_API_KEY`, `OPENAI_API_KEY`, …).
+
+**Playground voice STT** (`/api/playground/speech/stt`) uses **AGICY server `GROQ_API_KEY`**, not user BYOK — web-only, playground session cookie required. This is unrelated to UPDATED desktop keys.
+
+**Can UPDATED point at Copperway instead of OpenAI/Deepgram directly?**
+
+| Path | Phase 1–2 | Notes |
+|------|-----------|-------|
+| STT → Copperway | **No** | No audio/STT proxy route |
+| STT → Deepgram EU direct | **Yes** (Phase 1 plan) | User BYOK in Electron `safeStorage` |
+| Cleanup LLM → Copperway | **Possible** (Decision 2B) | OpenAI-compatible `chat/completions`; workspace secret as `apiKey`, not user's OpenAI key |
+| Cleanup LLM → Groq/OpenAI direct | **Possible** (Decision 2B) | Restore upstream BYOK keychain in UPDATED |
+| Search → Brave | **Yes** | Independent of Copperway |
+
+### 9.7 Setup scenarios (UPDATED desktop)
+
+| Profile | Keys / accounts | Voice search | Live web search |
+|---------|-----------------|--------------|-----------------|
+| **Minimal beta (Phase 1)** | 1× Deepgram EU | ✅ | Mock citations only |
+| **Minimal + live search** | Deepgram EU + Brave | ✅ | ✅ |
+| **Power user BYOK** | Deepgram EU + Brave + optional Groq/OpenAI cleanup | ✅ | ✅ |
+| **Power user Copperway cleanup** | Deepgram EU + Brave + Copperway workspace secret (cleanup only) | ✅ | ✅ |
+| **Privacy max (Phase 2)** | 0 cloud keys (local whisper) + optional Brave | ✅ offline STT | Optional |
+| **AGICY-hosted (Phase 3)** | AGICY account (STT JWT) + optional Brave | ✅ | Optional |
+
+**Today (0.9.0-beta.x):** Freestyle device OAuth replaces all of the above for STT — one browser sign-in at `freestylevoice.com/device` covers STT + default cleanup; Brave remains the only separate BYOK field in Settings → Search.
+
 ---
 
 ## 10. Open questions (non-blocking)
@@ -434,6 +474,7 @@ Before any implementation PR:
 | Desktop OAuth | ❌ **Not implemented** — must be built for Phase 3 |
 | STT token API | ❌ **Not implemented** — must be built for Phase 3 |
 | Freestyle JWT swap | ❌ **Not possible** without Freestyle backend change |
+| Phase 1 platform scope | ✅ **No `agicy-platform` changes** — BYOK in Electron only |
 
 ## Appendix B — STT research summary (fd127cfd)
 
