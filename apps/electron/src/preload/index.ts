@@ -1,4 +1,5 @@
 import { electronAPI } from "@electron-toolkit/preload";
+import type { DivergenceReport, ProviderSearchResult } from "@updated/search";
 import { contextBridge, ipcRenderer } from "electron";
 import type { ActiveAudioPlaybackMode } from "../shared/audio-playback";
 import type { CompanionForm, CompanionState } from "../shared/companion";
@@ -140,8 +141,8 @@ const api = {
         ok: true;
         query: string;
         contested: boolean;
-        divergence: unknown;
-        results: unknown[];
+        divergence: DivergenceReport;
+        results: ProviderSearchResult[];
       }
     | { ok: false; error: string }
   > => ipcRenderer.invoke("search:query", query),

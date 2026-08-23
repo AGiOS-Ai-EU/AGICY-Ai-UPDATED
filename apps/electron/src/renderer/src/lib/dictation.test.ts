@@ -97,6 +97,7 @@ function makeController() {
     {
       destination: () => "composer",
       outputMode: () => "paste",
+      inputMode: () => "dictation",
       soundEnabled: () => false,
       audioPlaybackMode: () => "off",
     },

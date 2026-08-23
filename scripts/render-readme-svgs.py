@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "docs" / "assets"
 
 SVGS = [
+    "updated-launch-123.svg",
     "updated-mobile-search.svg",
     "updated-mobile-voice.svg",
     "updated-mobile-contested.svg",
@@ -29,7 +30,11 @@ _PUNCT_FIX = {
 def sanitize_svg_file(path: Path) -> None:
     import re
 
-    text = path.read_bytes().decode("latin-1")
+    raw = path.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
     for old, new in _PUNCT_FIX.items():
         text = text.replace(old, new)
     # XML 1.0 forbids most control characters
@@ -53,7 +58,7 @@ def main() -> None:
             sys.exit(1)
         sanitize_svg_file(svg)
         png = ASSETS / name.replace(".svg", ".png")
-        render_resvg(svg, png)
+        render_resvg(svg, png, width=1600 if name == "updated-launch-123.svg" else 780)
         kb = png.stat().st_size // 1024
         from PIL import Image
 

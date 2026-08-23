@@ -109,9 +109,9 @@ test("main process is responsive", async () => {
   expect(isPackaged).toBe(false);
 });
 
-test("app name is Freestyle", async () => {
+test("app name is UPDATED", async () => {
   const appName = await app?.evaluate(({ app }) => app.getName());
-  expect(appName).toBe("Freestyle");
+  expect(appName).toBe("UPDATED");
 });
 
 test("app version is defined", async () => {

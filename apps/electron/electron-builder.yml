@@ -1,5 +1,5 @@
-appId: com.freestyle.app
-productName: Freestyle
+appId: ai.agicy.updated
+productName: UPDATED
 directories:
   buildResources: build
 files:
@@ -17,35 +17,46 @@ extraResources:
     filter:
       - "**/*"
 win:
-  executableName: Freestyle
+  executableName: UPDATED
+  icon: icon.ico
+  target:
+    - nsis
+    - msi
 nsis:
   artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+msi:
+  artifactName: ${productName}-${version}.${ext}
 mac:
+  identity: null
+  icon: icon.icns
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   artifactName: ${productName}-${version}-${arch}.${ext}
+  target:
+    - dmg
+    - zip
   extendInfo:
     NSCameraUsageDescription: Application requests access to the device's camera.
     NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-    NSAppleEventsUsageDescription: Freestyle uses Apple Events to paste transcribed text into the focused application.
-  notarize: true
+    NSAppleEventsUsageDescription: UPDATED uses Apple Events to paste transcribed text into the focused application.
+  notarize: false
 dmg:
   artifactName: ${productName}-${version}.${ext}
 linux:
-  executableName: freestyle
+  executableName: updated
   icon: icons
   desktop:
     entry:
-      StartupWMClass: freestyle
+      StartupWMClass: updated
   target:
     - AppImage
     - deb
-  maintainer: freestyle
+  maintainer: AGICY.Ai
   category: Utility
 appImage:
   artifactName: ${productName}-${version}.${ext}
@@ -54,5 +65,5 @@ deb:
 npmRebuild: false
 publish:
   provider: github
-  owner: freestyle-voice
-  repo: freestyle
+  owner: AGiOS-Ai-EU
+  repo: UPDATED

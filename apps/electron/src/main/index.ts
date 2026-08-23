@@ -1513,7 +1513,7 @@ function buildTrayContextMenu(): Menu {
 }
 
 function createTray(): void {
-  // Give the Freestyle mark enough presence in system trays while staying
+  // Give the UPDATED mark enough presence in system trays while staying
   // within the standard macOS menu-bar icon height.
   const trayImage = nativeImage
     .createFromPath(trayIconPath)
@@ -1639,7 +1639,7 @@ app.whenReady().then(async () => {
   void recoverDuckedVolumeFromCrash();
 
   // Set app user model id for windows
-  electronApp.setAppUserModelId("com.updated.app");
+  electronApp.setAppUserModelId("ai.agicy.updated");
 
   // Override app.name so macOS menu shows "UPDATED" instead of the package name
   app.setName("UPDATED");

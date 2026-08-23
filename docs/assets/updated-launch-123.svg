@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">UPDATED in three steps</title>
+  <desc id="desc">Download and install, hold the platform hotkey and speak, then read sourced results. Available in eight languages.</desc>
+  <rect width="1280" height="720" rx="28" fill="#f5f0eb"/>
+  <g stroke="#e1dcd4">
+    <path d="M0 78h1280M0 646h1280"/>
+    <path d="M64 0v720M1216 0v720" opacity=".7"/>
+  </g>
+
+  <text x="68" y="49" fill="#1a1a2e" font-family="Consolas, ui-monospace, monospace" font-size="17" font-weight="700" letter-spacing="2">UPDATED</text>
+  <text x="1212" y="49" text-anchor="end" fill="#b87333" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600">by AGICY.Ai</text>
+  <text x="640" y="132" text-anchor="middle" fill="#1a1a2e" font-family="Georgia, serif" font-size="46" font-weight="600">Three steps. One evidence trail.</text>
+  <text x="640" y="166" text-anchor="middle" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="17">Windows &#183; macOS &#183; Linux</text>
+
+  <g stroke="#c9894a" stroke-width="2" fill="none">
+    <path d="M387 339h65" stroke-dasharray="6 8"/>
+    <path d="m442 332 10 7-10 7"/>
+    <path d="M828 339h65" stroke-dasharray="6 8"/>
+    <path d="m883 332 10 7-10 7"/>
+  </g>
+
+  <g transform="translate(72 208)">
+    <rect width="360" height="280" rx="8" fill="#fff" stroke="#e1dcd4"/>
+    <text x="26" y="43" fill="#b87333" font-family="Consolas, monospace" font-size="15" font-weight="700" letter-spacing="2">01</text>
+    <g transform="translate(284 22)">
+      <circle cx="25" cy="25" r="25" fill="#f5f0eb" stroke="#e5d4b1"/>
+      <g transform="translate(13 13)" fill="none" stroke="#b87333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v12m0 0 5-5m-5 5-5-5"/>
+        <path d="M4 19h16"/>
+      </g>
+    </g>
+    <text x="26" y="116" fill="#1a1a2e" font-family="Georgia, serif" font-size="29" font-weight="600">Download and install</text>
+    <text x="26" y="157" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="16">
+      <tspan x="26">Choose your desktop system and install</tspan>
+      <tspan x="26" dy="24">the UPDATED beta.</tspan>
+    </text>
+    <g transform="translate(26 214)" font-family="Consolas, monospace" font-size="11">
+      <rect width="92" height="32" rx="3" fill="#f5f0eb" stroke="#e1dcd4"/>
+      <text x="46" y="21" text-anchor="middle" fill="#1a1a2e">WINDOWS</text>
+      <rect x="100" width="92" height="32" rx="3" fill="#f5f0eb" stroke="#e1dcd4"/>
+      <text x="146" y="21" text-anchor="middle" fill="#1a1a2e">MACOS</text>
+      <rect x="200" width="92" height="32" rx="3" fill="#f5f0eb" stroke="#e1dcd4"/>
+      <text x="246" y="21" text-anchor="middle" fill="#1a1a2e">LINUX</text>
+    </g>
+  </g>
+
+  <g transform="translate(460 208)">
+    <rect width="360" height="280" rx="8" fill="#fff" stroke="#e1dcd4"/>
+    <text x="26" y="43" fill="#b87333" font-family="Consolas, monospace" font-size="15" font-weight="700" letter-spacing="2">02</text>
+    <g transform="translate(284 22)">
+      <circle cx="25" cy="25" r="25" fill="#f5f0eb" stroke="#e5d4b1"/>
+      <g transform="translate(13 13)" fill="none" stroke="#b87333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12h2l2-6 4 12 3-10 3 7 2-3h2"/>
+      </g>
+    </g>
+    <text x="26" y="116" fill="#1a1a2e" font-family="Georgia, serif" font-size="29" font-weight="600">Hold and speak</text>
+    <text x="26" y="157" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="16">
+      <tspan x="26">Hold the platform hotkey and ask your</tspan>
+      <tspan x="26" dy="24">question naturally.</tspan>
+    </text>
+    <rect x="26" y="214" width="308" height="34" rx="3" fill="#f5f0eb" stroke="#e1dcd4"/>
+    <text x="180" y="236" text-anchor="middle" fill="#1a1a2e" font-family="Consolas, monospace" font-size="11" font-weight="700">RIGHT ALT &#183; FN &#183; CTRL+ALT+SPACE</text>
+  </g>
+
+  <g transform="translate(848 208)">
+    <rect width="360" height="280" rx="8" fill="#fff" stroke="#e1dcd4"/>
+    <text x="26" y="43" fill="#b87333" font-family="Consolas, monospace" font-size="15" font-weight="700" letter-spacing="2">03</text>
+    <g transform="translate(284 22)">
+      <circle cx="25" cy="25" r="25" fill="#f5f0eb" stroke="#e5d4b1"/>
+      <g transform="translate(13 13)" fill="none" stroke="#b87333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="3" width="16" height="18" rx="2"/>
+        <path d="M8 8h8M8 12h8M8 16h5"/>
+      </g>
+    </g>
+    <text x="26" y="116" fill="#1a1a2e" font-family="Georgia, serif" font-size="29" font-weight="600">Read sourced results</text>
+    <text x="26" y="157" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="16">
+      <tspan x="26">See claim cards, primary-source rate,</tspan>
+      <tspan x="26" dy="24">and CONTESTED results.</tspan>
+    </text>
+    <g transform="translate(26 214)">
+      <rect width="96" height="32" rx="3" fill="#fff" stroke="#c9894a"/>
+      <text x="48" y="21" text-anchor="middle" fill="#b87333" font-family="Consolas, monospace" font-size="10" font-weight="700">PRIMARY</text>
+      <text x="139" y="21" fill="#1a1a2e" font-family="Georgia, serif" font-size="19">2 / 5</text>
+      <text x="214" y="20" fill="#5e4e78" font-family="Consolas, monospace" font-size="10" font-weight="700">CONTESTED</text>
+    </g>
+  </g>
+
+  <g transform="translate(72 524)" font-family="Segoe UI, sans-serif" font-size="12" fill="#64748b">
+    <!-- English / United Kingdom -->
+    <g transform="translate(0 0)"><rect width="24" height="16" rx="2" fill="#012169"/><path d="M0 0l24 16M24 0 0 16" stroke="#fff" stroke-width="3"/><path d="M0 0l24 16M24 0 0 16" stroke="#c8102e"/><path d="M10 0h4v16h-4zM0 6h24v4H0z" fill="#fff"/><path d="M11 0h2v16h-2zM0 7h24v2H0z" fill="#c8102e"/><text x="32" y="13">English</text></g>
+    <!-- Chinese -->
+    <g transform="translate(132 0)"><rect width="24" height="16" rx="2" fill="#de2910"/><circle cx="5" cy="5" r="2.5" fill="#ffde00"/><text x="32" y="13">&#31616;&#20307;&#20013;&#25991;</text></g>
+    <!-- Hindi / India -->
+    <g transform="translate(260 0)"><rect width="24" height="5.33" rx="2" fill="#ff9933"/><rect y="5.33" width="24" height="5.34" fill="#fff"/><rect y="10.67" width="24" height="5.33" rx="2" fill="#138808"/><circle cx="12" cy="8" r="1.5" fill="none" stroke="#000080" stroke-width=".4"/><text x="32" y="13">&#2361;&#2367;&#2344;&#2381;&#2342;&#2368;</text></g>
+    <!-- German -->
+    <g transform="translate(370 0)"><rect width="24" height="5.33" rx="2" fill="#000"/><rect y="5.33" width="24" height="5.34" fill="#d00"/><rect y="10.67" width="24" height="5.33" rx="2" fill="#ffce00"/><text x="32" y="13">Deutsch</text></g>
+    <!-- Spanish -->
+    <g transform="translate(500 0)"><rect width="24" height="4" rx="2" fill="#aa151b"/><rect y="4" width="24" height="8" fill="#f1bf00"/><rect y="12" width="24" height="4" rx="2" fill="#aa151b"/><text x="32" y="13">Espa&#241;ol</text></g>
+    <!-- Greek -->
+    <g transform="translate(630 0)"><rect width="24" height="16" rx="2" fill="#0d5eaf"/><path d="M0 4h24M0 8h24M0 12h24" stroke="#fff" stroke-width="2"/><text x="32" y="13">&#917;&#955;&#955;&#951;&#957;&#953;&#954;&#940;</text></g>
+    <!-- Italian -->
+    <g transform="translate(780 0)"><rect width="8" height="16" rx="2" fill="#009246"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" rx="2" fill="#ce2b37"/><text x="32" y="13">Italiano</text></g>
+    <!-- French -->
+    <g transform="translate(910 0)"><rect width="8" height="16" rx="2" fill="#0055a4"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" rx="2" fill="#ef4135"/><text x="32" y="13">Fran&#231;ais</text></g>
+  </g>
+  <text x="640" y="590" text-anchor="middle" fill="#64748b" font-family="Segoe UI, sans-serif" font-size="15">Choose a language at agicy.ai/updated</text>
+  <text x="68" y="686" fill="#64748b" font-family="Consolas, monospace" font-size="12">UNSIGNED BETA &#183; v0.9.0-beta.1</text>
+  <text x="1212" y="686" text-anchor="end" fill="#64748b" font-family="Consolas, monospace" font-size="12">github.com/AGiOS-Ai-EU/UPDATED</text>
+</svg>

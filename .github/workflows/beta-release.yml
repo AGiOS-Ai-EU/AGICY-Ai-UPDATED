@@ -1,0 +1,154 @@
+name: Publish unsigned desktop beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version from apps/electron/package.json
+        required: true
+        default: 0.9.0-beta.1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: updated-beta-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('./apps/electron/package.json').version")"
+          if [[ "${{ inputs.version }}" != "$expected" ]]; then
+            echo "Requested version '${{ inputs.version }}' does not match package version '$expected'." >&2
+            exit 1
+          fi
+          echo "value=$expected" >> "$GITHUB_OUTPUT"
+
+  build-linux:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@freestyle-voice/server
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev libxext-dev libglib2.0-dev cmake libx11-xcb-dev binutils
+      - name: Build unsigned Linux installers
+        working-directory: apps/electron
+        run: pnpm run build:linux
+      - name: Verify packaged native binaries
+        working-directory: apps/electron
+        run: node scripts/verify-native-binaries.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: updated-linux-${{ needs.validate.outputs.version }}
+          path: |
+            apps/electron/dist/*.AppImage
+            apps/electron/dist/*.deb
+            apps/electron/dist/latest*.yml
+          if-no-files-found: error
+
+  build-windows:
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@freestyle-voice/server
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build unsigned Windows installers
+        working-directory: apps/electron
+        run: pnpm run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Verify packaged native binaries
+        working-directory: apps/electron
+        run: node scripts/verify-native-binaries.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: updated-windows-${{ needs.validate.outputs.version }}
+          path: |
+            apps/electron/dist/*.exe
+            apps/electron/dist/*.msi
+            apps/electron/dist/latest*.yml
+            apps/electron/dist/*.blockmap
+          if-no-files-found: error
+
+  build-macos:
+    needs: validate
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@freestyle-voice/server
+      - name: Build unsigned macOS installers
+        working-directory: apps/electron
+        run: pnpm run build:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Verify packaged native binaries
+        working-directory: apps/electron
+        run: node scripts/verify-native-binaries.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: updated-macos-${{ needs.validate.outputs.version }}
+          path: |
+            apps/electron/dist/*.dmg
+            apps/electron/dist/*.zip
+            apps/electron/dist/latest*.yml
+            apps/electron/dist/*.blockmap
+          if-no-files-found: error
+
+  publish:
+    needs: [validate, build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          name: UPDATED ${{ needs.validate.outputs.version }}
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            ## UPDATED unsigned beta
+
+            UPDATED is a voice-first desktop search instrument by AGICY.Ai.
+
+            1. Download the installer for Windows, macOS, or Linux.
+            2. Hold the platform hotkey and speak.
+            3. Read sourced claim cards, the primary-source rate, and CONTESTED results.
+
+            ### Important
+
+            This beta is not code-signed or notarized yet. Windows SmartScreen and macOS Gatekeeper may show a warning. Only download installers from this GitHub release.
+          files: release-assets/*
+          fail_on_unmatched_files: true
