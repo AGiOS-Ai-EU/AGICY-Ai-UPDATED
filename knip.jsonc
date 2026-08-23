@@ -8,7 +8,13 @@
     "enumMembers": "off",
     "namespaceMembers": "off"
   },
-  "ignoreBinaries": ["pactl", "pkg-config", "powershell.exe", "python", "python3"],
+  "ignoreBinaries": [
+    "pactl",
+    "pkg-config",
+    "powershell.exe",
+    "python",
+    "python3"
+  ],
   "ignoreDependencies": ["nano-staged"],
   "ignoreFiles": [
     "apps/electron/src/preload/*.d.ts",
