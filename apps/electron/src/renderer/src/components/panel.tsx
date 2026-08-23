@@ -1,5 +1,6 @@
 import "../overlay.css";
 import "../tavern.css";
+import "../glass.css";
 
 import { useChat } from "@ai-sdk/react";
 import { BrainFiles } from "@renderer/components/brain-files";
@@ -525,13 +526,13 @@ function PanelTail(): React.JSX.Element {
     >
       <path
         d="M12 3 L12 5.5 C15.5 15 17.5 28 17 41 C27 27 37 15 44 5.5 L44 3 Z"
-        fill="var(--tavern-card)"
+        fill="var(--glass-panel-bg, rgba(10, 12, 18, 0.58))"
       />
       <path
         d="M12 5.5 C15.5 15 17.5 28 17 41 C27 27 37 15 44 5.5"
         fill="none"
-        stroke="var(--tavern-ink)"
-        strokeWidth="3"
+        stroke="var(--glass-panel-border, rgba(255, 255, 255, 0.22))"
+        strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
       />

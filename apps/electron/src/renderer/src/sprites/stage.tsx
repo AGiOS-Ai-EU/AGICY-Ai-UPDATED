@@ -108,55 +108,40 @@ export function SpriteStage({
           left: ${def.bubble.x}px;
           bottom: ${def.bubble.y}px;
           max-width: ${def.windowSize - def.bubble.x - 14}px;
-          padding: 8px 12px;
-          background: #fbf5e4;
-          border: 3px solid #2a2114;
-          border-radius: 16px;
-          color: #8e7f5f;
+          padding: 8px 14px;
+          background: rgba(10, 12, 18, 0.52);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 999px;
+          color: rgba(232, 230, 223, 0.72);
           font: 500 11px/1.45 "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
           text-align: left;
           pointer-events: none;
           white-space: pre-wrap;
-          box-shadow: 4px 4px 0 rgba(42, 33, 20, 0.8);
+          box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+          backdrop-filter: blur(18px) saturate(1.35);
+          -webkit-backdrop-filter: blur(18px) saturate(1.35);
         }
-        .sprite-bubble::before {
-          content: "";
-          position: absolute;
-          left: 12px;
-          bottom: -17px;
-          border-style: solid;
-          border-width: 18px 16px 0 5px;
-          border-color: #2a2114 transparent transparent transparent;
-          transform: rotate(14deg);
-        }
+        .sprite-bubble::before,
         .sprite-bubble::after {
-          content: "";
-          position: absolute;
-          left: 16px;
-          bottom: -11px;
-          border-style: solid;
-          border-width: 13px 12px 0 3px;
-          border-color: #fbf5e4 transparent transparent transparent;
-          transform: rotate(14deg);
+          display: none;
         }
         /* Shout burst (paste lands): jagged flash. */
         .sprite-shout {
           position: absolute;
           left: ${def.bubble.x}px;
           bottom: ${def.bubble.y + 16}px;
-          background: #fbf5e4;
-          border: 3px solid #2a2114;
+          background: rgba(10, 12, 18, 0.62);
+          border: 1px solid rgba(217, 142, 43, 0.45);
+          border-radius: 14px;
           padding: 10px 18px;
           font-family: "Pixelify Sans", monospace;
           font-size: 16px;
-          color: #2a2114;
-          box-shadow: 5px 5px 0 #d98e2b;
+          color: #e8e6df;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(217, 142, 43, 0.2);
           pointer-events: none;
-          clip-path: polygon(
-            3% 12%, 12% 0, 30% 7%, 50% 0, 68% 8%, 88% 0, 97% 14%, 100% 40%,
-            94% 60%, 100% 86%, 86% 100%, 64% 92%, 44% 100%, 24% 93%, 8% 100%,
-            0 78%, 5% 52%, 0 30%
-          );
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          clip-path: none;
         }
       `}</style>
       <canvas ref={canvasRef} width={def.windowSize} height={def.windowSize} />

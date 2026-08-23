@@ -75,8 +75,10 @@ export function Spark({
             background: LANTERN,
             borderRadius: working ? Math.max(2, size * 0.18) : 1,
             boxShadow: suggesting
-              ? `0 0 0 6px ${LANTERN}33, 0 0 14px 2px ${LANTERN}55`
-              : undefined,
+              ? `0 0 0 6px ${LANTERN}33, 0 0 18px 4px ${LANTERN}66, 0 8px 24px rgba(0,0,0,0.35)`
+              : listening
+                ? `0 0 0 4px ${LANTERN}28, 0 0 14px 2px ${LANTERN}44, 0 6px 18px rgba(0,0,0,0.28)`
+                : `0 6px 18px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.18)`,
           }}
         />
       </span>

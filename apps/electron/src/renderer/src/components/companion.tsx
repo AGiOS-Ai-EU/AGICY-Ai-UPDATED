@@ -1,4 +1,5 @@
 import "../overlay.css";
+import "../glass.css";
 
 import { Spark, sparkScaleFor } from "@renderer/components/spark";
 import { initApiBase } from "@renderer/lib/api";
@@ -260,10 +261,13 @@ function SparkStage({
           display: inline-flex;
           align-items: flex-end;
           gap: 6px;
-          padding: 5px 10px 5px 8px;
-          border-radius: 14px;
-          background: rgba(251, 245, 228, 0.92);
-          border: 1px solid rgba(219, 204, 166, 0.8);
+          padding: 6px 12px 6px 10px;
+          border-radius: 999px;
+          background: var(--glass-pill-bg, rgba(10, 12, 18, 0.52));
+          border: 1px solid var(--glass-pill-border, rgba(255, 255, 255, 0.2));
+          box-shadow: var(--glass-shadow-soft, 0 10px 28px rgba(0, 0, 0, 0.28));
+          backdrop-filter: blur(18px) saturate(1.35);
+          -webkit-backdrop-filter: blur(18px) saturate(1.35);
           min-width: 0;
         }
         .bubble-bars {
@@ -287,19 +291,19 @@ function SparkStage({
           background: #8e7f5f;
         }
         .bubble-chip.is-error {
-          background: rgba(251, 233, 231, 0.95);
-          border-color: rgba(214, 120, 108, 0.8);
+          background: rgba(48, 14, 12, 0.72);
+          border-color: rgba(255, 120, 100, 0.35);
         }
         .bubble-chip.is-error .bubble-bar {
-          background: #b42318;
+          background: #ff8a78;
         }
         .bubble-chip.is-error .bubble-text {
-          color: #7a2016;
+          color: #ffb4a8;
         }
         .bubble-text {
           font-size: 11px;
           line-height: 1.35;
-          color: #8e7f5f;
+          color: rgba(232, 230, 223, 0.72);
           overflow-wrap: break-word;
           overflow: hidden;
           min-width: 0;

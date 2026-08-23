@@ -70,7 +70,7 @@ export function createNotificationWindow(): void {
     frame: false,
     transparent: true,
     resizable: false,
-    hasShadow: false,
+    hasShadow: process.platform !== "linux",
     alwaysOnTop: true,
     skipTaskbar: true,
     autoHideMenuBar: true,
