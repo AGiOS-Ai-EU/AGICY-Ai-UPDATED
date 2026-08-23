@@ -1,0 +1,54 @@
+UPDATED — Third-Party Notices
+=============================
+
+This product is a derivative fork of Freestyle (freestyle-voice/freestyle).
+
+Upstream
+--------
+Project:  https://github.com/freestyle-voice/freestyle
+License:  MIT License (upstream switched from earlier licenses to MIT in May 2026;
+          see upstream commit 2c01c5c, PR #103)
+Copyright (c) 2026 Freestyle
+
+UPDATED modifications
+---------------------
+Copyright (c) 2026 AGICY.Ai
+License:  MIT License (see LICENSE)
+
+Third-party services (runtime)
+------------------------------
+Voice transcription and text cleanup in the shipped beta use Freestyle Cloud
+(freestyle.sh). Audio and transcript text are sent to that service when you are
+signed in. Search uses Brave Search when you configure an API key; otherwise
+mock providers demonstrate the UI locally.
+
+See README.md § "Third-party services and privacy" for user-facing disclosure.
+
+Included components
+-------------------
+This repository vendors or depends on numerous open-source packages. Their
+licenses appear in node_modules and in upstream Freestyle release artifacts.
+Notable UI components are vendored from the beUI registry (MIT) as documented
+in upstream .lore.md.
+
+MIT License (summary)
+---------------------
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+The full MIT license text is in LICENSE.

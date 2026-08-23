@@ -1,6 +1,6 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, claim extraction, widget merge.
+> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, LLM claim extraction (cards today are citation formatting only), widget merge.
 
 ---
 

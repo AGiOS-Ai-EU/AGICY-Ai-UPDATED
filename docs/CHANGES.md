@@ -20,7 +20,7 @@ Summary of files touched implementing Gates 1, 2, and 3.
 | `apps/electron/src/renderer/src/glass.css` | Gutted (retired) |
 | `apps/electron/electron.vite.config.ts` | `@updated/design` alias |
 
-**Not changed:** `LICENSE` (still MIT upstream). Internal package names (`@freestyle-voice/*`) unchanged.
+**Not changed:** `LICENSE` (MIT, matching upstream since PR #103). Internal package names (`@freestyle-voice/*`) unchanged.
 
 ---
 

@@ -1,9 +1,11 @@
 # Freestyle Voice
 
-The plugin SDK for [Freestyle](../../README.md) — the local-first voice
-dictation app. This package is the **public contract** for writing plugins that
-extend the dictation pipeline: rewrite transcripts, inject cleanup prompts,
-transform final text, and control how text is delivered.
+The plugin SDK for [Freestyle](../../README.md) — the voice dictation app
+(upstream describes itself as local-first; the **UPDATED** fork removes on-device
+STT and requires Freestyle Cloud for transcription — see root README). This
+package is the **public contract** for writing plugins that extend the dictation
+pipeline: rewrite transcripts, inject cleanup prompts, transform final text, and
+control how text is delivered.
 
 It ships the plugin contract plus small host-agnostic runtime helpers (loader,
 registry, ordering, transforms). The server and Electron hosts inject their own
