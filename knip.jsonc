@@ -8,14 +8,18 @@
     "enumMembers": "off",
     "namespaceMembers": "off"
   },
-  "ignoreBinaries": ["pactl", "pkg-config", "powershell.exe", "python3"],
+  "ignoreBinaries": ["pactl", "pkg-config", "powershell.exe", "python", "python3"],
+  "ignoreDependencies": ["nano-staged"],
   "ignoreFiles": [
     "apps/electron/src/preload/*.d.ts",
     "apps/electron/src/renderer/src/env.d.ts",
     "plugins/*/ui/vite-env.d.ts",
     // Templates are standalone starter projects downloaded by create-freestyle-plugin,
     // not workspace code. They are never imported or built within the monorepo.
-    "templates/**"
+    "templates/**",
+    // Mirror contracts kept in sync with packages/search until shared import is wired.
+    "apps/server/src/lib/search/index.ts",
+    "apps/server/src/lib/search/types.ts"
   ],
   "workspaces": {
     "apps/electron": {
