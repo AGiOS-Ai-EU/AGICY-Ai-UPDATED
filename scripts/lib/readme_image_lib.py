@@ -9,14 +9,14 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[2]
 PROVIDERS = ROOT / "docs" / "assets" / "providers"
 
-PAPER = "#f7f8f6"
-INK = "#16211f"
-GRAPHITE = "#5c6663"
-RULE = "#d6dbd7"
+PAPER = "#f5f0eb"
+INK = "#1a1a2e"
+GRAPHITE = "#64748b"
+RULE = "#e1dcd4"
 FIELD = "#ffffff"
 CONTESTED = "#5e4e78"
-FRESH = "#2a6b4f"
-AGICY_ACCENT = "#2a6b4f"
+FRESH = "#2d6a4f"
+AGICY_ACCENT = "#b87333"
 
 PRIVACY_CHIP = "EU-hosted · GDPR-aligned"
 COBRAND = "by AGICY.Ai"

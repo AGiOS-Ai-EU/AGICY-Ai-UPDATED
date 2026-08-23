@@ -36,7 +36,9 @@ function SearchClaimCard({
 
   return (
     <article className="updated-search-card">
-      <div className="updated-search-card-chip">
+      <div
+        className={`updated-search-card-chip${sourceClass === "primary" ? " is-primary" : ""}`}
+      >
         {sourceClassChipLabel(sourceClass)}
       </div>
       <p className="updated-search-card-claim">

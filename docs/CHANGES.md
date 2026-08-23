@@ -373,3 +373,19 @@ Manual smoke: run two searches in Search tab → Recent shows both with CONTESTE
 
 **Regenerate:** `python scripts/render-hero-animation.py`
 
+---
+
+## Gate 18 — AGICY light mode (playground Vasilikos + copper)
+
+| File | Change |
+|------|--------|
+| `packages/updated-design/tokens.css` | Vasilikos paper `#f5f0eb`, copper accent tokens, warm glass shell |
+| `apps/electron/src/renderer/src/updated-hybrid-shell.css` | Copper active rail + overflow menu |
+| `apps/electron/src/renderer/src/search-results.css` | PRIMARY chip copper; mode toggle accent |
+| `apps/electron/src/renderer/src/components/search-results.tsx` | `is-primary` chip class |
+| `scripts/render-hero-animation.py` | Hero compositor hex constants |
+| `scripts/lib/readme_image_lib.py` | Shared compositor palette |
+| `docs/AGICY-THEME.md` | **New** — playground source paths + token mapping table |
+
+**README PNG/GIF:** Constants updated; assets **not regenerated** in this pass — run compositor scripts when ready.
+

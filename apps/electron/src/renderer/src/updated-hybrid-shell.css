@@ -57,9 +57,9 @@
 }
 
 .updated-glass-rail-btn[aria-selected="true"] {
-  color: var(--updated-ink);
-  background: var(--updated-glass-bg-strong);
-  border-color: var(--updated-glass-border);
+  color: var(--updated-accent-strong);
+  background: color-mix(in srgb, var(--updated-accent-muted) 42%, var(--updated-field));
+  border-color: color-mix(in srgb, var(--updated-accent) 35%, var(--updated-glass-border));
   box-shadow: var(--updated-glass-specular);
 }
 
@@ -120,7 +120,8 @@
 
 .updated-glass-rail-menu-btn:hover,
 .updated-glass-rail-menu-btn.is-active {
-  background: color-mix(in srgb, var(--updated-field) 70%, transparent);
+  background: color-mix(in srgb, var(--updated-accent-muted) 35%, var(--updated-field));
+  color: var(--updated-accent-strong);
 }
 
 /* Main panel — frosted frame wrapping certificate content */

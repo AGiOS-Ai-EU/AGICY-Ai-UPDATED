@@ -113,8 +113,9 @@
 }
 
 .updated-search-mode-toggle.is-active {
-  background: var(--updated-paper);
-  border-color: var(--updated-ink);
+  background: color-mix(in srgb, var(--updated-accent-muted) 40%, var(--updated-field));
+  border-color: var(--updated-accent-strong);
+  color: var(--updated-accent-strong);
 }
 
 .updated-search-status {
@@ -240,6 +241,10 @@
   color: var(--updated-graphite);
   padding: calc(var(--updated-space-rhythm) * 1.25)
     calc(var(--updated-space-rhythm) * 1.5) 0;
+}
+
+.updated-search-card-chip.is-primary {
+  color: var(--updated-accent-strong);
 }
 
 .updated-search-card-claim {

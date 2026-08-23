@@ -11,14 +11,15 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "docs" / "assets"
 FONTS = ASSETS / "fonts"
 
-# Design tokens (packages/updated-design/tokens.css)
-PAPER = "#f7f8f6"
-INK = "#16211f"
-GRAPHITE = "#5c6663"
-RULE = "#d6dbd7"
+# Design tokens (packages/updated-design/tokens.css — AGICY Vasilikos light)
+PAPER = "#f5f0eb"
+INK = "#1a1a2e"
+GRAPHITE = "#64748b"
+RULE = "#e1dcd4"
 FIELD = "#ffffff"
-FRESH = "#2a6b4f"
-BG = "#eef1ef"
+COPPER = "#b87333"
+FRESH = "#2d6a4f"
+BG = "#ece5dd"
 
 QUERY_FULL = "Cyprus annual return"
 RATE_LABEL = "Primary-source rate"
@@ -78,7 +79,7 @@ def draw_hybrid_ui(
     d.rounded_rectangle(
         (rail_x, rail_y, rail_x + rail_w, rail_y + rail_h),
         radius=20,
-        fill=hex_rgb("#fafbf9"),
+        fill=hex_rgb("#faf8f5"),
         outline=hex_rgb(RULE),
         width=1,
     )
@@ -105,7 +106,7 @@ def draw_hybrid_ui(
         fill=hex_rgb("#ffffff"),
     )
     d.text((panel_x + 16, panel_y + 28), "UPDATED", fill=hex_rgb(INK), font=mono)
-    d.text((panel_x + 78, panel_y + 28), COBRAND, fill=hex_rgb(FRESH), font=ui_sm)
+    d.text((panel_x + 78, panel_y + 28), COBRAND, fill=hex_rgb(COPPER), font=ui_sm)
 
     content_y = panel_y + 44
     d.rectangle(
@@ -154,7 +155,7 @@ def draw_hybrid_ui(
         )
 
         if frame_state["chip_alpha"] > 0:
-            chip_c = tuple(int(lerp(255, c, frame_state["chip_alpha"])) for c in hex_rgb(FRESH))
+            chip_c = tuple(int(lerp(255, c, frame_state["chip_alpha"])) for c in hex_rgb(COPPER))
             d.text((qx + 14, card_y + 24), "PRIMARY", fill=chip_c, font=mono_chip, anchor="ls")
 
         claim_chars = frame_state["claim_chars"]

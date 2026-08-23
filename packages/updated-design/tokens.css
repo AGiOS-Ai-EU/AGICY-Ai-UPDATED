@@ -1,29 +1,54 @@
 /**
  * UPDATED design tokens — Gate 1 certificate + hybrid glass shell.
+ * Light mode aligned with AGICY playground (Vasilikos palette + copper accent).
  *
  * Surface map:
  *   GLASS SHELL  — panel frame, vertical nav rail, settings chrome backdrop
  *   CERTIFICATE  — Search claim cards, primary rate, CONTESTED, age strip, body scroll
+ *
+ * Playground source of truth:
+ *   agicy-platform/src/app/globals.css          — Vasilikos light (--bg-primary)
+ *   agicy-platform/src/app/gateway/playground/playground.module.css — paper/ink/copper
+ *   agicy-platform/src/lib/playground/playgroundChatTheme.ts — accent #c9894a
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Martian+Mono:wght@400..600&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&display=swap");
 
 :root {
+  /* ── AGICY brand aliases (playground token names) ── */
+  --agicy-paper: #f5f0eb;
+  --agicy-paper-muted: #ece5dd;
+  --agicy-ink: #1a1a2e;
+  --agicy-ink-body: #374151;
+  --agicy-graphite: #64748b;
+  --agicy-copper: #c9894a;
+  --agicy-copper-strong: #b87333;
+  --agicy-copper-muted: #e5d4b1;
+  --agicy-cyan: #3db8d4;
+
   /* ── Certificate content (flat paper — never blur) ── */
-  --updated-paper: #f7f8f6;
-  --updated-ink: #16211f;
-  --updated-graphite: #5c6663;
-  --updated-rule: #d6dbd7;
+  --updated-paper: var(--agicy-paper);
+  --updated-paper-muted: var(--agicy-paper-muted);
+  --updated-ink: var(--agicy-ink);
+  --updated-ink-body: var(--agicy-ink-body);
+  --updated-graphite: var(--agicy-graphite);
+  --updated-rule: #e1dcd4;
   --updated-field: #ffffff;
 
-  /* ── Glass shell (nav rail, panel frame — frosted, not purple) ── */
-  --updated-glass-bg: color-mix(in srgb, var(--updated-paper) 68%, transparent);
-  --updated-glass-bg-strong: color-mix(in srgb, var(--updated-field) 82%, transparent);
-  --updated-glass-border: color-mix(in srgb, var(--updated-rule) 75%, var(--updated-ink) 6%);
+  /* ── Accent — copper primary highlights (PRIMARY chip, active rail) ── */
+  --updated-accent: var(--agicy-copper);
+  --updated-accent-strong: var(--agicy-copper-strong);
+  --updated-accent-muted: var(--agicy-copper-muted);
+  --updated-cyan: var(--agicy-cyan);
+
+  /* ── Glass shell (nav rail, panel frame — warm frosted tint) ── */
+  --updated-glass-bg: color-mix(in srgb, var(--updated-paper) 72%, #ffffff 28%);
+  --updated-glass-bg-strong: color-mix(in srgb, var(--updated-field) 88%, var(--updated-paper));
+  --updated-glass-border: color-mix(in srgb, var(--updated-rule) 80%, var(--updated-accent-muted) 12%);
   --updated-glass-blur: 20px;
   --updated-glass-blur-strong: 28px;
-  --updated-glass-specular: inset 0 1px 0 color-mix(in srgb, #ffffff 42%, transparent);
-  --updated-glass-shadow: 0 8px 32px color-mix(in srgb, var(--updated-ink) 8%, transparent);
+  --updated-glass-specular: inset 0 1px 0 color-mix(in srgb, #ffffff 55%, transparent);
+  --updated-glass-shadow: 0 8px 32px color-mix(in srgb, var(--updated-ink) 6%, transparent);
   --updated-glass-radius: 16px;
   --updated-glass-rail-radius: 20px;
   --updated-glass-rail-width: 52px;
@@ -40,17 +65,19 @@
   --updated-font-mono: "Martian Mono", ui-monospace, monospace;
 
   /* Decay ramp (evidence freshness) */
-  --updated-decay-fresh: #2a6b4f;
+  --updated-decay-fresh: #2d6a4f;
   --updated-decay-aging: #5a7a32;
   --updated-decay-stale: #9a7b2e;
   --updated-decay-expired: #9c4a38;
   --updated-decay-contested: #5e4e78;
 
+  color-scheme: light;
+
   /* Bridge into legacy tavern token names */
   --tavern-parchment: var(--updated-paper);
   --tavern-card: var(--updated-field);
   --tavern-ink: var(--updated-ink);
-  --tavern-lantern: var(--updated-decay-stale);
+  --tavern-lantern: var(--updated-accent);
   --tavern-robe: var(--updated-graphite);
   --tavern-rust: var(--updated-decay-expired);
   --tavern-rule: var(--updated-rule);
