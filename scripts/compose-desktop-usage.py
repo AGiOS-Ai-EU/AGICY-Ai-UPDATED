@@ -9,21 +9,22 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from lib.readme_image_lib import (  # noqa: E402
+    AGICY_ACCENT,
     COBRAND,
+    FIELD,
+    GRAPHITE,
+    INK,
+    PAPER,
     PRIVACY_CHIP,
+    RULE,
     draw_privacy_chip,
+    hex_rgb,
     paste_provider_row,
     rasterize_svg,
 )
 
 ASSETS = ROOT / "docs" / "assets"
 PROVIDERS = ASSETS / "providers"
-
-INK = "#16211f"
-GRAPHITE = "#5c6663"
-AGICY = "#2a6b4f"
-FIELD = "#ffffff"
-RULE = "#d6dbd7"
 
 
 def load_font(path: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -40,7 +41,7 @@ def overlay_hold_speak(path: Path) -> None:
     mono_b = load_font("C:/Windows/Fonts/consolab.ttf", 14)
     sub = load_font("C:/Windows/Fonts/segoeui.ttf", 13)
     # Co-brand under existing UPDATED wordmark (top-left ~4%, 5%)
-    d.text((int(w * 0.04), int(h * 0.115)), COBRAND, fill=AGICY, font=sub)
+    d.text((int(w * 0.04), int(h * 0.115)), COBRAND, fill=AGICY_ACCENT, font=sub)
     # Privacy chip on certificate card (right panel ~72% x, 18% y)
     chip_x, chip_y = int(w * 0.58), int(h * 0.155)
     draw_privacy_chip(d, int(w * 0.58), int(h * 0.155), sub, mono_b=mono_b)
@@ -61,7 +62,7 @@ def overlay_search_flow(path: Path) -> None:
     w, h = img.size
     mono_b = load_font("C:/Windows/Fonts/consolab.ttf", 12)
     sub = load_font("C:/Windows/Fonts/segoeui.ttf", 11)
-    d.text((int(w * 0.04), int(h * 0.03)), COBRAND, fill=AGICY, font=sub)
+    d.text((int(w * 0.04), int(h * 0.03)), COBRAND, fill=AGICY_ACCENT, font=sub)
     draw_privacy_chip(d, int(w * 0.04), int(h * 0.055), sub, mono_b=mono_b)
     # CONTESTED card metadata — lower card ~55% from top
     paste_provider_row(
@@ -76,10 +77,8 @@ def overlay_search_flow(path: Path) -> None:
 
 
 def render_hero_png() -> None:
-    from lib.readme_image_lib import COBRAND, PRIVACY_CHIP, hex_rgb
-
     w, h = 1280, 640
-    img = Image.new("RGB", (w, h), hex_rgb("#f7f8f6"))
+    img = Image.new("RGB", (w, h), hex_rgb(PAPER))
     d = ImageDraw.Draw(img)
     mono_b = load_font("C:/Windows/Fonts/consolab.ttf", 11)
     serif = load_font("C:/Windows/Fonts/georgia.ttf", 96)
@@ -87,10 +86,10 @@ def render_hero_png() -> None:
     agicy = load_font("C:/Windows/Fonts/segoeui.ttf", 18)
     chip_f = load_font("C:/Windows/Fonts/consola.ttf", 11)
 
-    d.line([(64, 0), (64, h)], fill="#d6dbd7", width=1)
-    d.line([(w - 64, 0), (w - 64, h)], fill="#d6dbd7", width=1)
-    d.line([(0, 48), (w, 48)], fill="#d6dbd7", width=1)
-    d.line([(0, h - 48), (w, h - 48)], fill="#d6dbd7", width=1)
+    d.line([(64, 0), (64, h)], fill=RULE, width=1)
+    d.line([(w - 64, 0), (w - 64, h)], fill=RULE, width=1)
+    d.line([(0, 48), (w, 48)], fill=RULE, width=1)
+    d.line([(0, h - 48), (w, h - 48)], fill=RULE, width=1)
 
     title = "UPDATED"
     bbox = d.textbbox((0, 0), title, font=serif)
@@ -99,7 +98,7 @@ def render_hero_png() -> None:
     cob = COBRAND
     bb2 = d.textbbox((0, 0), cob, font=agicy)
     cw = bb2[2] - bb2[0]
-    d.text(((w - cw) // 2, 268), cob, fill=AGICY, font=agicy)
+    d.text(((w - cw) // 2, 268), cob, fill=AGICY_ACCENT, font=agicy)
     tag = "Voice-driven search. Certificate-grade sources."
     bt = d.textbbox((0, 0), tag, font=sub)
     d.text(((w - (bt[2] - bt[0])) // 2, 300), tag, fill=GRAPHITE, font=sub)
@@ -107,7 +106,7 @@ def render_hero_png() -> None:
 
     card_x, card_y = 430, 380
     d.rounded_rectangle((card_x, card_y, card_x + 420, card_y + 120), radius=2, fill=FIELD, outline=RULE)
-    d.text((card_x + 20, card_y + 20), "PRIMARY", fill=AGICY, font=mono_b)
+    d.text((card_x + 20, card_y + 20), "PRIMARY", fill=AGICY_ACCENT, font=mono_b)
     d.text((card_x + 20, card_y + 50), "Primary-source rate: 1 / 4", fill=INK, font=load_font("C:/Windows/Fonts/georgia.ttf", 18))
     d.line([(card_x + 20, card_y + 74), (card_x + 400, card_y + 74)], fill=RULE)
     d.text((card_x + 20, card_y + 98), "gov.cy · 2023-11-04 · local keychain", fill=GRAPHITE, font=chip_f)
@@ -123,7 +122,8 @@ def render_hero_png() -> None:
 def main() -> None:
     overlay_hold_speak(ASSETS / "updated-usage-hold-speak.png")
     overlay_search_flow(ASSETS / "updated-usage-search-flow.png")
-    render_hero_png()
+    # Photo hero (updated-github-hero.png) is the GIF base — do not overwrite here.
+    # Call render_hero_png() manually only when regenerating the vector fallback.
 
 
 if __name__ == "__main__":

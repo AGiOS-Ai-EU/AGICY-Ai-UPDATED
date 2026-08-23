@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5C6663?style=flat-square" alt="MIT License" /></a>
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-16211F?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/shell-Electron-16211F?style=flat-square" alt="Electron" />
-  <a href="docs/ARCHITECTURE-MAP.md"><img src="https://img.shields.io/badge/docs-architecture-5C6663?style=flat-square" alt="Architecture" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748B?style=flat-square" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-1A1A2E?style=flat-square" alt="Platform" />
+  <img src="https://img.shields.io/badge/shell-Electron-1A1A2E?style=flat-square" alt="Electron" />
+  <a href="docs/ARCHITECTURE-MAP.md"><img src="https://img.shields.io/badge/docs-architecture-64748B?style=flat-square" alt="Architecture" /></a>
 </p>
 
 # UPDATED
