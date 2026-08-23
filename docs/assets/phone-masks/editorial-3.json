@@ -1,8 +1,10 @@
 {
-  "x0": 0.405,
-  "y0": 0.122,
-  "x1": 0.595,
-  "y1": 0.848,
-  "radius_frac": 0.045,
-  "_note": "Hands hero — clip above sweater, below notch"
+  "x0": 0.404,
+  "y0": 0.124,
+  "x1": 0.596,
+  "y1": 0.842,
+  "radius_frac": 0.044,
+  "crop_pad_x": 1.35,
+  "crop_pad_y": 1.25,
+  "_note": "Hands hero — phone already large; moderate crop"
 }

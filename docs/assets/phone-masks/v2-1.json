@@ -1,0 +1,10 @@
+{
+  "x0": 0.282,
+  "y0": 0.108,
+  "x1": 0.498,
+  "y1": 0.848,
+  "radius_frac": 0.038,
+  "crop_pad_x": 0,
+  "crop_pad_y": 0,
+  "_base": "updated-mobile-base-v2-1.png"
+}

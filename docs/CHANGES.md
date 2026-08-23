@@ -295,3 +295,26 @@ pnpm biome check packages/search/src/query-history.ts apps/electron/src/main/sea
 ```
 
 Manual smoke: run two searches in Search tab → Recent shows both with CONTESTED/primary metadata → click older row re-runs → Clear empties list.
+
+---
+
+## Gate 14 — README imagery redo (AGICY.Ai + EU privacy + provider SVGs)
+
+| File | Change |
+|------|--------|
+| `docs/assets/providers/*.svg` | **New** — OpenAI, Anthropic, Groq, Mistral, Cerebras, Brave (search) copied from agicy-platform favicons; `brave-search.svg` simplified mark |
+| `scripts/lib/readme_image_lib.py` | **New** — `hex_rgb`, SVG rasterize (cairosvg @2×), privacy chip, co-brand helpers |
+| `scripts/compose-mobile-hybrid.py` | AGICY.Ai header/footer, provider icon rows on scenes 1 + 3; tuned `v2-*.json` screen masks |
+| `scripts/compose-desktop-usage.py` | **New** — overlays co-brand + privacy + provider icons on desktop usage PNGs; Pillow hero PNG |
+| `docs/assets/updated-github-hero.svg` | Co-brand subline, EU privacy chip, local keychain strip |
+| `docs/assets/updated-github-hero.png` | Regenerated 1280×640 (~25 KB vector-style raster) |
+| `docs/assets/updated-usage-hold-speak.png` | Overlay: **by AGICY.Ai**, EU chip, OpenAI + Brave + Groq icons |
+| `docs/assets/updated-usage-search-flow.png` | Overlay: privacy chip; Anthropic + Mistral + Cerebras on CONTESTED card |
+| `docs/assets/updated-mobile-hybrid-{1,2,3}.png` | Regenerated — readable hybrid UI clipped in phone; provider SVGs on 1 + 3 |
+| `README.md` | Usage captions note AGICY.Ai, EU-hosted · GDPR-aligned, provider marks |
+
+**Readability (export @ 1200×675 / 1280×720, README width 960px):** body equivalent ≥14px (18px serif claims); mono chips ≥11px; privacy footer ≥10px.
+
+**GitHub social preview:** `docs/assets/updated-github-hero.png` (1280×640).
+
+**Provider icons on images:** hold-speak + hybrid-1 (OpenAI, Brave, Groq); search-flow CONTESTED row (Anthropic, Mistral, Cerebras); hybrid-3 (Groq, Anthropic, Mistral). Waveform scene (hybrid-2) intentionally clean.

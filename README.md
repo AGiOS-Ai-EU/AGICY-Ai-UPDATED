@@ -1,6 +1,6 @@
 <p align="center">
   <img
-    alt="UPDATED — voice-driven search, certificate-grade sources"
+    alt="UPDATED by AGICY.Ai — voice-driven search, certificate-grade sources, EU-hosted"
     src="docs/assets/updated-github-hero.png"
     width="960"
   />
@@ -44,22 +44,22 @@ Hold the dictation hotkey (default **Right Alt**), speak your question, then rea
 
 <p align="center">
   <img
-    alt="Two professionals at a desk — one holds Right Alt while speaking a question; certificate-style claim cards appear beside them"
+    alt="Two professionals at a desk — hold Right Alt, speak, read certificate claim cards (UPDATED by AGICY.Ai)"
     src="docs/assets/updated-usage-hold-speak.png"
     width="960"
   />
   <br />
-  <sub>Hold hotkey → speak → claim cards (Search mode). Illustration uses UPDATED paper/ink tokens; not a live app screenshot.</sub>
+  <sub>Hold hotkey → speak → claim cards. EU-hosted · GDPR-aligned; Brave key in safeStorage.</sub>
 </p>
 
 <p align="center">
   <img
-    alt="Close-up: finger on Right Alt, voice waveform, PRIMARY and CONTESTED claim cards with source strip"
+    alt="Close-up: Right Alt hotkey, waveform, PRIMARY and CONTESTED cards with provider marks"
     src="docs/assets/updated-usage-search-flow.png"
     width="960"
   />
   <br />
-  <sub>Certificate cards: PRIMARY chip, source count and date strip, CONTESTED when dual providers diverge (mock pair without a Brave key).</sub>
+  <sub>Certificate cards with PRIMARY / CONTESTED chips; mock ↔ mock-alt divergence when no Brave key.</sub>
 </p>
 
 Typed queries in the Search tab work the same way — voice is the primary path shown here.
@@ -69,21 +69,21 @@ Typed queries in the Search tab work the same way — voice is the primary path 
 Same flow on phone: hold the hotkey, speak, read claim cards. Hybrid UI below — glass nav rail + certificate Search content, composited inside the phone screen. **Mobile client is a concept**; the hybrid shell + certificate Search tab is **shipped in the Electron panel** (commit `2060245`).
 
 <p align="center">
-  <img alt="Café interview: hybrid UI clipped on phone — Search query and PRIMARY claim cards" src="docs/assets/updated-mobile-hybrid-1.png" width="960" />
+  <img alt="Café interview: Search query, PRIMARY 2/5, OpenAI + Brave provider marks — UPDATED by AGICY.Ai" src="docs/assets/updated-mobile-hybrid-1.png" width="960" />
   <br />
-  <sub>Café interview — glass rail, certificate claim cards, primary rate 2/5 (screen-mask compositor).</sub>
+  <sub>Search scene — readable 14px+ body; EU-hosted · GDPR-aligned footer chip.</sub>
 </p>
 
 <p align="center">
-  <img alt="Over-shoulder: hold hotkey waveform and PRIMARY claim card on hybrid phone UI" src="docs/assets/updated-mobile-hybrid-2.png" width="960" />
+  <img alt="Over-shoulder: hold hotkey waveform, PRIMARY 1/5 — clipped in phone mask" src="docs/assets/updated-mobile-hybrid-2.png" width="960" />
   <br />
-  <sub>Over-shoulder — hold hotkey, voice waveform, primary rate 1/5.</sub>
+  <sub>Voice path only — no provider icons (single focal state).</sub>
 </p>
 
 <p align="center">
-  <img alt="Hands hero: CONTESTED divergence and certificate claim card inside phone bezel" src="docs/assets/updated-mobile-hybrid-3.png" width="960" />
+  <img alt="Hands hero: CONTESTED chip, Groq + Anthropic + Mistral marks, one PRIMARY card" src="docs/assets/updated-mobile-hybrid-3.png" width="960" />
   <br />
-  <sub>Hands hero — CONTESTED state, provider sections, PRIMARY card clipped in screen.</sub>
+  <sub>Dual mock providers diverge; similarity line + provider SVG row.</sub>
 </p>
 
 ---

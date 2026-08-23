@@ -1,8 +1,10 @@
 {
-  "x0": 0.508,
-  "y0": 0.378,
-  "x1": 0.568,
-  "y1": 0.638,
-  "radius_frac": 0.04,
-  "_note": "Cafe interview — grey LCD, tightened to bezel"
+  "x0": 0.505,
+  "y0": 0.375,
+  "x1": 0.572,
+  "y1": 0.642,
+  "radius_frac": 0.038,
+  "crop_pad_x": 2.8,
+  "crop_pad_y": 2.2,
+  "_note": "Cafe — tight screen; aggressive hero crop on phone"
 }

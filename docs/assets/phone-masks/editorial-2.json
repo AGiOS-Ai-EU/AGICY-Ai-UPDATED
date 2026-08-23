@@ -1,8 +1,10 @@
 {
-  "x0": 0.398,
-  "y0": 0.302,
-  "x1": 0.502,
-  "y1": 0.692,
-  "radius_frac": 0.05,
-  "_note": "Over-shoulder — white screen only, exclude table/sweater"
+  "x0": 0.396,
+  "y0": 0.304,
+  "x1": 0.504,
+  "y1": 0.688,
+  "radius_frac": 0.048,
+  "crop_pad_x": 2.0,
+  "crop_pad_y": 1.6,
+  "_note": "Over-shoulder white screen"
 }
