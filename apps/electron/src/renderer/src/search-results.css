@@ -128,6 +128,94 @@
   color: var(--updated-decay-expired);
 }
 
+.updated-search-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--updated-space-rhythm);
+  padding-bottom: calc(var(--updated-space-rhythm) * 1.5);
+  border-bottom: var(--updated-hairline) solid var(--updated-rule);
+}
+
+.updated-search-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--updated-space-rhythm);
+}
+
+.updated-search-history-title {
+  margin: 0;
+  font-family: var(--updated-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--updated-graphite);
+}
+
+.updated-search-history-clear {
+  border: none;
+  background: transparent;
+  color: var(--updated-graphite);
+  font-family: var(--updated-font-ui);
+  font-size: calc(var(--updated-space-base) * 3);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.updated-search-history-clear:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.updated-search-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--updated-space-base) * 1.5);
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.updated-search-history-item {
+  width: 100%;
+  text-align: left;
+  border: var(--updated-hairline) solid var(--updated-rule);
+  border-radius: var(--updated-radius);
+  background: var(--updated-field);
+  padding: calc(var(--updated-space-rhythm) * 1.25)
+    calc(var(--updated-space-rhythm) * 1.5);
+  cursor: pointer;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--updated-space-base) * 1.5);
+}
+
+.updated-search-history-item:hover:not(:disabled) {
+  border-color: var(--updated-ink);
+}
+
+.updated-search-history-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.updated-search-history-query {
+  font-family: var(--updated-font-ui);
+  font-size: calc(var(--updated-space-base) * 3 + 1px);
+  color: var(--updated-ink);
+}
+
+.updated-search-history-meta {
+  font-family: var(--updated-font-mono);
+  font-size: 11px;
+  color: var(--updated-graphite);
+}
+
 .updated-search-cards {
   display: flex;
   flex-direction: column;

@@ -184,6 +184,11 @@ import {
   setBraveSearchApiKey,
 } from "./search-keychain";
 import {
+  clearSearchQueryHistory,
+  listSearchQueryHistory,
+  recordSearchQueryHistory,
+} from "./search-query-history";
+import {
   initSpriteTravel,
   performSyncAction,
   resolveSpriteImpact,
@@ -3222,6 +3227,13 @@ ipcMain.handle("search:divergence-log-reveal", async () => {
   }
 });
 
+ipcMain.handle("search:history-list", () => listSearchQueryHistory());
+
+ipcMain.handle("search:history-clear", () => {
+  clearSearchQueryHistory();
+  return { ok: true as const };
+});
+
 ipcMain.handle("search:query", async (_event, query: unknown) => {
   if (typeof query !== "string" || !query.trim()) {
     return { ok: false as const, error: "Query must not be empty" };
@@ -3245,12 +3257,25 @@ ipcMain.handle("search:query", async (_event, query: unknown) => {
       body: JSON.stringify({ query: query.trim() }),
       signal: AbortSignal.timeout(SERVER_SETTING_TIMEOUT_MS),
     });
-    const payload = (await res.json().catch(() => null)) as {
-      ok: boolean;
-      error?: string;
-    } | null;
+    const payload = (await res.json().catch(() => null)) as
+      | {
+          ok: true;
+          query: string;
+          contested: boolean;
+          divergence: unknown;
+          results: import("@updated/search").ProviderSearchResult[];
+        }
+      | { ok: false; error?: string }
+      | null;
     if (!payload) {
       return { ok: false as const, error: `Search failed (${res.status})` };
+    }
+    if (payload.ok) {
+      recordSearchQueryHistory({
+        query: payload.query,
+        contested: payload.contested,
+        results: payload.results,
+      });
     }
     return payload;
   } catch (err) {

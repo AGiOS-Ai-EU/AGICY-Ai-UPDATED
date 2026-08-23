@@ -108,7 +108,7 @@ Optional: Settings → Search → paste a Brave Search key → Save (stored via 
 
 ---
 
-## Features (Gates 1–6)
+## Features (Gates 1–7)
 
 - Certificate design system (Newsreader / Instrument Sans / Martian Mono)
 - Bottom-centre widget positioning with per-display persistence
@@ -116,8 +116,9 @@ Optional: Settings → Search → paste a Brave Search key → Save (stored via 
 - Panel **Search** tab with claim cards, age strip, primary-source rate
 - Divergence detection + JSONL log at `{userData}/logs/search-divergence.jsonl`
 - Settings: hotkey rebind, mode switch, Brave key, provider dual/single, log reveal
+- **Search query history** — last 30 queries in the Search tab (CONTESTED flag + primary rate); click to re-run; stored locally in `{userData}/search-query-history.json`
 
-Architecture: [`docs/ARCHITECTURE-MAP.md`](docs/ARCHITECTURE-MAP.md) · Search: [`docs/SEARCH-ARCHITECTURE.md`](docs/SEARCH-ARCHITECTURE.md) · Changelog: [`docs/CHANGES.md`](docs/CHANGES.md)
+Architecture: [`docs/ARCHITECTURE-MAP.md`](docs/ARCHITECTURE-MAP.md) · Search: [`docs/SEARCH-ARCHITECTURE.md`](docs/SEARCH-ARCHITECTURE.md) · Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md) · Changelog: [`docs/CHANGES.md`](docs/CHANGES.md)
 
 Vector banner (crisp): [`docs/assets/updated-github-hero.svg`](docs/assets/updated-github-hero.svg)
 
@@ -125,13 +126,14 @@ Vector banner (crisp): [`docs/assets/updated-github-hero.svg`](docs/assets/updat
 
 ## Not yet wired
 
-Honest backlog for later gates:
+Honest backlog for later gates (see [`docs/ROADMAP.md`](docs/ROADMAP.md)):
 
 - Modifier + hotkey flip for input mode (settings / Search tab toggles exist today)
 - Third live search provider (e.g. Exa)
 - Divergence CSV / in-app log viewer (reveal + copy path only)
 - LLM claim extraction (one card per citation + summary today)
 - Single merged widget window (still companion + panel + notification)
+- Export search results (JSON/CSV)
 
 ---
 

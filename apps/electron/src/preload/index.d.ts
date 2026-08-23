@@ -90,6 +90,10 @@ declare global {
       revealDivergenceLog: () => Promise<
         { ok: true; path: string } | { ok: false; path: string; error: string }
       >;
+      listSearchQueryHistory: () => Promise<
+        import("@updated/search").SearchQueryHistoryEntry[]
+      >;
+      clearSearchQueryHistory: () => Promise<{ ok: true }>;
       panelOpenForSearch: (query: string) => void;
       onPanelSearchQuery: (callback: (query: string) => void) => () => void;
       onDictationPrefs: (

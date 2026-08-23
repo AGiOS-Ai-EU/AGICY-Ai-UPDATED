@@ -16,6 +16,23 @@ export interface SearchQueryFailure {
 
 export type SearchQueryResult = SearchQuerySuccess | SearchQueryFailure;
 
+/** Load persisted search queries (most recent first). */
+export async function fetchSearchQueryHistory(): Promise<
+  import("@updated/search").SearchQueryHistoryEntry[]
+> {
+  if (window.api.listSearchQueryHistory) {
+    return window.api.listSearchQueryHistory();
+  }
+  return [];
+}
+
+/** Clear local search query history. */
+export async function clearSearchQueryHistory(): Promise<void> {
+  if (window.api.clearSearchQueryHistory) {
+    await window.api.clearSearchQueryHistory();
+  }
+}
+
 /** Execute multi-provider search via main-process proxy. */
 export async function runSearchQuery(
   query: string,

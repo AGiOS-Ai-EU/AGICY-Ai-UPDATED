@@ -159,6 +159,11 @@ const api = {
   revealDivergenceLog: (): Promise<
     { ok: true; path: string } | { ok: false; path: string; error: string }
   > => ipcRenderer.invoke("search:divergence-log-reveal"),
+  listSearchQueryHistory: (): Promise<
+    import("@updated/search").SearchQueryHistoryEntry[]
+  > => ipcRenderer.invoke("search:history-list"),
+  clearSearchQueryHistory: (): Promise<{ ok: true }> =>
+    ipcRenderer.invoke("search:history-clear"),
   onPanelSearchQuery: (callback: (query: string) => void): (() => void) => {
     const handler = (_e: unknown, query: string): void => callback(query);
     ipcRenderer.on("panel:search-query", handler);

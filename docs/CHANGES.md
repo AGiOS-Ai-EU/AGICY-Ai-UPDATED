@@ -268,3 +268,30 @@ Original gala/Dubai close-ups replaced by NY editorial set in Gate 10.
 **Mask tuning:** Red debug rectangles on NY editorial bases; tightened y1 on images 2–3 to exclude sweater/table bleed.
 
 **Desktop screenshot:** Skipped — dev server not captured in this pass. Capture manually: Search tab with CONTESTED mock, save as `docs/assets/updated-desktop-hybrid-search.png`.
+
+---
+
+## Gate 13 — Search query history (README feature #7)
+
+| File | Change |
+|------|--------|
+| `packages/search/src/query-history.ts` | **New** — history entry builder, append/dedupe, JSON parse |
+| `packages/search/src/query-history.test.ts` | **New** — vitest coverage |
+| `packages/search/src/index.ts` | Export query-history helpers |
+| `apps/electron/src/main/search-query-history.ts` | **New** — `{userData}/search-query-history.json` persistence |
+| `apps/electron/src/main/index.ts` | Record history on successful `search:query`; `search:history-list` / `search:history-clear` IPC |
+| `apps/electron/src/preload/index.ts` + `index.d.ts` | History bridge APIs |
+| `apps/electron/src/renderer/src/lib/search.ts` | `fetchSearchQueryHistory`, `clearSearchQueryHistory` |
+| `apps/electron/src/renderer/src/components/search-tab.tsx` | Recent list + re-run + clear |
+| `apps/electron/src/renderer/src/search-results.css` | History list styles |
+| `README.md` | Features → Gates 1–7 |
+| `docs/ROADMAP.md` | **New** — prioritized gap list |
+
+**Verification:**
+
+```powershell
+pnpm --filter @updated/search test
+pnpm biome check packages/search/src/query-history.ts apps/electron/src/main/search-query-history.ts apps/electron/src/renderer/src/components/search-tab.tsx
+```
+
+Manual smoke: run two searches in Search tab → Recent shows both with CONTESTED/primary metadata → click older row re-runs → Clear empties list.

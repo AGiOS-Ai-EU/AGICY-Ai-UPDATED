@@ -27,6 +27,17 @@ export {
 export { MOCK_SEARCH_ANSWER } from "./providers/mock.js";
 export { MOCK_ALT_SEARCH_ANSWER } from "./providers/mock-alt.js";
 export type {
+  SearchQueryHistoryEntry,
+  SearchQueryHistoryFile,
+} from "./query-history.js";
+export {
+  appendSearchQueryHistoryEntry,
+  buildSearchQueryHistoryEntry,
+  emptySearchQueryHistoryFile,
+  parseSearchQueryHistoryFile,
+  SEARCH_QUERY_HISTORY_MAX,
+} from "./query-history.js";
+export type {
   AgeStripSummary,
   PrimaryRateSummary,
 } from "./result-stats.js";
