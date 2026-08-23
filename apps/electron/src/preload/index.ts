@@ -100,6 +100,8 @@ const api = {
   widgetDragEnd: (): void => ipcRenderer.send("widget:drag-end"),
   setCompanionForm: (form: CompanionForm): void =>
     ipcRenderer.send("companion:set-form", form),
+  setCompanionProductVisible: (visible: boolean): void =>
+    ipcRenderer.send("companion:product-visible", visible),
   panelOpenForDictation: (): void =>
     ipcRenderer.send("panel:open-for-dictation"),
   panelOpenForSearch: (query: string): void =>

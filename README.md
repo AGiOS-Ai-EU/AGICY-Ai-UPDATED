@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748B?style=flat-square" alt="MIT License" /></a>
-  <a href="https://github.com/AGiOS-Ai-EU/UPDATED/releases"><img src="https://img.shields.io/badge/release-0.9.0--beta.1-C9894A?style=flat-square" alt="UPDATED 0.9.0 beta 1" /></a>
+  <a href="https://github.com/AGiOS-Ai-EU/UPDATED/releases"><img src="https://img.shields.io/badge/release-0.9.0--beta.2-C9894A?style=flat-square" alt="UPDATED 0.9.0 beta 2" /></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-1A1A2E?style=flat-square" alt="Windows, macOS, Linux" />
   <img src="https://img.shields.io/badge/shell-Electron-1A1A2E?style=flat-square" alt="Electron" />
 </p>
@@ -46,9 +46,9 @@ Download only from the official [UPDATED Releases](https://github.com/AGiOS-Ai-E
 
 | System | Installer | Default hotkey |
 | --- | --- | --- |
-| Windows | `UPDATED-0.9.0-beta.1-setup.exe` | Right Alt |
-| macOS | `UPDATED-0.9.0-beta.1.dmg` | Fn |
-| Linux | `UPDATED-0.9.0-beta.1.AppImage` or `.deb` | Ctrl + Alt + Space |
+| Windows | `UPDATED-0.9.0-beta.2-setup.exe` | Right Alt |
+| macOS | `UPDATED-0.9.0-beta.2.dmg` | Fn |
+| Linux | `UPDATED-0.9.0-beta.2.AppImage` or `.deb` | Ctrl + Alt + Space |
 
 > [!WARNING]
 > This first beta is not code-signed or notarized. Windows SmartScreen and macOS Gatekeeper may warn before opening it. Verify that the download comes from `AGiOS-Ai-EU/UPDATED`.
@@ -70,6 +70,17 @@ Download only from the official [UPDATED Releases](https://github.com/AGiOS-Ai-E
 1. Download the AppImage and mark it executable: `chmod +x UPDATED-*.AppImage`.
 2. Open UPDATED. If hold-to-talk requests input access, add your user to the `input` group and sign in again.
 3. Allow microphone access.
+
+## First run (beta)
+
+After install, expect this sequence on first launch:
+
+1. **Windows SmartScreen** (or macOS Gatekeeper) — the beta is unsigned. Use **More info → Run anyway** (Windows) or **Open** from the context menu (macOS). See the install steps above.
+2. **UPDATED sign-in panel** — the app opens a sign-in window with a device code (for example `ULHYXKTC`). Click **Continue in browser** if the browser does not open automatically.
+3. **Browser device sign-in** — your browser opens `freestylevoice.com/device` with Freestyle Cloud branding (Apple, Google, or GitHub). This is required: voice transcription and search-by-voice use **Freestyle Cloud**; UPDATED cannot rebrand that page without changing the auth backend. Confirm the code in the browser matches the code in the app, then complete sign-in.
+4. **Microphone** — allow mic access when prompted. Hold the platform hotkey and speak once signed in.
+
+Until sign-in completes, the floating companion sprite stays hidden so the gate is not cluttered with upstream Freestyle artwork.
 
 ## How it works
 

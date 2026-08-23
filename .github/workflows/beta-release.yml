@@ -6,7 +6,7 @@ on:
       version:
         description: Version from apps/electron/package.json
         required: true
-        default: 0.9.0-beta.1
+        default: 0.9.0-beta.2
 
 permissions:
   contents: write

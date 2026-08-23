@@ -600,8 +600,13 @@ function SignInGate(): React.JSX.Element {
             updated<span className="tavern-gate-accent">.</span>
           </span>
         </div>
-        <h1 className="tavern-gate-heading">The intelligent reminders app.</h1>
+        <h1 className="tavern-gate-heading">Voice-first search instrument.</h1>
         <p className="tavern-gate-sub">Sign in to your UPDATED account</p>
+        <p className="tavern-gate-sub is-small">
+          Voice transcription uses Freestyle Cloud. Your browser may show
+          Freestyle branding — that is expected. Match the code below and sign
+          in there.
+        </p>
         {auth.signingIn ? (
           <>
             <div className="tavern-gate-code">{auth.userCode ?? "…"}</div>
@@ -746,6 +751,16 @@ function PanelInner({
     const offForm = window.api.onCompanionForm(setSpriteForm);
     return () => offForm?.();
   }, []);
+
+  useEffect(() => {
+    if (auth.loading) return;
+    if (!auth.user) {
+      window.api.setCompanionProductVisible(false);
+      return;
+    }
+    if (onboarding.status === "loading") return;
+    window.api.setCompanionProductVisible(onboarding.status === "done");
+  }, [auth.user, auth.loading, onboarding.status]);
 
   const [updateStatus, setUpdateStatus] = useState<{
     version: string | null;

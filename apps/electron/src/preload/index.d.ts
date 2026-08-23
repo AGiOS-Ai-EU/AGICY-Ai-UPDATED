@@ -49,6 +49,7 @@ declare global {
       widgetDragMove: (dx: number, dy: number) => void;
       widgetDragEnd: () => void;
       setCompanionForm: (form: CompanionForm) => void;
+      setCompanionProductVisible: (visible: boolean) => void;
       panelOpenForDictation: () => void;
       panelDictationPartial: (text: string) => void;
       panelDictationFinal: (text: string) => void;
