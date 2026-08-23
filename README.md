@@ -71,6 +71,17 @@ Download only from the official [UPDATED Releases](https://github.com/AGiOS-Ai-E
 2. Open UPDATED. If hold-to-talk requests input access, add your user to the `input` group and sign in again.
 3. Allow microphone access.
 
+## First run (beta)
+
+After install, expect this sequence on first launch:
+
+1. **Windows SmartScreen** (or macOS Gatekeeper) — the beta is unsigned. Use **More info → Run anyway** (Windows) or **Open** from the context menu (macOS). See the install steps above.
+2. **UPDATED sign-in panel** — the app opens a sign-in window with a device code (for example `ULHYXKTC`). Click **Continue in browser** if the browser does not open automatically.
+3. **Browser device sign-in** — your browser opens `freestylevoice.com/device` with Freestyle Cloud branding (Apple, Google, or GitHub). This is required: voice transcription and search-by-voice use **Freestyle Cloud**; UPDATED cannot rebrand that page without changing the auth backend. Confirm the code in the browser matches the code in the app, then complete sign-in.
+4. **Microphone** — allow mic access when prompted. Hold the platform hotkey and speak once signed in.
+
+Until sign-in completes, the floating companion sprite stays hidden so the gate is not cluttered with upstream Freestyle artwork.
+
 ## How it works
 
 1. **Download and install** the desktop beta.

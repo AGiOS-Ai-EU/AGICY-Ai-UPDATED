@@ -2026,6 +2026,7 @@ app.whenReady().then(async () => {
       .api.auth.status.$get()
       .then(async (res) => (res.ok ? ((await res.json()).user ?? null) : null))
       .catch(() => null);
+    setCompanionProductVisible(!!user);
     if (!user) openPanel();
   })();
 
@@ -2969,6 +2970,8 @@ function widgetPillPosition(display: Display): { x: number; y: number } {
 }
 
 let companionWindow: BrowserWindow | null = null;
+/** Hide the corner companion during sign-in and onboarding takeovers. */
+let companionProductVisible = false;
 let companionHotRect: PillHotRect | null = null;
 let companionLastRect: PillHotRect | null = null;
 let companionHotPollTimer: NodeJS.Timeout | null = null;
@@ -3577,6 +3580,10 @@ ipcMain.on("sprite:perform-done", (event, nonce: string) => {
   resolveSpritePerformDone(nonce);
 });
 
+ipcMain.on("companion:product-visible", (_event, visible: boolean) => {
+  setCompanionProductVisible(visible);
+});
+
 ipcMain.on("companion:set-hot-rect", (event, rect: PillHotRect | null) => {
   if (event.sender !== companionWindow?.webContents) return;
   setCompanionHotRect(rect);
@@ -3946,6 +3953,20 @@ function destroyPanelWindow(): void {
   panelWindow = null;
 }
 
+function applyCompanionProductVisibility(): void {
+  if (!companionWindow || companionWindow.isDestroyed()) return;
+  if (companionProductVisible) {
+    companionWindow.showInactive();
+  } else {
+    companionWindow.hide();
+  }
+}
+
+function setCompanionProductVisible(visible: boolean): void {
+  companionProductVisible = visible;
+  applyCompanionProductVisibility();
+}
+
 function createCompanionWindow(): void {
   if (companionWindow && !companionWindow.isDestroyed()) return;
   const size = SPRITES_INFO[companionFormSetting()].windowSize;
@@ -3996,7 +4017,7 @@ function createCompanionWindow(): void {
   });
 
   companionWindow.once("ready-to-show", () => {
-    companionWindow?.showInactive();
+    applyCompanionProductVisibility();
   });
 
   void companionWindow.loadURL(rendererUrl("companion.html"));

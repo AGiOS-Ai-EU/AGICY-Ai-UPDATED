@@ -678,7 +678,7 @@ export function OnboardingGate({
     <div className="tavern-onb" data-beat={beat} data-line={lineIdx}>
       <div className="tavern-onb-head">
         <span className="tavern-head-name">
-          freestyle<i>.</i>
+          updated<i>.</i>
         </span>
         <button type="button" className="tavern-onb-skip" onClick={skip}>
           skip intro ↦
