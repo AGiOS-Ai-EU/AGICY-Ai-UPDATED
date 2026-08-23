@@ -34,7 +34,7 @@ export interface UseCloudAuth {
 
 const CloudAuthContext = createContext<UseCloudAuth | null>(null);
 
-/** Renderer-side state for Freestyle Cloud sign-in (drives the OAuth device flow in main). */
+/** Renderer-side state for AGICY account sign-in (device flow in main). */
 function useCloudAuthState(): UseCloudAuth {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<CloudUser | null>(null);
@@ -64,7 +64,7 @@ function useCloudAuthState(): UseCloudAuth {
     const run = (async () => {
       let reached = false;
       const user = await getClient()
-        .api.auth.status.$get()
+        .api.auth.agicy.status.$get()
         .then(async (res) => {
           if (!res.ok) return null;
           reached = true;
@@ -135,7 +135,7 @@ function useCloudAuthState(): UseCloudAuth {
     setUserCode(null);
 
     const run = async (): Promise<CloudUser | null> => {
-      const codeRes = await getClient().api.auth.device.code.$post();
+      const codeRes = await getClient().api.auth.agicy.device.code.$post();
       if (!codeRes.ok)
         throw new Error(`Could not start sign-in (${codeRes.status})`);
       const code = await codeRes.json();
@@ -150,7 +150,7 @@ function useCloudAuthState(): UseCloudAuth {
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
         if (cancelledRef.current) return null;
         if (attempt !== signInAttemptRef.current) return null;
-        const tokenRes = await getClient().api.auth.device.token.$post({
+        const tokenRes = await getClient().api.auth.agicy.device.token.$post({
           json: { device_code: code.device_code },
         });
         if (tokenRes.status === 202) continue;
@@ -203,7 +203,7 @@ function useCloudAuthState(): UseCloudAuth {
 
   const signOut = useCallback(async (): Promise<void> => {
     await getClient()
-      .api.auth["sign-out"].$post()
+      .api.auth.agicy["sign-out"].$post()
       .catch(() => {});
     wasSignedInRef.current = false;
     setSessionExpired(false);

@@ -19,6 +19,8 @@ extraResources:
 win:
   executableName: UPDATED
   icon: icon.ico
+  # When CSC_LINK / WIN_CSC_LINK + CSC_KEY_PASSWORD are set in CI, electron-builder signs the installer.
+  signAndEditExecutable: true
   target:
     - nsis
     - msi
@@ -44,6 +46,7 @@ mac:
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
     NSAppleEventsUsageDescription: UPDATED uses Apple Events to paste transcribed text into the focused application.
+  # CI sets APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID and runs with -c.mac.notarize=true
   notarize: false
 dmg:
   artifactName: ${productName}-${version}.${ext}

@@ -581,7 +581,7 @@ function PanelResizeHandle(): React.JSX.Element {
   );
 }
 
-function SignInGate(): React.JSX.Element {
+function AgicySignInGate(): React.JSX.Element {
   const auth = useCloudAuth();
   return (
     <div className="tavern-gate">
@@ -601,11 +601,10 @@ function SignInGate(): React.JSX.Element {
           </span>
         </div>
         <h1 className="tavern-gate-heading">Voice-first search instrument.</h1>
-        <p className="tavern-gate-sub">Sign in to your UPDATED account</p>
+        <p className="tavern-gate-sub">Sign in with your AGICY account</p>
         <p className="tavern-gate-sub is-small">
-          Voice transcription uses Freestyle Cloud. Your browser may show
-          Freestyle branding — that is expected. Match the code below and sign
-          in there.
+          Your browser will open agicy.ai/updated/my_device. Sign in with your
+          email first, confirm the code below, then approve this device.
         </p>
         {auth.signingIn ? (
           <>
@@ -644,7 +643,7 @@ function SignInGate(): React.JSX.Element {
           type="button"
           className="tavern-gate-link"
           onClick={() =>
-            void window.api.openExternal("https://freestylevoice.com/terms")
+            void window.api.openExternal("https://agicy.ai/legal/terms")
           }
         >
           Terms
@@ -654,7 +653,7 @@ function SignInGate(): React.JSX.Element {
           type="button"
           className="tavern-gate-link"
           onClick={() =>
-            void window.api.openExternal("https://freestylevoice.com/privacy")
+            void window.api.openExternal("https://agicy.ai/legal/privacy")
           }
         >
           Privacy Policy
@@ -868,7 +867,7 @@ function PanelInner({
       const message = typeof err.message === "string" ? err.message : "";
       setNotice(
         message.includes("cloud_auth_required") || message.includes("401")
-          ? "Sign in to transcribe to chat."
+          ? "Sign in with your AGICY account."
           : message.includes("thread_too_long")
             ? "This conversation is too long to continue. Start a new one from the menu."
             : message && message !== "[object Object]"
@@ -1254,7 +1253,7 @@ function PanelInner({
     return (
       <div className="tavern-shell">
         <div className="tavern tavern-panel">
-          {auth.loading ? null : <SignInGate />}
+          {auth.loading ? null : <AgicySignInGate />}
         </div>
         <PanelTail />
         <PanelResizeHandle />

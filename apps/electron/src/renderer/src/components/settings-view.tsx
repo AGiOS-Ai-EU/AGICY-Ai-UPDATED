@@ -409,6 +409,15 @@ function AccountCard({
               </span>
             </div>
             <div className="tavern-set-card-sub">{auth.user.email}</div>
+            <button
+              type="button"
+              className="tavern-set-link"
+              onClick={() =>
+                void window.api.openExternal("https://agicy.ai/dashboard/usage")
+              }
+            >
+              View inference credits
+            </button>
           </div>
           <span className="tavern-set-chevron">›</span>
         </div>

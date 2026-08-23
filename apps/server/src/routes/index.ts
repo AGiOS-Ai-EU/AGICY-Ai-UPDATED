@@ -15,6 +15,7 @@ import {
 import agentRoute from "./agent.js";
 import agentOsRoute from "./agent-os.js";
 import agentThreadsRoute from "./agent-threads.js";
+import agicyAuth from "./agicy-auth.js";
 import auth from "./auth.js";
 import billing from "./billing.js";
 import brainRoute from "./brain.js";
@@ -92,6 +93,7 @@ const apiRouter = new Hono()
   .route("/scheduled", scheduledRoute)
   .route("/suggestions", suggestionsRoute)
   .route("/auth", auth)
+  .route("/auth/agicy", agicyAuth)
   .route("/models", models)
   .route("/transcribe", transcribe)
   .route("/transcribe", transcribePreWarmRoute)

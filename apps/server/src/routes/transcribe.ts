@@ -1,6 +1,8 @@
 import { sanitizeTranscriptText } from "@freestyle-voice/stt";
 import { createAppLogger } from "@freestyle-voice/utils";
 import { Hono } from "hono";
+import { AGICY_HOSTED_PROVIDER_ID } from "../lib/agicy-platform.js";
+import { invalidateAgicySession } from "../lib/agicy-session.js";
 import { readSetting } from "../lib/db.js";
 import { getRewritePromptContext } from "../lib/editor/rewrite-context.js";
 import { formatError } from "../lib/format-error.js";
@@ -34,6 +36,7 @@ import {
 import { capture, captureException } from "../lib/posthog.js";
 import { getDefaultModels } from "../lib/providers.js";
 import { invalidateSession } from "../lib/sessions.js";
+import { CloudAuthError as AgicyCloudAuthError } from "../lib/streaming/providers/agicy-hosted.js";
 import { CloudAuthError } from "../lib/streaming/providers/freestyle-cloud.js";
 import { getProvider } from "../lib/streaming/registry.js";
 import {
@@ -183,8 +186,10 @@ const transcribeRoute = new Hono().post("/", async (c) => {
 
   const apiKey = getApiKeyForProvider(voiceProvider);
   if (!apiKey) {
-    // Freestyle Cloud has no stored key — a null token means "signed out".
-    if (voiceProvider === FREESTYLE_CLOUD_PROVIDER_ID) {
+    if (
+      voiceProvider === AGICY_HOSTED_PROVIDER_ID ||
+      voiceProvider === FREESTYLE_CLOUD_PROVIDER_ID
+    ) {
       return c.json({ error: "cloud_auth_required" }, 401);
     }
     return c.json(
@@ -442,8 +447,12 @@ const transcribeRoute = new Hono().post("/", async (c) => {
       );
     } catch (err) {
       // Expired/invalid cloud session — ask the desktop app to re-authenticate.
-      if (err instanceof CloudAuthError) {
-        invalidateSession();
+      if (err instanceof CloudAuthError || err instanceof AgicyCloudAuthError) {
+        if (voiceProvider === AGICY_HOSTED_PROVIDER_ID) {
+          invalidateAgicySession();
+        } else {
+          invalidateSession();
+        }
         return c.json({ error: "cloud_auth_required" }, 401);
       }
       log.error(
