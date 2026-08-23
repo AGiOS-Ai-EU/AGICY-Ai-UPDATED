@@ -1,8 +1,20 @@
 import { SearchResults } from "@renderer/components/search-results";
 import { runSearchQuery } from "@renderer/lib/search";
-import type { InputMode, SearchAnswer } from "@updated/search";
+import {
+  DIVERGENCE_CONTESTED_JACCARD_THRESHOLD,
+  type DivergenceReport,
+  type InputMode,
+  type ProviderSearchResult,
+} from "@updated/search";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+
+const EMPTY_DIVERGENCE: DivergenceReport = {
+  contested: false,
+  threshold: DIVERGENCE_CONTESTED_JACCARD_THRESHOLD,
+  minSimilarity: null,
+  pairScores: [],
+};
 
 export interface SearchTabProps {
   inputMode: InputMode;
@@ -14,8 +26,9 @@ export interface SearchTabProps {
 
 interface SearchState {
   query: string;
-  providerId?: string;
-  answer?: SearchAnswer;
+  contested: boolean;
+  divergence: DivergenceReport;
+  results: ProviderSearchResult[];
   error?: string;
 }
 
@@ -33,21 +46,36 @@ export function SearchTab({
     const trimmed = query.trim();
     if (!trimmed) return;
     setLoading(true);
-    setState({ query: trimmed });
+    setState({
+      query: trimmed,
+      contested: false,
+      divergence: EMPTY_DIVERGENCE,
+      results: [],
+    });
     try {
       const result = await runSearchQuery(trimmed);
       if (!result.ok) {
-        setState({ query: trimmed, error: result.error });
+        setState({
+          query: trimmed,
+          contested: false,
+          divergence: EMPTY_DIVERGENCE,
+          results: [],
+          error: result.error,
+        });
         return;
       }
       setState({
         query: trimmed,
-        providerId: result.providerId,
-        answer: result.answer,
+        contested: result.contested,
+        divergence: result.divergence,
+        results: result.results,
       });
     } catch (err) {
       setState({
         query: trimmed,
+        contested: false,
+        divergence: EMPTY_DIVERGENCE,
+        results: [],
         error: err instanceof Error ? err.message : "Search failed",
       });
     } finally {
@@ -113,21 +141,17 @@ export function SearchTab({
         </p>
       ) : null}
 
-      {state?.answer ? (
+      {state && state.results.length > 0 ? (
         <SearchResults
           query={state.query}
-          answer={state.answer}
-          providerId={state.providerId}
-          latencyNote={
-            state.answer.latencyMs !== undefined
-              ? `${state.answer.latencyMs} ms`
-              : undefined
-          }
+          contested={state.contested}
+          divergence={state.divergence}
+          results={state.results}
         />
       ) : !loading && !state?.error ? (
         <p className="updated-search-status">
           Hold the hotkey in search mode to dictate a query, or type above.
-          Modifier + hotkey mode toggle is planned for Gate 6.
+          Default dev search runs two mock providers to surface divergence.
         </p>
       ) : null}
     </div>

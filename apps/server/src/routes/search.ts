@@ -1,7 +1,11 @@
 import { zValidator } from "@hono/zod-validator";
-import { createSearchProvider } from "@updated/search";
+import { createSearchProviders, runMultiProviderSearch } from "@updated/search";
 import { Hono } from "hono";
 import { z } from "zod";
+import {
+  appendDivergenceLog,
+  buildDivergenceLogEvent,
+} from "../lib/search/divergence-log.js";
 
 const searchQuerySchema = z.object({
   query: z.string().trim().min(1).max(500),
@@ -13,7 +17,7 @@ const search = new Hono().post(
   async (c) => {
     const { query } = c.req.valid("json");
     const headerKey = c.req.header("x-search-api-key")?.trim();
-    const provider = createSearchProvider({
+    const providers = createSearchProviders({
       apiKey: headerKey || null,
       forceMock:
         process.env.UPDATED_SEARCH_MOCK === "1" ||
@@ -21,11 +25,25 @@ const search = new Hono().post(
     });
 
     try {
-      const answer = await provider.search(query, c.req.raw.signal);
+      const outcome = await runMultiProviderSearch(
+        providers,
+        query,
+        c.req.raw.signal,
+      );
+
+      const logEvent = buildDivergenceLogEvent({
+        query,
+        providers: outcome.results.map((result) => result.providerId),
+        divergence: outcome.divergence,
+      });
+      appendDivergenceLog(logEvent);
+
       return c.json({
         ok: true as const,
-        providerId: provider.id,
-        answer,
+        query,
+        contested: outcome.contested,
+        divergence: outcome.divergence,
+        results: outcome.results,
       });
     } catch (err) {
       const message =

@@ -1,6 +1,10 @@
 import "../search-results.css";
 
-import type { SearchAnswer, SearchCitation } from "@updated/search";
+import type {
+  DivergenceReport,
+  ProviderSearchResult,
+  SearchCitation,
+} from "@updated/search";
 import {
   citationAgeLabel,
   classifySource,
@@ -13,9 +17,9 @@ import type React from "react";
 
 export interface SearchResultsProps {
   query: string;
-  answer: SearchAnswer;
-  providerId?: string;
-  latencyNote?: string;
+  contested: boolean;
+  divergence: DivergenceReport;
+  results: ProviderSearchResult[];
 }
 
 function claimTextForCitation(citation: SearchCitation): string {
@@ -58,18 +62,55 @@ function SearchClaimCard({
   );
 }
 
-export function SearchResults({
+function DivergenceBanner({
+  contested,
+  divergence,
+}: {
+  contested: boolean;
+  divergence: DivergenceReport;
+}): React.JSX.Element {
+  return (
+    <section className="updated-search-divergence" aria-live="polite">
+      {contested ? (
+        <p className="updated-search-contested">CONTESTED</p>
+      ) : (
+        <p className="updated-search-agreement">Providers agree</p>
+      )}
+      <p className="updated-search-divergence-summary">
+        Minimum pairwise similarity:{" "}
+        {divergence.minSimilarity === null
+          ? "n/a"
+          : divergence.minSimilarity.toFixed(2)}{" "}
+        (threshold {divergence.threshold.toFixed(2)})
+      </p>
+      {divergence.pairScores.length > 0 ? (
+        <ul className="updated-search-pair-scores">
+          {divergence.pairScores.map((pair) => (
+            <li key={`${pair.providerA}-${pair.providerB}`}>
+              {pair.providerA} ↔ {pair.providerB}: {pair.jaccard.toFixed(2)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function ProviderResultsSection({
   query,
-  answer,
-  providerId,
-  latencyNote,
-}: SearchResultsProps): React.JSX.Element {
+  result,
+}: {
+  query: string;
+  result: ProviderSearchResult;
+}): React.JSX.Element {
+  const { answer, providerId } = result;
   const primaryRate = computePrimaryRate(answer.citations);
   const ageStrip = formatAgeStrip(answer.citations);
 
   return (
-    <div className="updated-search">
+    <section className="updated-search-provider">
       <header className="updated-search-header">
+        <p className="updated-search-provider-label">Provider {providerId}</p>
         <p className="updated-search-primary-rate">
           Primary-source rate: {primaryRate.rateText}
         </p>
@@ -79,7 +120,7 @@ export function SearchResults({
         <div
           className="updated-search-age-strip"
           role="group"
-          aria-label="Citation date range"
+          aria-label={`Citation date range for ${providerId}`}
         >
           <span className="updated-search-age-item">
             <span>Oldest</span>
@@ -90,12 +131,8 @@ export function SearchResults({
             <span>{ageStrip.newest}</span>
           </span>
         </div>
-        {providerId || latencyNote ? (
-          <p className="updated-search-meta">
-            {providerId ? `Provider ${providerId}` : null}
-            {providerId && latencyNote ? " · " : null}
-            {latencyNote ?? null}
-          </p>
+        {answer.latencyMs !== undefined ? (
+          <p className="updated-search-meta">{answer.latencyMs} ms</p>
         ) : null}
       </header>
 
@@ -118,9 +155,32 @@ export function SearchResults({
 
       <div className="updated-search-cards">
         {answer.citations.map((citation) => (
-          <SearchClaimCard key={citation.url} citation={citation} />
+          <SearchClaimCard
+            key={`${providerId}-${citation.url}`}
+            citation={citation}
+          />
         ))}
       </div>
+    </section>
+  );
+}
+
+export function SearchResults({
+  query,
+  contested,
+  divergence,
+  results,
+}: SearchResultsProps): React.JSX.Element {
+  return (
+    <div className="updated-search">
+      <DivergenceBanner contested={contested} divergence={divergence} />
+      {results.map((result) => (
+        <ProviderResultsSection
+          key={result.providerId}
+          query={query}
+          result={result}
+        />
+      ))}
     </div>
   );
 }

@@ -135,7 +135,13 @@ const api = {
   searchQuery: (
     query: string,
   ): Promise<
-    | { ok: true; providerId: string; answer: unknown }
+    | {
+        ok: true;
+        query: string;
+        contested: boolean;
+        divergence: unknown;
+        results: unknown[];
+      }
     | { ok: false; error: string }
   > => ipcRenderer.invoke("search:query", query),
   getSearchKeyStatus: (): Promise<{

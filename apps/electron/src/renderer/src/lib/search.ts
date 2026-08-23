@@ -1,10 +1,12 @@
 import { apiFetch, initApiBase } from "@renderer/lib/api";
-import type { SearchAnswer } from "@updated/search";
+import type { DivergenceReport, ProviderSearchResult } from "@updated/search";
 
 export interface SearchQuerySuccess {
   ok: true;
-  providerId: string;
-  answer: SearchAnswer;
+  query: string;
+  contested: boolean;
+  divergence: DivergenceReport;
+  results: ProviderSearchResult[];
 }
 
 export interface SearchQueryFailure {
@@ -14,7 +16,7 @@ export interface SearchQueryFailure {
 
 export type SearchQueryResult = SearchQuerySuccess | SearchQueryFailure;
 
-/** Execute search via main-process proxy (injects keychain key server-side). */
+/** Execute multi-provider search via main-process proxy. */
 export async function runSearchQuery(
   query: string,
 ): Promise<SearchQueryResult> {

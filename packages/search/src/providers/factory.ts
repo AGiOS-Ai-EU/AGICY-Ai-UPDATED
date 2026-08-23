@@ -1,24 +1,32 @@
 import type { SearchProvider } from "../types.js";
 import { BraveSearchProvider } from "./brave.js";
 import { MockSearchProvider } from "./mock.js";
+import { MockAltSearchProvider } from "./mock-alt.js";
 
 export interface SearchProviderOptions {
   apiKey?: string | null;
   forceMock?: boolean;
 }
 
-/** Select Brave when a key exists; otherwise fall back to the dev mock provider. */
-export function createSearchProvider(
+function isSingleProviderMode(): boolean {
+  return (
+    process.env.UPDATED_SEARCH_SINGLE === "1" ||
+    process.env.UPDATED_SEARCH_SINGLE === "true"
+  );
+}
+
+/**
+ * Return the active provider set for divergence-aware search.
+ * Default dev path runs two mocks; live Brave runs alongside mock-alt unless
+ * UPDATED_SEARCH_SINGLE=1.
+ */
+export function createSearchProviders(
   options: SearchProviderOptions = {},
-): SearchProvider {
+): SearchProvider[] {
   const forceMock =
     options.forceMock ||
     process.env.UPDATED_SEARCH_MOCK === "1" ||
     process.env.UPDATED_SEARCH_MOCK === "true";
-
-  if (forceMock) {
-    return new MockSearchProvider();
-  }
 
   const apiKey =
     options.apiKey?.trim() ||
@@ -26,11 +34,23 @@ export function createSearchProvider(
     process.env.UPDATED_BRAVE_SEARCH_API_KEY?.trim() ||
     "";
 
-  if (apiKey) {
-    return new BraveSearchProvider(apiKey);
+  if (isSingleProviderMode()) {
+    if (forceMock || !apiKey) return [new MockSearchProvider()];
+    return [new BraveSearchProvider(apiKey)];
   }
 
-  return new MockSearchProvider();
+  if (forceMock || !apiKey) {
+    return [new MockSearchProvider(), new MockAltSearchProvider()];
+  }
+
+  return [new BraveSearchProvider(apiKey), new MockAltSearchProvider()];
 }
 
-export { BraveSearchProvider, MockSearchProvider };
+/** Back-compat helper for callers that still expect one provider. */
+export function createSearchProvider(
+  options: SearchProviderOptions = {},
+): SearchProvider {
+  return createSearchProviders(options)[0];
+}
+
+export { BraveSearchProvider, MockAltSearchProvider, MockSearchProvider };

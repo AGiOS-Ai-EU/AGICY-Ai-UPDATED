@@ -182,9 +182,10 @@ One line per step, file path only:
 
 | Touch | Files |
 |-------|-------|
-| Orchestration | `packages/search/src/divergence.ts` |
-| Log | `apps/server/src/lib/search-log.ts` or main-process append-only JSONL |
-| Tests | `source-class.test.ts`, `divergence.test.ts`, log round-trip |
+| Orchestration | `packages/search/src/divergence.ts`, `multi-search.ts` |
+| Log | `apps/server/src/lib/search/divergence-log.ts` |
+| Tests | `divergence.test.ts`, `search-divergence-log.test.ts` |
+| UI | `search-results.tsx` — CONTESTED banner, per-provider sections |
 
 ### Phase 7 — Settings (Gate 6)
 
@@ -248,4 +249,6 @@ One line per step, file path only:
 
 **Gate 4:** Result rendering + minimal search execution — see `docs/CHANGES.md`.
 
-**Gate 5+:** Divergence orchestration, settings UI for search keys, hotkey modifier mode flip.
+**Gate 5:** Divergence detection + CONTESTED state — see `docs/CHANGES.md`.
+
+**Gate 6+:** Settings UI for search keys, hotkey modifier mode flip, divergence log export.

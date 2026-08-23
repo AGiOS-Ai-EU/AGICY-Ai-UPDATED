@@ -1,6 +1,6 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 4 — search UI, classifier, Brave/mock providers, keychain IPC wired. Hotkey modifier flip deferred to Gate 6.
+> **Status:** Gate 5 — multi-provider divergence detection, CONTESTED UI, JSONL log wired.
 
 ---
 
@@ -105,6 +105,42 @@ Renderer never receives raw keys — only `{ configured: boolean, providerId }`.
 
 ---
 
+## Gate 5 — Divergence detection
+
+### Similarity model
+
+Each citation becomes a stable identity key: **normalized domain + sorted title tokens** (snippets excluded — providers paraphrase them). For each provider, citations form a set of keys. Pairwise **Jaccard similarity** is `|A∩B| / |A∪B|`.
+
+### CONTESTED threshold
+
+`DIVERGENCE_CONTESTED_JACCARD_THRESHOLD = 0.35` in `packages/search/src/divergence.ts`. When **any** provider pair scores below 0.35, the run is **CONTESTED**. Results are never merged or voted — each provider section renders separately.
+
+### Divergence log
+
+Append-only JSONL at `{userData}/logs/search-divergence.jsonl` (override with `UPDATED_SEARCH_DIVERGENCE_LOG`). Each line:
+
+```json
+{
+  "timestamp": "2026-08-23T08:00:00.000Z",
+  "query": "...",
+  "providers": ["mock", "mock-alt"],
+  "contested": true,
+  "threshold": 0.35,
+  "minSimilarity": 0,
+  "pairScores": [{ "providerA": "mock", "providerB": "mock-alt", "jaccard": 0 }]
+}
+```
+
+### Multi-provider defaults
+
+| Mode | Providers |
+|------|-----------|
+| Dev (no Brave key) | `mock` + `mock-alt` |
+| Live Brave key | `brave` + `mock-alt` |
+| `UPDATED_SEARCH_SINGLE=1` | single provider only (no divergence) |
+
+---
+
 ## 7. Latency & telemetry
 
 - `SearchAnswer.latencyMs` — provider round-trip only.
@@ -121,3 +157,6 @@ Renderer never receives raw keys — only `{ configured: boolean, providerId }`.
 - [x] Keychain IPC (Gate 4 — `safeStorage` in main)
 - [ ] Mode persistence hotkey modifier (Gate 6 — panel toggle only in Gate 4)
 - [x] Search UI (Gate 4)
+- [x] Divergence detection + CONTESTED state (Gate 5)
+- [x] Divergence JSONL log (Gate 5)
+- [ ] Mode persistence hotkey modifier (Gate 6 — panel toggle only in Gate 4)

@@ -93,6 +93,33 @@ Summary of files touched implementing Gates 1, 2, and 3.
 
 ---
 
+## Gate 5 — Divergence detection
+
+| File | Change |
+|------|--------|
+| `packages/search/src/divergence.ts` | **New** — Jaccard similarity, `DIVERGENCE_CONTESTED_JACCARD_THRESHOLD` (0.35) |
+| `packages/search/src/divergence.test.ts` | **New** — Jaccard + CONTESTED tests |
+| `packages/search/src/multi-search.ts` | **New** — multi-provider orchestration (no merge/vote) |
+| `packages/search/src/providers/mock-alt.ts` | **New** — second dev provider for divergence demos |
+| `packages/search/src/providers/factory.ts` | `createSearchProviders()` returns provider arrays |
+| `apps/server/src/lib/search/divergence-log.ts` | **New** — append-only JSONL log |
+| `apps/server/tests/search-divergence-log.test.ts` | **New** — log round-trip test |
+| `apps/server/src/routes/search.ts` | Multi-provider search + divergence logging |
+| `apps/electron/src/renderer/src/components/search-results.tsx` | CONTESTED banner + per-provider sections |
+| `apps/electron/src/renderer/src/components/search-tab.tsx` | Multi-provider response handling |
+| `apps/electron/src/renderer/src/lib/search.ts` | Updated response types |
+| `apps/electron/src/renderer/src/search-results.css` | CONTESTED / divergence styles |
+
+**Not fully wired (deferred to Gate 6):**
+
+- Hotkey modifier mode flip
+- Settings UI for Brave API key and provider selection
+- Export divergence JSONL from settings
+- Third live provider (Exa, etc.) — only Brave + mocks today
+- `UPDATED_SEARCH_SINGLE=1` disables divergence (documented escape hatch)
+
+---
+
 ## Verification
 
 ```powershell
