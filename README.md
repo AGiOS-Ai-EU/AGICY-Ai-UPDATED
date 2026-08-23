@@ -1,49 +1,94 @@
 <p align="center">
-  <img alt="Freestyle" src="media/freestyle-lockup.png" width="520">
+  <img
+    alt="UPDATED — voice-driven search, certificate-grade sources"
+    src="docs/assets/updated-github-hero.png"
+    width="960"
+  />
 </p>
 
 <p align="center">
-  <a href="https://github.com/freestyle-voice/freestyle/releases/latest"><img src="https://img.shields.io/github/v/release/freestyle-voice/freestyle?style=for-the-badge&sort=semver&color=blue" alt="Release" /></a>
-  <a href="https://github.com/freestyle-voice/freestyle/releases/latest"><img src="https://img.shields.io/badge/Download-Latest-brightgreen.svg?style=for-the-badge" alt="Download" /></a>
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge" alt="Platform" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License" /></a>
-  <a href="https://discord.gg/Fmgt5yZCDu"><img src="https://img.shields.io/badge/Discord-Join%20Server-5865F2.svg?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5C6663?style=flat-square" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-16211F?style=flat-square" alt="Platform" />
+  <img src="https://img.shields.io/badge/shell-Electron-16211F?style=flat-square" alt="Electron" />
+  <a href="docs/ARCHITECTURE-MAP.md"><img src="https://img.shields.io/badge/docs-architecture-5C6663?style=flat-square" alt="Architecture" /></a>
 </p>
 
-Freestyle is the intelligent reminders app. It lives on your desktop: tell it what matters to you, connect the apps where that stuff lives, and it periodically checks on its own. When something needs you, it taps you on the shoulder: the invoice that is three weeks overdue, the pull request nobody has reviewed, the flight credit that expires Friday. Then it offers to do the next step, and waits for you to say yes.
+# UPDATED
 
-It keeps notes and todos for you, remembers what you tell it, and can draft the reply, book the time, or start the task itself. Anything it wants to send, post, or buy is shown to you first and only happens when you press Allow.
+**Hold a hotkey. Speak a question. Read the sources.**
 
-### Features
+UPDATED is a desktop search instrument: voice in, certificate-style claim cards out — with a plain primary-source rate and an honest CONTESTED state when providers diverge.
 
-- **Scheduled tasks** — "Every morning, look at my repo and tell me about open issues." "Tell me when a deal goes quiet for five days." Each one becomes a standing job that runs on a timer you set, and you get one desktop notification when something crosses the line, not a feed to scroll.
-- **Connected apps** — Gmail, Google Calendar, Slack, GitHub, Notion, Google Drive and Sheets out of the box, plus around 1,200 more tools through MCP. Connect an app once and Freestyle can read from it to check the things you asked about, and write to it only through an action you approve.
-- **Todos and notes** — Freestyle tracks what you care about in a Todos list and plain-text notes. It reminds you when you are falling behind, verifies whether something actually got done, and checks items off for you when it sees they are finished.
-- **Brain** — a memory of the things you have told it, kept as plain text you can read, edit, and delete. Say something once and it is there for every future conversation.
-- **Approval before action** — sending an email, posting to Slack, booking time, buying something. Every one of these stops at an approval step showing exactly what would happen and where. You hit Allow, or you don't.
-- **Dictation and Remix** — the writing tools are still here. Hold the hotkey, speak, release to paste polished text at your cursor, or highlight a paragraph and describe the change you want. Works in Google Docs, Slack, VS Code, Gmail, and anywhere else you type.
+Fork of [Freestyle](https://github.com/freestyle-voice/freestyle). Product name and design system are UPDATED; the dictation paste path remains intact.
 
-<p align="center">
-  <img src="media/freestyle-screenshot.png" alt="Freestyle on the desktop: the companion panel setting up a scheduled task to check a GitHub repo every morning" width="800" />
-</p>
+---
 
-## Download
+## What it is
 
-| Platform | Download |
-|----------|----------|
-| macOS (Apple Silicon) | [`.dmg`](https://github.com/freestyle-voice/freestyle/releases/latest) |
-| macOS (Intel) | [`.dmg`](https://github.com/freestyle-voice/freestyle/releases/latest) |
-| Windows | [`.exe`](https://github.com/freestyle-voice/freestyle/releases/latest) |
-| Linux | [`.AppImage`](https://github.com/freestyle-voice/freestyle/releases/latest) / [`.deb`](https://github.com/freestyle-voice/freestyle/releases/latest) |
+| Surface | Behavior |
+|---------|----------|
+| **Dictation mode** | Hold hotkey → mic → STT → paste/clipboard (unchanged Freestyle path) |
+| **Search mode** | Hold hotkey → mic → STT → multi-provider search → claim cards in the panel |
+| **Claim cards** | Newsreader claim text, Martian Mono state chips, hairline source strip |
+| **Primary-source rate** | Stated as `primary / total` — including `0 / N` and “No primary sources found.” |
+| **CONTESTED** | Jaccard similarity across providers below 0.35 — results never merged or voted |
+| **Settings** | Live hotkey rebind, input mode, Brave API key (encrypted), dual/single providers, divergence log reveal |
 
-Mobile support on iOS and Android is coming soon. 
+Design tokens live in `packages/updated-design` — paper, ink, graphite, 2px radius, 0.5px hairlines. No glassmorphism.
 
-## Contributing
+---
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, local development, and opening up a PR. 
+## Quick start
 
-Consider joining our [Discord server](https://discord.gg/Fmgt5yZCDu)! That's where project contributors communicate.
+```powershell
+git clone https://github.com/AGiOS-Ai-EU/UPDATED.git
+cd UPDATED
+pnpm install
+pnpm --filter @freestyle-voice/electron run compile:native
+pnpm --filter @freestyle-voice/electron run dev
+```
+
+**Windows notes**
+
+- Default dictation hotkey is **Right Alt** (see Settings → Dictation to rebind live).
+- Native helpers need a working C++ toolchain for `compile:native` on first run.
+- Without a Brave Search API key, dual **mock** providers demonstrate CONTESTED results in the Search tab.
+
+Optional: Settings → Search → paste a Brave Search key → Save (stored via Electron `safeStorage`, never in SQLite).
+
+---
+
+## Features (Gates 1–6)
+
+- Certificate design system (Newsreader / Instrument Sans / Martian Mono)
+- Bottom-centre widget positioning with per-display persistence
+- Search contracts + Brave HTTP provider + mock / mock-alt pair
+- Panel **Search** tab with claim cards, age strip, primary-source rate
+- Divergence detection + JSONL log at `{userData}/logs/search-divergence.jsonl`
+- Settings: hotkey rebind, mode switch, Brave key, provider dual/single, log reveal
+
+Architecture: [`docs/ARCHITECTURE-MAP.md`](docs/ARCHITECTURE-MAP.md) · Search: [`docs/SEARCH-ARCHITECTURE.md`](docs/SEARCH-ARCHITECTURE.md) · Changelog: [`docs/CHANGES.md`](docs/CHANGES.md)
+
+Vector banner (crisp): [`docs/assets/updated-github-hero.svg`](docs/assets/updated-github-hero.svg)
+
+---
+
+## Not yet wired
+
+Honest backlog for later gates:
+
+- Modifier + hotkey flip for input mode (settings / Search tab toggles exist today)
+- Third live search provider (e.g. Exa)
+- Divergence CSV / in-app log viewer (reveal + copy path only)
+- LLM claim extraction (one card per citation + summary today)
+- Single merged widget window (still companion + panel + notification)
+
+---
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — same license as the upstream Freestyle checkout in this repository.
+
+## Credits
+
+UPDATED is a fork of [freestyle-voice/freestyle](https://github.com/freestyle-voice/freestyle). Upstream product names (`@freestyle-voice/*` packages) are retained for compatibility; the shipped desktop product name is **UPDATED**.
