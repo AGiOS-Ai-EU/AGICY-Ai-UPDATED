@@ -204,3 +204,16 @@ pnpm biome check packages/search apps/server/src/lib/search apps/server/src/rout
 **Generation:** Cursor `GenerateImage` (certificate/lab prompts; palette from `packages/updated-design/tokens.css` and `updated-github-hero.png` reference). Resized/optimized with Pillow — no SVG companions (raster editorial only).
 
 **GitHub social preview (manual):** Social preview remains a single image. Keep `docs/assets/updated-github-hero.png` as the repo OG unless you upload a composite manually at Settings → Social preview. Usage PNGs are README-only.
+
+---
+
+## Gate 9 — Mobile usage imagery (gala style)
+
+| File | Change |
+|------|--------|
+| `docs/assets/updated-mobile-hold-speak-1.png` | **New** — 1120×630, ~988 KB. Scene A: woman shows phone with UPDATED claim cards to man — medium close-up, gala backdrop. |
+| `docs/assets/updated-mobile-hold-speak-2.png` | **New** — 1080×608, ~952 KB. Scene B: two people side by side, each holding phone with Search UI + waveform. |
+| `docs/assets/updated-mobile-hold-speak-3.png` | **New** — 1120×630, ~1008 KB. Scene C: single-subject close-up, thumb on hotkey, “Cyprus annual return” query. |
+| `README.md` | **Usage → Mobile** sub-section with three images |
+
+**Generation:** Cursor `GenerateImage` with dual references — user gala style guide (`Gemini_Generated_Image_oldnjz…jpg`) + `updated-github-hero.png` for UPDATED UI tokens. Prompts: no microphones, smartphones with certificate UI (paper `#f8f6f1`, ink `#1a1814`, graphite `#5c5850`), closer camera, UPDATED glass branding (not crypto). Resized/optimized with Pillow.

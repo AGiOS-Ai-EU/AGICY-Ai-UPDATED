@@ -64,6 +64,28 @@ Hold the dictation hotkey (default **Right Alt**), speak your question, then rea
 
 Typed queries in the Search tab work the same way — voice is the primary path shown here.
 
+### Mobile
+
+Same flow on phone: hold the hotkey, speak, read claim cards. Illustrations below — not live app screenshots. Mobile client is not shipped in this repo; UI chrome matches the desktop certificate tokens.
+
+<p align="center">
+  <img alt="Gala close-up: woman shows UPDATED Search claim cards on phone to colleague" src="docs/assets/updated-mobile-hold-speak-1.png" width="960" />
+  <br />
+  <sub>Hold hotkey on phone → speak → show claim cards to a colleague.</sub>
+</p>
+
+<p align="center">
+  <img alt="Two professionals side by side, each holding phone with UPDATED Search and waveform" src="docs/assets/updated-mobile-hold-speak-2.png" width="960" />
+  <br />
+  <sub>Side by side: each holds hotkey, speaks, reads PRIMARY rate and CONTESTED state on screen.</sub>
+</p>
+
+<p align="center">
+  <img alt="Close-up: thumb on phone hotkey, Cyprus annual return query and waveform on UPDATED UI" src="docs/assets/updated-mobile-hold-speak-3.png" width="960" />
+  <br />
+  <sub>Close-up: hotkey hold, voice waveform, query visible — claim cards below.</sub>
+</p>
+
 ---
 
 ## Quick start
