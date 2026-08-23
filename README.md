@@ -1,9 +1,11 @@
 <p align="center">
   <img
-    alt="UPDATED by AGICY.Ai — voice-driven search, certificate-grade sources, EU-hosted"
+    alt="Two professionals at a desk — woman speaks into UPDATED on laptop while holding Right Alt; hybrid Search panel with Cyprus annual return and PRIMARY 2/5 (UPDATED by AGICY.Ai)"
     src="docs/assets/updated-github-hero.png"
     width="960"
   />
+  <br />
+  <sub>People using UPDATED — hold hotkey, speak, read certificate claim cards on laptop. EU-hosted &#183; GDPR-aligned.</sub>
 </p>
 
 <p align="center">

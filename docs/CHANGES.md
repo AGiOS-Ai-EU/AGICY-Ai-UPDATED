@@ -170,7 +170,7 @@ Manual smoke:
 | File | Change |
 |------|--------|
 | `README.md` | Rewritten for UPDATED (certificate voice, Gates 1–6 honesty, Freestyle credit, MIT) |
-| `docs/assets/updated-github-hero.png` | **New** — 1280×640 OG/README hero (&lt;1 MB) |
+| `docs/assets/updated-github-hero.png` | **Replaced** — 1080×720 editorial hero (&lt;1 MB); people using UPDATED on laptop |
 | `docs/assets/updated-github-hero.svg` | **New** — crisp vector banner |
 | `apps/electron/.../search-results.tsx` | Drop `role="group"` a11y warning |
 
@@ -338,3 +338,16 @@ Manual smoke: run two searches in Search tab → Recent shows both with CONTESTE
 **Why compositor failed:** Pillow pasted a 3× virtual UI into fractional phone masks on editorial photos — aspect letterboxing, bezel misalignment, and downscale clipped header/footer text. SVG mockups draw the real hybrid shell (52px rail, 16px frame, 2px certificate cards) with no mask guesswork.
 
 **GitHub README fix (Gate 15b):** Raw repo SVG is served as `Content-Type: text/plain`, so `<img src="*.svg">` showed broken icons on github.com. **Fix:** sanitize SVG (valid UTF-8, strip XML control chars); export PNG @2× (780×1688) via `scripts/render-readme-svgs.py` + resvg-js; README primary format is **PNG**.
+
+---
+
+## Gate 16 — README hero — people using UPDATED
+
+| File | Change |
+|------|--------|
+| `docs/assets/updated-github-hero.png` | **Replaced** — editorial two-person desk scene; laptop shows hybrid Search UI in-screen (GenerateImage; refs `updated-usage-hold-speak.png`, `updated-mobile-search.png`) |
+| `README.md` | Hero alt + subcaption: people using product on laptop |
+| `docs/assets/updated-github-hero.svg` | Unchanged abstract vector; **PNG is canonical** for README + Social preview |
+
+**Compositing:** Single-pass GenerateImage editorial (UI rendered on laptop screen in prompt); Pillow resize **1080×720**, PNG optimize (**~1002 KB**).
+
