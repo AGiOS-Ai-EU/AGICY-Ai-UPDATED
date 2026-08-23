@@ -77,10 +77,10 @@ After install, expect this sequence on first launch:
 
 1. **Windows SmartScreen** (or macOS Gatekeeper) — the beta is unsigned. Use **More info → Run anyway** (Windows) or **Open** from the context menu (macOS). See the install steps above.
 2. **AGICY sign-in panel** — the app opens a sign-in window with a device code. Click **Continue in browser** if the browser does not open automatically.
-3. **Browser device sign-in** — your browser opens [agicy.ai/updated/connect](https://agicy.ai/updated/connect). Sign in with your AGICY account, confirm the code matches the app, then approve the device. Voice transcription uses hosted Deepgram EU through agicy.ai (inference credits apply).
+3. **Browser device sign-in** — your browser opens [agicy.ai/updated/my_device](https://agicy.ai/updated/my_device). Sign in with your AGICY email first, confirm the code matches the app, then approve the device. Voice transcription uses hosted Deepgram EU through agicy.ai (inference credits apply).
 4. **Microphone** — allow mic access when prompted. Hold the platform hotkey and speak once signed in.
 
-Until sign-in completes, the floating companion sprite stays hidden so the gate is not cluttered with upstream Freestyle artwork.
+Until sign-in completes, the floating companion sprite stays hidden during the auth gate.
 
 ## How it works
 
