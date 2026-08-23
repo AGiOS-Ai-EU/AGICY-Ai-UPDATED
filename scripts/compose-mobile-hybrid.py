@@ -1,4 +1,8 @@
-"""Hybrid mobile compositor v2 — 3x virtual phone UI, hero crop, AGICY.Ai + EU privacy."""
+"""Hybrid mobile compositor v2 — DEPRECATED.
+
+Photo paste compositor failed alignment (README hybrid-1 broken). Use hand-crafted
+SVG mockups in docs/assets/updated-mobile-*.svg instead. Kept for reference only.
+"""
 from __future__ import annotations
 
 import json

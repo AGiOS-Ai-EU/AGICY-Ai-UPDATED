@@ -318,3 +318,23 @@ Manual smoke: run two searches in Search tab → Recent shows both with CONTESTE
 **GitHub social preview:** `docs/assets/updated-github-hero.png` (1280×640).
 
 **Provider icons on images:** hold-speak + hybrid-1 (OpenAI, Brave, Groq); search-flow CONTESTED row (Anthropic, Mistral, Cerebras); hybrid-3 (Groq, Anthropic, Mistral). Waveform scene (hybrid-2) intentionally clean.
+
+---
+
+## Gate 15 — Mobile README SVG mockups (replaces photo compositor)
+
+| File | Change |
+|------|--------|
+| `docs/assets/updated-mobile-search.svg` | **New** — 390×844 Search tab mockup |
+| `docs/assets/updated-mobile-voice.svg` | **New** — hold hotkey + waveform + recent history |
+| `docs/assets/updated-mobile-contested.svg` | **New** — CONTESTED + dual provider sections |
+| `docs/assets/updated-mobile-hybrid-{1,2,3}.png` | **Removed** — broken photo paste |
+| `docs/assets/bases/updated-mobile-base-v2-*.png` | **Removed** — editorial bases no longer used |
+| `docs/assets/phone-masks/v2-*.json` | **Deprecated** — compositor masks unused |
+| `scripts/compose-mobile-hybrid.py` | Marked **DEPRECATED** (reference only) |
+| `scripts/render-readme-svgs.py` | **New** — optional SVG→PNG @2× for social preview |
+| `README.md` | Mobile Usage embeds SVG via `<img src="*.svg" width="960">` |
+
+**Why compositor failed:** Pillow pasted a 3× virtual UI into fractional phone masks on editorial photos — aspect letterboxing, bezel misalignment, and downscale clipped header/footer text. SVG mockups draw the real hybrid shell (52px rail, 16px frame, 2px certificate cards) with no mask guesswork.
+
+**GitHub SVG support:** GitHub renders SVG in `<img>` tags in README; vectors stay crisp at 960px width.

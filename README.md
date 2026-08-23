@@ -66,24 +66,24 @@ Typed queries in the Search tab work the same way — voice is the primary path 
 
 ### Mobile
 
-Same flow on phone: hold the hotkey, speak, read claim cards. Hybrid UI below — glass nav rail + certificate Search content, composited inside the phone screen. **Mobile client is a concept**; the hybrid shell + certificate Search tab is **shipped in the Electron panel** (commit `2060245`).
+Same flow on phone: hold the hotkey, speak, read claim cards. **Hybrid panel mockups (SVG)** below match the Electron Search tab — glass rail + certificate content, not photo compositing.
 
 <p align="center">
-  <img alt="Café interview: Search query, PRIMARY 2/5, OpenAI + Brave provider marks — UPDATED by AGICY.Ai" src="docs/assets/updated-mobile-hybrid-1.png" width="960" />
+  <img alt="Search results — Cyprus annual return, PRIMARY 2/5, claim card" src="docs/assets/updated-mobile-search.svg" width="960" />
   <br />
-  <sub>Search scene — readable 14px+ body; EU-hosted · GDPR-aligned footer chip.</sub>
+  <sub>Hybrid panel mockup (SVG) — Search tab; EU-hosted · GDPR-aligned.</sub>
 </p>
 
 <p align="center">
-  <img alt="Over-shoulder: hold hotkey waveform, PRIMARY 1/5 — clipped in phone mask" src="docs/assets/updated-mobile-hybrid-2.png" width="960" />
+  <img alt="Hold hotkey voice path — waveform, recent history, primary 1/5" src="docs/assets/updated-mobile-voice.svg" width="960" />
   <br />
-  <sub>Voice path only — no provider icons (single focal state).</sub>
+  <sub>Voice / hotkey — query history row (feature #7); single focal state.</sub>
 </p>
 
 <p align="center">
-  <img alt="Hands hero: CONTESTED chip, Groq + Anthropic + Mistral marks, one PRIMARY card" src="docs/assets/updated-mobile-hybrid-3.png" width="960" />
+  <img alt="CONTESTED — mock vs mock-alt, two provider sections" src="docs/assets/updated-mobile-contested.svg" width="960" />
   <br />
-  <sub>Dual mock providers diverge; similarity line + provider SVG row.</sub>
+  <sub>CONTESTED divergence — provider SVG marks, one claim card per section.</sub>
 </p>
 
 ---
