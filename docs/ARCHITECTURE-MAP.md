@@ -253,4 +253,6 @@ One line per step, file path only:
 
 **Gate 6:** Settings — hotkey rebind, mode switch, Brave key, provider dual/single, divergence log reveal — see `docs/CHANGES.md`.
 
-**Gates 7–8+:** Modifier mode flip, third live provider, claim extraction, single-widget merge.
+**Gate 7:** Final pass — README + GitHub hero assets, lint/tests on Gate packages — see `docs/CHANGES.md`.
+
+**Gate 8+:** Modifier mode flip, third live provider, claim extraction, single-widget merge.

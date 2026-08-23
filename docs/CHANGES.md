@@ -162,3 +162,31 @@ Manual smoke:
 6. Settings → Search → Provider set Single → search shows one provider (no CONTESTED)
 7. Settings → Search → Reveal JSONL log → file manager opens on `search-divergence.jsonl`
 8. Open panel → Search tab → type query → Enter — claim cards + divergence banner when Dual
+
+---
+
+## Gate 7 — Final pass + README / social image
+
+| File | Change |
+|------|--------|
+| `README.md` | Rewritten for UPDATED (certificate voice, Gates 1–6 honesty, Freestyle credit, MIT) |
+| `docs/assets/updated-github-hero.png` | **New** — 1280×640 OG/README hero (&lt;1 MB) |
+| `docs/assets/updated-github-hero.svg` | **New** — crisp vector banner |
+| `apps/electron/.../search-results.tsx` | Drop `role="group"` a11y warning |
+
+**Verification (Gate 7):**
+
+```powershell
+pnpm --filter @updated/search test                                          # 26 passed
+pnpm --filter @freestyle-voice/electron exec vitest run src/shared/search-settings.test.ts  # 5 passed
+cd apps/server; pnpm vitest run tests/search-divergence-log.test.ts         # 1 passed
+pnpm biome check packages/search apps/server/src/lib/search apps/server/src/routes/search.ts apps/electron/src/shared/search-settings.ts apps/electron/src/renderer/src/components/search-results.tsx apps/electron/src/renderer/src/components/search-tab.tsx
+```
+
+**GitHub social preview (manual):** API cannot set Social preview. Maintainer step:
+
+1. Open https://github.com/AGiOS-Ai-EU/UPDATED/settings
+2. Scroll to **Social preview** → **Edit** → **Upload an image…**
+3. Upload `docs/assets/updated-github-hero.png` (1280×640, PNG &lt; 1 MB)
+
+**Not fully wired (Gate 8+):** modifier+hotkey mode flip; third live provider; divergence CSV / in-app viewer; LLM claim extraction; single-widget shell merge.

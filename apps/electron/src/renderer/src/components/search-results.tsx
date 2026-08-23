@@ -117,11 +117,7 @@ function ProviderResultsSection({
         {!primaryRate.hasPrimary ? (
           <p className="updated-search-no-primary">No primary sources found.</p>
         ) : null}
-        <div
-          className="updated-search-age-strip"
-          role="group"
-          aria-label={`Citation date range for ${providerId}`}
-        >
+        <div className="updated-search-age-strip">
           <span className="updated-search-age-item">
             <span>Oldest</span>
             <span>{ageStrip.oldest}</span>

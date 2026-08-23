@@ -1,6 +1,6 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 6 — settings for input mode, Brave key, provider dual/single, live hotkey reload, divergence log reveal.
+> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, claim extraction, widget merge.
 
 ---
 
