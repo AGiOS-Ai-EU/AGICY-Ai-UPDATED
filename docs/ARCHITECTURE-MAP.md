@@ -191,10 +191,10 @@ One line per step, file path only:
 
 | Touch | Files |
 |-------|-------|
-| Settings UI | `apps/electron/src/renderer/src/components/settings-view.tsx`, `tavern.css` `.tavern-set-*` |
-| Live hotkey | `hotkey:reload` path in `index.ts` (already exists — verify end-to-end) |
-| Server settings | `apps/server/src/routes/settings.ts`, SQLite `settings` table |
-| Export | New route or IPC for JSONL/CSV export |
+| Settings UI | `settings-view.tsx` — **Search** page (mode, Brave key, dual/single, log reveal) |
+| Live hotkey | `hotkey:reload` + `stopHotkeyRecording(accel)` end-to-end |
+| Server settings | SQLite `input_mode`, `search_provider_mode` |
+| Export | `search:divergence-log-reveal` IPC → `showItemInFolder` |
 
 ### Rakazo bridge (parallel track, optional)
 
@@ -251,4 +251,6 @@ One line per step, file path only:
 
 **Gate 5:** Divergence detection + CONTESTED state — see `docs/CHANGES.md`.
 
-**Gate 6+:** Settings UI for search keys, hotkey modifier mode flip, divergence log export.
+**Gate 6:** Settings — hotkey rebind, mode switch, Brave key, provider dual/single, divergence log reveal — see `docs/CHANGES.md`.
+
+**Gates 7–8+:** Modifier mode flip, third live provider, claim extraction, single-widget merge.

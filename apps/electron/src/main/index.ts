@@ -40,6 +40,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 import { execFile } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -94,7 +95,7 @@ import {
   resolveDictationWindowDisplays,
   resolvePanelCompanionDisplays,
 } from "../shared/companion-position";
-import type { DictationPrefs, InputMode } from "../shared/dictation-prefs";
+import type { DictationPrefs } from "../shared/dictation-prefs";
 import {
   findFocusedSwayNode,
   getSwayFocusedWindowBounds,
@@ -115,6 +116,10 @@ import {
   getDefaultRemixHotkey,
   REMIX_CLIPBOARD_PREVIEW_LIMIT,
 } from "../shared/remix";
+import {
+  parseInputMode,
+  parseSearchProviderMode,
+} from "../shared/search-settings";
 import { bearerAuthHeaders } from "../shared/server-auth";
 import { SETTINGS_KEYS } from "../shared/settings-keys";
 import { SPRITES_INFO } from "../shared/sprites";
@@ -173,6 +178,7 @@ import { invalidatePluginViews } from "./plugins/ui-host";
 import { isRemixTargetAllowed } from "./remix-target";
 import { rendererUrl } from "./renderer-url";
 import {
+  clearBraveSearchApiKey,
   getBraveSearchApiKey,
   getSearchKeyStatus,
   setBraveSearchApiKey,
@@ -3140,10 +3146,6 @@ function companionFormSetting(): CompanionForm {
   return parseCompanionForm(readSettings().companionForm as string | undefined);
 }
 
-function parseInputMode(value: string | undefined): InputMode {
-  return value === "search" ? "search" : "dictation";
-}
-
 async function dictationPrefs(): Promise<DictationPrefs> {
   const settings = (await getServerSettings()) ?? {};
   const mode = settings.audio_playback_mode;
@@ -3193,6 +3195,33 @@ ipcMain.handle("search:set-brave-key", (_event, apiKey: unknown) => {
   return setBraveSearchApiKey(apiKey);
 });
 
+ipcMain.handle("search:clear-brave-key", () => clearBraveSearchApiKey());
+
+function divergenceLogPath(): string {
+  const override = process.env.UPDATED_SEARCH_DIVERGENCE_LOG?.trim();
+  if (override) return override;
+  return join(app.getPath("userData"), "logs", "search-divergence.jsonl");
+}
+
+ipcMain.handle("search:divergence-log-path", () => divergenceLogPath());
+
+ipcMain.handle("search:divergence-log-reveal", async () => {
+  const path = divergenceLogPath();
+  try {
+    const dir = dirname(path);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    if (!existsSync(path)) writeFileSync(path, "", "utf8");
+    shell.showItemInFolder(path);
+    return { ok: true as const, path };
+  } catch (err) {
+    return {
+      ok: false as const,
+      path,
+      error: err instanceof Error ? err.message : "Could not reveal log",
+    };
+  }
+});
+
 ipcMain.handle("search:query", async (_event, query: unknown) => {
   if (typeof query !== "string" || !query.trim()) {
     return { ok: false as const, error: "Query must not be empty" };
@@ -3203,6 +3232,11 @@ ipcMain.handle("search:query", async (_event, query: unknown) => {
   };
   const apiKey = getBraveSearchApiKey();
   if (apiKey) headers["X-Search-Api-Key"] = apiKey;
+
+  const settings = (await getServerSettings()) ?? {};
+  headers["X-Search-Provider-Mode"] = parseSearchProviderMode(
+    settings[SETTINGS_KEYS.searchProviderMode],
+  );
 
   try {
     const res = await net.fetch(`${getServerBaseUrl()}/api/search`, {

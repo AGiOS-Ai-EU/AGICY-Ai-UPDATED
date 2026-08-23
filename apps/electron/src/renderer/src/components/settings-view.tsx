@@ -38,8 +38,13 @@ import {
   DEFAULT_COMPANION_FORM,
   parseCompanionForm,
 } from "@shared/companion";
+import type { InputMode } from "@shared/dictation-prefs";
 import { getDefaultHotkey } from "@shared/hotkey-defaults";
 import { getDefaultRemixHotkey } from "@shared/remix";
+import {
+  parseInputMode,
+  parseSearchProviderMode,
+} from "@shared/search-settings";
 import { SETTINGS_KEYS } from "@shared/settings-keys";
 import { SPRITES_INFO } from "@shared/sprites";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,6 +57,7 @@ type SettingsPage =
   | "billing"
   | "notifications"
   | "dictation"
+  | "search"
   | "talk"
   | "application"
   | "permissions"
@@ -62,6 +68,7 @@ const PAGE_TITLES: Record<Exclude<SettingsPage, "root">, string> = {
   billing: "Billing & Usage",
   notifications: "Notifications",
   dictation: "Dictation",
+  search: "Search",
   talk: "Talk & Summon",
   application: "Application",
   permissions: "Permissions",
@@ -138,6 +145,9 @@ function useServerSettings(): {
     onSuccess: (_data, { key }) => {
       window.api.reloadDictationPrefs();
       if (key === SETTINGS_KEYS.remixHotkey) window.api.reloadRemixHotkey();
+      if (key === SETTINGS_KEYS.hotkey || key === SETTINGS_KEYS.hotkeyMode) {
+        window.api.reloadHotkey();
+      }
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
@@ -1183,6 +1193,193 @@ function DictationPage({
   );
 }
 
+function SearchPage({
+  value,
+  setSetting,
+}: {
+  value: (key: string, fallback?: string) => string;
+  setSetting: (key: string, value: string) => void;
+}): React.JSX.Element {
+  const inputMode = parseInputMode(value(SETTINGS_KEYS.inputMode));
+  const providerMode = parseSearchProviderMode(
+    value(SETTINGS_KEYS.searchProviderMode),
+  );
+  const [keyStatus, setKeyStatus] = useState<{
+    configured: boolean;
+    encryptionAvailable: boolean;
+  } | null>(null);
+  const [braveDraft, setBraveDraft] = useState("");
+  const [keyMessage, setKeyMessage] = useState<string | null>(null);
+  const [logPath, setLogPath] = useState<string>("");
+  const [logMessage, setLogMessage] = useState<string | null>(null);
+
+  const refreshKeyStatus = useCallback((): void => {
+    void window.api
+      .getSearchKeyStatus()
+      .then((status) =>
+        setKeyStatus({
+          configured: status.configured,
+          encryptionAvailable: status.encryptionAvailable,
+        }),
+      )
+      .catch(() => setKeyStatus(null));
+  }, []);
+
+  useEffect(() => {
+    refreshKeyStatus();
+    void window.api
+      .getDivergenceLogPath()
+      .then(setLogPath)
+      .catch(() => setLogPath(""));
+  }, [refreshKeyStatus]);
+
+  const setInputMode = (mode: InputMode): void => {
+    setSetting(SETTINGS_KEYS.inputMode, mode);
+    void window.api.setInputMode(mode);
+  };
+
+  const saveBraveKey = (): void => {
+    const trimmed = braveDraft.trim();
+    if (!trimmed) {
+      setKeyMessage("Enter a Brave Search API key.");
+      return;
+    }
+    void window.api.setBraveSearchKey(trimmed).then((ok) => {
+      if (ok) {
+        setBraveDraft("");
+        setKeyMessage("Brave key saved to encrypted storage.");
+        refreshKeyStatus();
+      } else {
+        setKeyMessage(
+          keyStatus?.encryptionAvailable === false
+            ? "Encrypted storage is unavailable on this system."
+            : "Could not save Brave key.",
+        );
+      }
+    });
+  };
+
+  const clearBraveKey = (): void => {
+    void window.api.clearBraveSearchKey().then((ok) => {
+      setKeyMessage(ok ? "Brave key cleared." : "Could not clear Brave key.");
+      refreshKeyStatus();
+    });
+  };
+
+  const revealLog = (): void => {
+    void window.api.revealDivergenceLog().then((result) => {
+      if (result.ok) {
+        setLogPath(result.path);
+        setLogMessage("Opened divergence log in file manager.");
+      } else {
+        setLogMessage(result.error);
+      }
+    });
+  };
+
+  const copyLogPath = (): void => {
+    void navigator.clipboard.writeText(logPath).then(
+      () => setLogMessage("Log path copied."),
+      () => setLogMessage("Could not copy path."),
+    );
+  };
+
+  return (
+    <>
+      <p className="tavern-set-hint is-lead">
+        Search mode routes the hotkey transcript to certificate results instead
+        of pasting. Keys stay in encrypted OS storage — never in SQLite.
+      </p>
+
+      <SectionLabel>Input mode</SectionLabel>
+      <ChoiceRow
+        label="Hotkey delivers"
+        value={inputMode}
+        options={[
+          { id: "dictation", label: "Dictation" },
+          { id: "search", label: "Search" },
+        ]}
+        onChange={(id) =>
+          setInputMode(id === "search" ? "search" : "dictation")
+        }
+      />
+
+      <SectionLabel>Providers</SectionLabel>
+      <ChoiceRow
+        label="Provider set"
+        value={providerMode}
+        options={[
+          { id: "dual", label: "Dual" },
+          { id: "single", label: "Single" },
+        ]}
+        onChange={(id) =>
+          setSetting(
+            SETTINGS_KEYS.searchProviderMode,
+            id === "single" ? "single" : "dual",
+          )
+        }
+      />
+      <p className="tavern-set-hint">
+        Dual runs two providers and surfaces CONTESTED when they diverge. Single
+        disables divergence pairing.
+      </p>
+
+      <SectionLabel>Brave Search</SectionLabel>
+      <InfoRow
+        label="Key status"
+        value={
+          keyStatus === null
+            ? "…"
+            : keyStatus.configured
+              ? "Configured"
+              : "Not set (using mock)"
+        }
+      />
+      <div className="tavern-set-row is-static">
+        <span className="tavern-set-label">API key</span>
+        <input
+          className="tavern-set-input"
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Paste Brave Search key"
+          value={braveDraft}
+          onChange={(event) => setBraveDraft(event.target.value)}
+        />
+      </div>
+      <div className="tavern-set-row is-static">
+        <span className="tavern-set-label" />
+        <div className="tavern-set-seg">
+          <button
+            type="button"
+            className="tavern-set-seg-btn"
+            onClick={saveBraveKey}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            className="tavern-set-seg-btn"
+            onClick={clearBraveKey}
+            disabled={!keyStatus?.configured}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+      {keyMessage ? <p className="tavern-set-hint">{keyMessage}</p> : null}
+
+      <SectionLabel>Divergence log</SectionLabel>
+      <ActionRow label="Reveal JSONL log" action="Open" onClick={revealLog} />
+      <ActionRow label="Copy log path" action="Copy" onClick={copyLogPath} />
+      {logPath ? (
+        <p className="tavern-set-hint tavern-mono">{logPath}</p>
+      ) : null}
+      {logMessage ? <p className="tavern-set-hint">{logMessage}</p> : null}
+    </>
+  );
+}
+
 function ApplicationPage({
   onReplayIntro,
 }: {
@@ -1563,6 +1760,8 @@ export function SettingsView({
           </>
         ) : page === "dictation" ? (
           <DictationPage value={value} setSetting={setSetting} />
+        ) : page === "search" ? (
+          <SearchPage value={value} setSetting={setSetting} />
         ) : page === "talk" ? (
           <>
             <p className="tavern-set-hint is-lead">
@@ -1613,6 +1812,15 @@ export function SettingsView({
         label="Dictation"
         detail={value(SETTINGS_KEYS.hotkey) || getDefaultHotkey()}
         onClick={() => setPage("dictation")}
+      />
+      <NavRow
+        label="Search"
+        detail={
+          parseInputMode(value(SETTINGS_KEYS.inputMode)) === "search"
+            ? "Search mode"
+            : "Dictation mode"
+        }
+        onClick={() => setPage("search")}
       />
       <NavRow
         label="Talk & Summon"

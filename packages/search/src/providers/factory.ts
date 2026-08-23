@@ -6,9 +6,12 @@ import { MockAltSearchProvider } from "./mock-alt.js";
 export interface SearchProviderOptions {
   apiKey?: string | null;
   forceMock?: boolean;
+  /** When true, run one provider only (no divergence). */
+  single?: boolean;
 }
 
-function isSingleProviderMode(): boolean {
+function isSingleProviderMode(options: SearchProviderOptions): boolean {
+  if (options.single) return true;
   return (
     process.env.UPDATED_SEARCH_SINGLE === "1" ||
     process.env.UPDATED_SEARCH_SINGLE === "true"
@@ -34,7 +37,7 @@ export function createSearchProviders(
     process.env.UPDATED_BRAVE_SEARCH_API_KEY?.trim() ||
     "";
 
-  if (isSingleProviderMode()) {
+  if (isSingleProviderMode(options)) {
     if (forceMock || !apiKey) return [new MockSearchProvider()];
     return [new BraveSearchProvider(apiKey)];
   }

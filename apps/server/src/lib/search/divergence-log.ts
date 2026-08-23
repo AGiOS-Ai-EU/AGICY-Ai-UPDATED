@@ -14,7 +14,8 @@ export interface DivergenceLogEvent {
   pairScores: DivergenceReport["pairScores"];
 }
 
-function resolveLogPath(): string {
+/** Resolve the append-only divergence JSONL path (dev + packaged). */
+export function resolveDivergenceLogPath(): string {
   const override = process.env.UPDATED_SEARCH_DIVERGENCE_LOG?.trim();
   if (override) return override;
 
@@ -24,6 +25,10 @@ function resolveLogPath(): string {
   }
 
   return join(process.cwd(), "logs", SEARCH_DIVERGENCE_LOG_FILENAME);
+}
+
+function resolveLogPath(): string {
+  return resolveDivergenceLogPath();
 }
 
 /** Append one divergence event as JSONL (works in dev and packaged Electron). */

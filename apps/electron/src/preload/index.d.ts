@@ -33,6 +33,7 @@ declare global {
       setDictationPhase: (phase: "idle" | "recording" | "transcribing") => void;
       onHotkeyError: (callback: (message: string) => void) => () => void;
       setHotkeyMode: (mode: "hold" | "toggle") => void;
+      reloadHotkey: () => void;
       reloadRemixHotkey: () => void;
       remixGetContext: () => Promise<RemixContextResult>;
       remixReadDocument: () => Promise<RemixReadDocumentResult>;
@@ -59,6 +60,38 @@ declare global {
         }) => void,
       ) => () => void;
       dictationPrefs: () => Promise<DictationPrefs>;
+      getInputMode: () => Promise<
+        import("../shared/dictation-prefs").InputMode
+      >;
+      setInputMode: (
+        mode: import("../shared/dictation-prefs").InputMode,
+      ) => Promise<import("../shared/dictation-prefs").InputMode>;
+      onInputModeChanged: (
+        callback: (mode: import("../shared/dictation-prefs").InputMode) => void,
+      ) => () => void;
+      searchQuery: (query: string) => Promise<
+        | {
+            ok: true;
+            query: string;
+            contested: boolean;
+            divergence: unknown;
+            results: unknown[];
+          }
+        | { ok: false; error: string }
+      >;
+      getSearchKeyStatus: () => Promise<{
+        configured: boolean;
+        providerId: string;
+        encryptionAvailable: boolean;
+      }>;
+      setBraveSearchKey: (apiKey: string) => Promise<boolean>;
+      clearBraveSearchKey: () => Promise<boolean>;
+      getDivergenceLogPath: () => Promise<string>;
+      revealDivergenceLog: () => Promise<
+        { ok: true; path: string } | { ok: false; path: string; error: string }
+      >;
+      panelOpenForSearch: (query: string) => void;
+      onPanelSearchQuery: (callback: (query: string) => void) => () => void;
       onDictationPrefs: (
         callback: (prefs: DictationPrefs) => void,
       ) => () => void;

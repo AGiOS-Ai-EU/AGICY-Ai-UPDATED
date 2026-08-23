@@ -38,9 +38,15 @@ export function setBraveSearchApiKey(apiKey: string): boolean {
   return true;
 }
 
-export function clearBraveSearchApiKey(): void {
+export function clearBraveSearchApiKey(): boolean {
   const path = braveKeyPath();
-  if (existsSync(path)) writeFileSync(path, "");
+  if (!existsSync(path)) return true;
+  try {
+    writeFileSync(path, "");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function getSearchKeyStatus(): {

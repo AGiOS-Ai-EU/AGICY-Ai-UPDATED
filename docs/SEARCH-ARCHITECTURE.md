@@ -1,6 +1,6 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 5 — multi-provider divergence detection, CONTESTED UI, JSONL log wired.
+> **Status:** Gate 6 — settings for input mode, Brave key, provider dual/single, live hotkey reload, divergence log reveal.
 
 ---
 
@@ -61,9 +61,9 @@ Stub throws until Gate 4 wires HTTP + keychain.
 |---------|----------|
 | Default | `dictation` — existing paste path |
 | Modifier + panel toggle hotkey | Flip `InputMode` (`dictation` ↔ `search`) |
-| Settings (Gate 6) | Persist mode + provider in server SQLite `settings` |
+| Settings (Gate 6) | Persist mode + `search_provider_mode` in server SQLite; Brave key via `safeStorage` |
 
-**Routing (Gate 4 implementation point):**
+**Routing (Gate 4+):**
 
 ```
 hotkey:up + final transcript
@@ -135,9 +135,11 @@ Append-only JSONL at `{userData}/logs/search-divergence.jsonl` (override with `U
 
 | Mode | Providers |
 |------|-----------|
-| Dev (no Brave key) | `mock` + `mock-alt` |
-| Live Brave key | `brave` + `mock-alt` |
-| `UPDATED_SEARCH_SINGLE=1` | single provider only (no divergence) |
+| Dev (no Brave key), dual | `mock` + `mock-alt` |
+| Live Brave key, dual | `brave` + `mock-alt` |
+| Settings **Single** or `UPDATED_SEARCH_SINGLE=1` | single provider only (no divergence) |
+
+Settings UI (Gate 6) persists `search_provider_mode` = `dual` \| `single` and injects `X-Search-Provider-Mode` on search.
 
 ---
 
@@ -155,8 +157,8 @@ Append-only JSONL at `{userData}/logs/search-divergence.jsonl` (override with `U
 - [x] `packages/search/` interfaces + Brave stub
 - [x] `apps/server/src/lib/search/` mirror types
 - [x] Keychain IPC (Gate 4 — `safeStorage` in main)
-- [ ] Mode persistence hotkey modifier (Gate 6 — panel toggle only in Gate 4)
 - [x] Search UI (Gate 4)
 - [x] Divergence detection + CONTESTED state (Gate 5)
 - [x] Divergence JSONL log (Gate 5)
-- [ ] Mode persistence hotkey modifier (Gate 6 — panel toggle only in Gate 4)
+- [x] Settings: mode, Brave key, provider dual/single, log reveal (Gate 6)
+- [ ] Modifier+hotkey mode flip (Gate 7+)

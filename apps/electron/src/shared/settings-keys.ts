@@ -26,6 +26,8 @@ export const SETTINGS_KEYS = {
   soundEnabled: "sound_enabled",
   translateMode: "translate_mode",
   inputMode: "input_mode",
+  /** dual (default) | single — Gate 6 provider selection for divergence. */
+  searchProviderMode: "search_provider_mode",
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];

@@ -74,6 +74,7 @@ const api = {
   },
   setHotkeyMode: (mode: "hold" | "toggle"): void =>
     ipcRenderer.send("hotkey:set-mode", mode),
+  reloadHotkey: (): void => ipcRenderer.send("hotkey:reload"),
   // --- Remix ---
   reloadRemixHotkey: (): void => ipcRenderer.send("remix-hotkey:reload"),
   // --- Remix primitives (the agent's tools; workflow lives in its prompt) ---
@@ -151,6 +152,13 @@ const api = {
   }> => ipcRenderer.invoke("search:key-status"),
   setBraveSearchKey: (apiKey: string): Promise<boolean> =>
     ipcRenderer.invoke("search:set-brave-key", apiKey),
+  clearBraveSearchKey: (): Promise<boolean> =>
+    ipcRenderer.invoke("search:clear-brave-key"),
+  getDivergenceLogPath: (): Promise<string> =>
+    ipcRenderer.invoke("search:divergence-log-path"),
+  revealDivergenceLog: (): Promise<
+    { ok: true; path: string } | { ok: false; path: string; error: string }
+  > => ipcRenderer.invoke("search:divergence-log-reveal"),
   onPanelSearchQuery: (callback: (query: string) => void): (() => void) => {
     const handler = (_e: unknown, query: string): void => callback(query);
     ipcRenderer.on("panel:search-query", handler);
