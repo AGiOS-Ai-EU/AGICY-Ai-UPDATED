@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844" role="img" aria-labelledby="title desc">
-  <title id="title">UPDATED Search  CONTESTED divergence</title>
+  <title id="title">UPDATED Search  CONTESTED divergence</title>
   <desc id="desc">CONTESTED chip, mock vs mock-alt providers, one PRIMARY claim card each.</desc>
   <defs>
     <linearGradient id="glassRail" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -26,7 +26,7 @@
   <!-- divergence banner -->
   <rect x="92" y="76" width="88" height="24" rx="2" fill="#ffffff" stroke="#5e4e78" stroke-width="0.5"/>
   <text x="104" y="92" font-family="Consolas,monospace" font-size="11" font-weight="600" letter-spacing="0.08em" fill="#5e4e78">CONTESTED</text>
-  <text x="92" y="120" font-family="Consolas,monospace" font-size="11" fill="#5c6663">mock ” mock-alt · 0.00</text>
+  <text x="92" y="120" font-family="Consolas,monospace" font-size="11" fill="#5c6663">mock - mock-alt &#183; 0.00</text>
   <text x="92" y="148" font-family="Segoe UI,sans-serif" font-size="14" font-weight="600" fill="#16211f">Primary rate: 0 / 4</text>
   <!-- provider mock -->
   <text x="92" y="180" font-family="Consolas,monospace" font-size="11" letter-spacing="0.06em" fill="#5c6663">PROVIDER MOCK</text>
@@ -36,7 +36,7 @@
   <rect x="92" y="192" width="270" height="96" rx="2" fill="#ffffff" stroke="#d6dbd7" stroke-width="0.5"/>
   <text x="106" y="216" font-family="Consolas,monospace" font-size="11" font-weight="600" fill="#2a6b4f">PRIMARY</text>
   <text x="106" y="244" font-family="Georgia,serif" font-size="15" fill="#16211f">Filing deadline: 28 days post-AGM.</text>
-  <text x="106" y="276" font-family="Consolas,monospace" font-size="11" fill="#5c6663">gov.cy · 2024-06-01</text>
+  <text x="106" y="276" font-family="Consolas,monospace" font-size="11" fill="#5c6663">gov.cy &#183; 2024-06-01</text>
   <line x1="92" y1="308" x2="362" y2="308" stroke="#d6dbd7" stroke-width="0.5"/>
   <!-- provider mock-alt -->
   <text x="92" y="332" font-family="Consolas,monospace" font-size="11" letter-spacing="0.06em" fill="#5c6663">PROVIDER MOCK-ALT</text>
@@ -46,7 +46,7 @@
   <rect x="92" y="344" width="270" height="96" rx="2" fill="#ffffff" stroke="#d6dbd7" stroke-width="0.5"/>
   <text x="106" y="368" font-family="Consolas,monospace" font-size="11" font-weight="600" fill="#5e4e78">CONTESTED</text>
   <text x="106" y="396" font-family="Georgia,serif" font-size="15" fill="#16211f">High-dose filing window differs by source.</text>
-  <text x="106" y="428" font-family="Consolas,monospace" font-size="11" fill="#5c6663">forum · 2025-02-01</text>
+  <text x="106" y="428" font-family="Consolas,monospace" font-size="11" fill="#5c6663">forum &#183; 2025-02-01</text>
   <rect x="92" y="776" width="200" height="22" rx="4" fill="#ffffff" stroke="#d6dbd7" stroke-width="0.5"/>
-  <text x="104" y="791" font-family="Consolas,monospace" font-size="10" fill="#5c6663">EU-hosted · GDPR-aligned</text>
+  <text x="104" y="791" font-family="Consolas,monospace" font-size="10" fill="#5c6663">EU-hosted &#183; GDPR-aligned</text>
 </svg>

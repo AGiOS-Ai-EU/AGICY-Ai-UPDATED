@@ -69,21 +69,21 @@ Typed queries in the Search tab work the same way — voice is the primary path 
 Same flow on phone: hold the hotkey, speak, read claim cards. **Hybrid panel mockups (SVG)** below match the Electron Search tab — glass rail + certificate content, not photo compositing.
 
 <p align="center">
-  <img alt="Search results — Cyprus annual return, PRIMARY 2/5, claim card" src="docs/assets/updated-mobile-search.svg" width="960" />
+  <img alt="Search results — Cyprus annual return, PRIMARY 2/5, claim card" src="docs/assets/updated-mobile-search.png" width="960" />
   <br />
-  <sub>Hybrid panel mockup (SVG) — Search tab; EU-hosted · GDPR-aligned.</sub>
+  <sub>Hybrid panel mockup — Search tab; source <code>updated-mobile-search.svg</code>. EU-hosted &#183; GDPR-aligned.</sub>
 </p>
 
 <p align="center">
-  <img alt="Hold hotkey voice path — waveform, recent history, primary 1/5" src="docs/assets/updated-mobile-voice.svg" width="960" />
+  <img alt="Hold hotkey voice path — waveform, recent history, primary 1/5" src="docs/assets/updated-mobile-voice.png" width="960" />
   <br />
-  <sub>Voice / hotkey — query history row (feature #7); single focal state.</sub>
+  <sub>Voice / hotkey — query history (feature #7); source <code>updated-mobile-voice.svg</code>.</sub>
 </p>
 
 <p align="center">
-  <img alt="CONTESTED — mock vs mock-alt, two provider sections" src="docs/assets/updated-mobile-contested.svg" width="960" />
+  <img alt="CONTESTED — mock vs mock-alt, two provider sections" src="docs/assets/updated-mobile-contested.png" width="960" />
   <br />
-  <sub>CONTESTED divergence — provider SVG marks, one claim card per section.</sub>
+  <sub>CONTESTED divergence — source <code>updated-mobile-contested.svg</code>.</sub>
 </p>
 
 ---

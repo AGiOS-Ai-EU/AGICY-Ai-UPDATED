@@ -333,8 +333,8 @@ Manual smoke: run two searches in Search tab → Recent shows both with CONTESTE
 | `docs/assets/phone-masks/v2-*.json` | **Deprecated** — compositor masks unused |
 | `scripts/compose-mobile-hybrid.py` | Marked **DEPRECATED** (reference only) |
 | `scripts/render-readme-svgs.py` | **New** — optional SVG→PNG @2× for social preview |
-| `README.md` | Mobile Usage embeds SVG via `<img src="*.svg" width="960">` |
+| `README.md` | Mobile Usage uses **PNG** in `<img>` (`updated-mobile-*.png`); SVG sources kept for edit |
 
 **Why compositor failed:** Pillow pasted a 3× virtual UI into fractional phone masks on editorial photos — aspect letterboxing, bezel misalignment, and downscale clipped header/footer text. SVG mockups draw the real hybrid shell (52px rail, 16px frame, 2px certificate cards) with no mask guesswork.
 
-**GitHub SVG support:** GitHub renders SVG in `<img>` tags in README; vectors stay crisp at 960px width.
+**GitHub README fix (Gate 15b):** Raw repo SVG is served as `Content-Type: text/plain`, so `<img src="*.svg">` showed broken icons on github.com. **Fix:** sanitize SVG (valid UTF-8, strip XML control chars); export PNG @2× (780×1688) via `scripts/render-readme-svgs.py` + resvg-js; README primary format is **PNG**.

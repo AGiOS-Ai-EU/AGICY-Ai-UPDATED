@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844" role="img" aria-labelledby="title desc">
-  <title id="title">UPDATED Voice  hold hotkey search</title>
+  <title id="title">UPDATED Voice  hold hotkey search</title>
   <desc id="desc">Search tab active, hold hotkey waveform, primary rate 1/5, recent query history.</desc>
   <defs>
     <linearGradient id="glassRail" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -35,10 +35,10 @@
   <text x="318" y="244" font-family="Segoe UI,sans-serif" font-size="12" fill="#5c6663" text-decoration="underline">Clear</text>
   <rect x="92" y="256" width="270" height="52" rx="2" fill="#ffffff" stroke="#d6dbd7" stroke-width="0.5"/>
   <text x="104" y="278" font-family="Segoe UI,sans-serif" font-size="14" fill="#16211f">Cyprus annual return</text>
-  <text x="104" y="298" font-family="Consolas,monospace" font-size="11" fill="#5c6663">agree ù primary 1/5 ù Aug 22</text>
+  <text x="104" y="298" font-family="Consolas,monospace" font-size="11" fill="#5c6663">agree &#183; primary 1/5 &#183; Aug 22</text>
   <rect x="92" y="316" width="270" height="52" rx="2" fill="#ffffff" stroke="#d6dbd7" stroke-width="0.5"/>
   <text x="104" y="338" font-family="Segoe UI,sans-serif" font-size="14" fill="#16211f">HE32 filing deadline</text>
-  <text x="104" y="358" font-family="Consolas,monospace" font-size="11" fill="#5c6663">CONTESTED ù primary 0/4 ù Aug 21</text>
+  <text x="104" y="358" font-family="Consolas,monospace" font-size="11" fill="#5c6663">CONTESTED &#183; primary 0/4 &#183; Aug 21</text>
   <rect x="92" y="776" width="200" height="22" rx="4" fill="#ffffff" stroke="#d6dbd7" stroke-width="0.5"/>
-  <text x="104" y="791" font-family="Consolas,monospace" font-size="10" fill="#5c6663">EU-hosted ù GDPR-aligned</text>
+  <text x="104" y="791" font-family="Consolas,monospace" font-size="10" fill="#5c6663">EU-hosted &#183; GDPR-aligned</text>
 </svg>
