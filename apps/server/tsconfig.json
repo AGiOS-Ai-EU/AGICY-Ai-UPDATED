@@ -17,7 +17,8 @@
       "@freestyle-voice/validations": [
         "../../packages/validations/src/index.ts"
       ],
-      "@freestyle-voice/stt": ["../../packages/stt/src/index.ts"]
+      "@freestyle-voice/stt": ["../../packages/stt/src/index.ts"],
+      "@updated/search": ["../../packages/search/src/index.ts"]
     }
   },
   "include": [
@@ -25,6 +26,7 @@
     "../../packages/sdk/src/**/*",
     "../../packages/utils/src/**/*",
     "../../packages/validations/src/**/*",
-    "../../packages/stt/src/**/*"
+    "../../packages/stt/src/**/*",
+    "../../packages/search/src/**/*"
   ]
 }

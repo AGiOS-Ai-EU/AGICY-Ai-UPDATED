@@ -244,6 +244,8 @@ One line per step, file path only:
 
 **STOP — Gate 0 complete.**
 
-**Gates 1–3:** Implemented in commit `354a7ff`. See `docs/CHANGES.md` and `docs/SEARCH-ARCHITECTURE.md`. Gate 4 (search UI + keychain) not started.
+**Gates 1–3:** Implemented in commit `354a7ff`. See `docs/CHANGES.md` and `docs/SEARCH-ARCHITECTURE.md`.
 
-**Awaiting approval before Gate 4 (result rendering).**
+**Gate 4:** Result rendering + minimal search execution — see `docs/CHANGES.md`.
+
+**Gate 5+:** Divergence orchestration, settings UI for search keys, hotkey modifier mode flip.

@@ -41,6 +41,7 @@ function useDictation(
     let prefs: DictationPrefs = {
       destination: "cursor",
       outputMode: "paste",
+      inputMode: "dictation",
       soundEnabled: true,
       audioPlaybackMode: "off",
       micDeviceId: null,
@@ -101,6 +102,7 @@ function useDictation(
       {
         destination: () => (talkSession ? "composer" : prefs.destination),
         outputMode: () => prefs.outputMode,
+        inputMode: () => prefs.inputMode,
         soundEnabled: () => prefs.soundEnabled,
         audioPlaybackMode: () => prefs.audioPlaybackMode,
         micDeviceId: () => prefs.micDeviceId,

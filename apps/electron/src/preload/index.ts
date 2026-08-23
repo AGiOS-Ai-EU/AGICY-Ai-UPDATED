@@ -2,7 +2,7 @@ import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
 import type { ActiveAudioPlaybackMode } from "../shared/audio-playback";
 import type { CompanionForm, CompanionState } from "../shared/companion";
-import type { DictationPrefs } from "../shared/dictation-prefs";
+import type { DictationPrefs, InputMode } from "../shared/dictation-prefs";
 import type {
   RemixContextResult,
   RemixCopyResult,
@@ -100,6 +100,8 @@ const api = {
     ipcRenderer.send("companion:set-form", form),
   panelOpenForDictation: (): void =>
     ipcRenderer.send("panel:open-for-dictation"),
+  panelOpenForSearch: (query: string): void =>
+    ipcRenderer.send("panel:open-for-search", query),
   panelDictationPartial: (text: string): void =>
     ipcRenderer.send("panel:dictation-partial", text),
   panelDictationFinal: (text: string): void =>
@@ -122,6 +124,32 @@ const api = {
   },
   dictationPrefs: (): Promise<DictationPrefs> =>
     ipcRenderer.invoke("dictation:prefs"),
+  getInputMode: (): Promise<InputMode> => ipcRenderer.invoke("input-mode:get"),
+  setInputMode: (mode: InputMode): Promise<InputMode> =>
+    ipcRenderer.invoke("input-mode:set", mode),
+  onInputModeChanged: (callback: (mode: InputMode) => void): (() => void) => {
+    const handler = (_e: unknown, mode: InputMode): void => callback(mode);
+    ipcRenderer.on("input-mode:changed", handler);
+    return () => ipcRenderer.removeListener("input-mode:changed", handler);
+  },
+  searchQuery: (
+    query: string,
+  ): Promise<
+    | { ok: true; providerId: string; answer: unknown }
+    | { ok: false; error: string }
+  > => ipcRenderer.invoke("search:query", query),
+  getSearchKeyStatus: (): Promise<{
+    configured: boolean;
+    providerId: string;
+    encryptionAvailable: boolean;
+  }> => ipcRenderer.invoke("search:key-status"),
+  setBraveSearchKey: (apiKey: string): Promise<boolean> =>
+    ipcRenderer.invoke("search:set-brave-key", apiKey),
+  onPanelSearchQuery: (callback: (query: string) => void): (() => void) => {
+    const handler = (_e: unknown, query: string): void => callback(query);
+    ipcRenderer.on("panel:search-query", handler);
+    return () => ipcRenderer.removeListener("panel:search-query", handler);
+  },
   onDictationPrefs: (
     callback: (prefs: DictationPrefs) => void,
   ): (() => void) => {

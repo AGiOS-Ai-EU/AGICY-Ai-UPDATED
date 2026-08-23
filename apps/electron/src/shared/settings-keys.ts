@@ -25,6 +25,7 @@ export const SETTINGS_KEYS = {
   dictationDestination: "dictation_destination",
   soundEnabled: "sound_enabled",
   translateMode: "translate_mode",
+  inputMode: "input_mode",
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];

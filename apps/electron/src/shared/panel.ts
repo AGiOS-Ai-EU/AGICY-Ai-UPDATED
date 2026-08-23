@@ -1,5 +1,6 @@
 export const PANEL_TABS = [
   "chat",
+  "search",
   "history",
   "todos",
   "notes",

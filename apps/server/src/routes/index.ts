@@ -32,6 +32,7 @@ import pluginsRoute from "./plugins.js";
 import postProcessRoute from "./post-process-route.js";
 import pricing from "./pricing.js";
 import scheduledRoute from "./scheduled.js";
+import searchRoute from "./search.js";
 import settings from "./settings.js";
 import streamRoute from "./stream.js";
 import suggestionsRoute from "./suggestions.js";
@@ -99,6 +100,7 @@ const apiRouter = new Hono()
   .route("/dismissed-notifications", dismissedNotifications)
   .route("/vocabulary", vocabulary)
   .route("/post-process", postProcessRoute)
+  .route("/search", searchRoute)
   .route("/agent", agentRoute)
   .route("/agent/thread", agentThreadsRoute)
   .route("/agent-os", agentOsRoute)

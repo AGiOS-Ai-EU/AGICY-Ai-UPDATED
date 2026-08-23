@@ -11,6 +11,7 @@ import { Markdown } from "@renderer/components/markdown";
 import { NotesTab } from "@renderer/components/notes-tab";
 import { OnboardingGate, useOnboarding } from "@renderer/components/onboarding";
 import { OpenerCards } from "@renderer/components/opener-cards";
+import { SearchTab } from "@renderer/components/search-tab";
 import { SettingsView } from "@renderer/components/settings-view";
 import { Spark } from "@renderer/components/spark";
 import { ThreadHistory } from "@renderer/components/thread-history";
@@ -47,6 +48,7 @@ import {
 } from "@renderer/lib/tool-presentation";
 import { SpriteBadge } from "@renderer/sprites/badge";
 import { type CompanionForm, DEFAULT_COMPANION_FORM } from "@shared/companion";
+import type { InputMode } from "@shared/dictation-prefs";
 import {
   PANEL_MAX_WIDTH,
   PANEL_MIN_WIDTH,
@@ -70,6 +72,7 @@ import { createRoot } from "react-dom/client";
 
 const TAB_LABELS: Record<PanelTab, string> = {
   chat: "Chat",
+  search: "Search",
   history: "History",
   todos: "Todos",
   notes: "Notes",
@@ -79,6 +82,7 @@ const TAB_LABELS: Record<PanelTab, string> = {
 
 const TAB_PLACEHOLDER: Record<PanelTab, string> = {
   chat: "Ask anything, or point at something on screen.",
+  search: "Search the open web with certificate-style citations.",
   history: "Past conversations land here — pick one to continue it.",
   todos: "Nothing to do yet.",
   notes: "No notes yet.",
@@ -732,6 +736,24 @@ function PanelInner({
 
   useEffect(() => {
     void window.api
+      .getInputMode()
+      .then(setInputMode)
+      .catch(() => {});
+    const offMode = window.api.onInputModeChanged(setInputMode);
+    const offVoiceSearch = window.api.onPanelSearchQuery((query) => {
+      setTab("search");
+      setSettingsOpen(false);
+      setCapabilitiesOpen(false);
+      setVoiceSearchQuery(query);
+    });
+    return () => {
+      offMode?.();
+      offVoiceSearch?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    void window.api
       .companionForm()
       .then(setSpriteForm)
       .catch(() => {});
@@ -761,6 +783,8 @@ function PanelInner({
   const [editDraft, setEditDraft] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>("dictation");
+  const [voiceSearchQuery, setVoiceSearchQuery] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const dictationBaseRef = useRef<string | null>(null);
   // Whether the current draft arrived by voice, so message_sent can say so.
@@ -1239,6 +1263,16 @@ function PanelInner({
                 setSettingsOpen(false);
                 onboarding.replay();
               }}
+            />
+          ) : tab === "search" ? (
+            <SearchTab
+              inputMode={inputMode}
+              onInputModeChange={(mode) => {
+                setInputMode(mode);
+                void window.api.setInputMode(mode);
+              }}
+              externalQuery={voiceSearchQuery}
+              onExternalQueryHandled={() => setVoiceSearchQuery(null)}
             />
           ) : tab === "history" ? (
             <ThreadHistory

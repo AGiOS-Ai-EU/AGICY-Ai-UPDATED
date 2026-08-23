@@ -2,10 +2,19 @@
   "name": "@updated/search",
   "version": "0.1.0",
   "private": true,
-  "description": "UPDATED search provider contracts (Gate 3 — interfaces only)",
+  "description": "UPDATED search provider contracts and result helpers",
   "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
   "exports": {
     ".": "./src/index.ts",
-    "./providers/brave": "./src/providers/brave.ts"
+    "./providers/brave": "./src/providers/brave.ts",
+    "./providers/mock": "./src/providers/mock.ts",
+    "./providers/factory": "./src/providers/factory.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
   }
 }

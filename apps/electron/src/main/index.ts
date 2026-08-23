@@ -94,7 +94,7 @@ import {
   resolveDictationWindowDisplays,
   resolvePanelCompanionDisplays,
 } from "../shared/companion-position";
-import type { DictationPrefs } from "../shared/dictation-prefs";
+import type { DictationPrefs, InputMode } from "../shared/dictation-prefs";
 import {
   findFocusedSwayNode,
   getSwayFocusedWindowBounds,
@@ -172,6 +172,11 @@ import {
 import { invalidatePluginViews } from "./plugins/ui-host";
 import { isRemixTargetAllowed } from "./remix-target";
 import { rendererUrl } from "./renderer-url";
+import {
+  getBraveSearchApiKey,
+  getSearchKeyStatus,
+  setBraveSearchApiKey,
+} from "./search-keychain";
 import {
   initSpriteTravel,
   performSyncAction,
@@ -3135,6 +3140,10 @@ function companionFormSetting(): CompanionForm {
   return parseCompanionForm(readSettings().companionForm as string | undefined);
 }
 
+function parseInputMode(value: string | undefined): InputMode {
+  return value === "search" ? "search" : "dictation";
+}
+
 async function dictationPrefs(): Promise<DictationPrefs> {
   const settings = (await getServerSettings()) ?? {};
   const mode = settings.audio_playback_mode;
@@ -3146,6 +3155,7 @@ async function dictationPrefs(): Promise<DictationPrefs> {
       settings[SETTINGS_KEYS.outputMode] === "clipboard"
         ? "clipboard"
         : "paste",
+    inputMode: parseInputMode(settings[SETTINGS_KEYS.inputMode]),
     soundEnabled: settings[SETTINGS_KEYS.soundEnabled] !== "false",
     audioPlaybackMode:
       mode === "duck" || mode === "pause" || mode === "off" ? mode : "off",
@@ -3160,6 +3170,62 @@ export function broadcastDictationPrefs(): void {
 }
 
 ipcMain.handle("dictation:prefs", () => dictationPrefs());
+
+ipcMain.handle("input-mode:get", async () => {
+  const settings = (await getServerSettings()) ?? {};
+  return parseInputMode(settings[SETTINGS_KEYS.inputMode]);
+});
+
+ipcMain.handle("input-mode:set", async (_event, mode: unknown) => {
+  const next = mode === "search" ? "search" : "dictation";
+  const ok = await putServerSetting(SETTINGS_KEYS.inputMode, next);
+  if (ok) {
+    broadcastDictationPrefs();
+    panelWindow?.webContents.send("input-mode:changed", next);
+  }
+  return next;
+});
+
+ipcMain.handle("search:key-status", () => getSearchKeyStatus());
+
+ipcMain.handle("search:set-brave-key", (_event, apiKey: unknown) => {
+  if (typeof apiKey !== "string") return false;
+  return setBraveSearchApiKey(apiKey);
+});
+
+ipcMain.handle("search:query", async (_event, query: unknown) => {
+  if (typeof query !== "string" || !query.trim()) {
+    return { ok: false as const, error: "Query must not be empty" };
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const apiKey = getBraveSearchApiKey();
+  if (apiKey) headers["X-Search-Api-Key"] = apiKey;
+
+  try {
+    const res = await net.fetch(`${getServerBaseUrl()}/api/search`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: query.trim() }),
+      signal: AbortSignal.timeout(SERVER_SETTING_TIMEOUT_MS),
+    });
+    const payload = (await res.json().catch(() => null)) as {
+      ok: boolean;
+      error?: string;
+    } | null;
+    if (!payload) {
+      return { ok: false as const, error: `Search failed (${res.status})` };
+    }
+    return payload;
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: err instanceof Error ? err.message : "Search request failed",
+    };
+  }
+});
 
 ipcMain.on("dictation:reload-prefs", () => broadcastDictationPrefs());
 
@@ -3479,6 +3545,15 @@ ipcMain.on("panel:open-for-dictation", (event) => {
   openPanel({ focusComposer: true, trigger: "dictation" });
 });
 
+ipcMain.on("panel:open-for-search", (event, query: unknown) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  openPanel({ trigger: "search" });
+  panelRendererMessages.send({
+    channel: "panel:search-query",
+    payload: typeof query === "string" ? query : "",
+  });
+});
+
 ipcMain.on("panel:dictation-partial", (event, text: string) => {
   if (event.sender !== companionWindow?.webContents) return;
   forwardDictation("partial", text);
@@ -3579,7 +3654,8 @@ const panelRendererMessages = new PanelRendererMessageQueue((message) => {
   if (!win || win.isDestroyed()) return;
   if (
     message.channel === "panel:dictation" ||
-    message.channel === "panel:open-thread"
+    message.channel === "panel:open-thread" ||
+    message.channel === "panel:search-query"
   ) {
     win.webContents.send(message.channel, message.payload);
     return;
@@ -3703,6 +3779,7 @@ type PanelTrigger =
   | "hotkey"
   | "notification"
   | "dictation"
+  | "search"
   | "tray"
   | "other";
 

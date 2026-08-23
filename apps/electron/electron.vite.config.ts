@@ -11,6 +11,7 @@ const workspaceAliases = {
     "../../packages/validations/src/index.ts",
   ),
   "@updated/design": resolve("../../packages/updated-design"),
+  "@updated/search": resolve("../../packages/search/src/index.ts"),
 };
 
 // Bundle analysis is opt-in via `ANALYZE=1` (see the `analyze` npm script).

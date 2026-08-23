@@ -9,6 +9,7 @@ import {
 import { LevelMeter } from "@renderer/lib/level-meter";
 import { Recorder, RecorderSupersededError } from "@renderer/lib/recorder";
 import { Streamer } from "@renderer/lib/streamer";
+import type { InputMode } from "@shared/dictation-prefs";
 
 export type DictationPhase = "idle" | "recording" | "transcribing";
 export type DictationDestination = "cursor" | "composer";
@@ -24,6 +25,7 @@ export interface DictationCallbacks {
 export interface DictationOptions {
   destination: () => DictationDestination;
   outputMode: () => "paste" | "clipboard";
+  inputMode: () => InputMode;
   soundEnabled: () => boolean;
   audioPlaybackMode: () => "off" | "duck" | "pause";
   micDeviceId?: () => string | null;
@@ -255,6 +257,11 @@ export class DictationController {
   }
 
   private async deliver(finalText: string): Promise<void> {
+    if (this.options.inputMode() === "search") {
+      await this.deliverSearch(finalText);
+      return;
+    }
+
     if (this.options.destination() === "composer") {
       this.callbacks.onComposerText(finalText);
       return;
@@ -296,6 +303,18 @@ export class DictationController {
           err instanceof Error ? err.message : "Could not deliver text",
         );
       }
+    }
+    window.api.sendTranscriptionDone();
+  }
+
+  /** Gate 4 — route voice transcripts to the search panel instead of paste. */
+  private async deliverSearch(finalText: string): Promise<void> {
+    try {
+      await window.api.panelOpenForSearch(finalText);
+    } catch (err) {
+      this.callbacks.onError(
+        err instanceof Error ? err.message : "Could not open search",
+      );
     }
     window.api.sendTranscriptionDone();
   }

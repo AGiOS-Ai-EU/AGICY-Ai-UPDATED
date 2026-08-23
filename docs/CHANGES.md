@@ -55,11 +55,51 @@ Summary of files touched implementing Gates 1, 2, and 3.
 
 ---
 
+## Gate 4 — Result rendering + search execution
+
+| File | Change |
+|------|--------|
+| `packages/search/src/source-class.ts` | **New** — domain/citation classifier |
+| `packages/search/src/source-class.test.ts` | **New** — full vitest coverage |
+| `packages/search/src/result-stats.ts` | **New** — primary rate + age strip helpers |
+| `packages/search/src/result-stats.test.ts` | **New** — helper tests |
+| `packages/search/src/providers/brave.ts` | Brave Search HTTP provider |
+| `packages/search/src/providers/mock.ts` | Dev mock provider (default without key) |
+| `packages/search/src/providers/factory.ts` | Provider selection (`UPDATED_SEARCH_MOCK`, env key) |
+| `packages/search/vitest.config.ts` | Test runner config |
+| `apps/server/src/routes/search.ts` | **New** — `POST /api/search` |
+| `apps/electron/src/main/search-keychain.ts` | **New** — Brave key via Electron `safeStorage` |
+| `apps/electron/src/main/index.ts` | `search:query`, keychain IPC, `input-mode:*`, voice search panel open |
+| `apps/electron/src/preload/index.ts` | Search + input-mode bridge APIs |
+| `apps/electron/src/shared/panel.ts` | `search` panel tab |
+| `apps/electron/src/shared/settings-keys.ts` | `input_mode` setting key |
+| `apps/electron/src/shared/dictation-prefs.ts` | `inputMode` on prefs |
+| `apps/electron/src/renderer/src/lib/dictation.ts` | Minimal `deliverSearch()` branch at `deliver()` |
+| `apps/electron/src/renderer/src/lib/search.ts` | Renderer search client |
+| `apps/electron/src/renderer/src/components/search-tab.tsx` | **New** — query form + mode toggle |
+| `apps/electron/src/renderer/src/components/search-results.tsx` | **New** — certificate claim cards |
+| `apps/electron/src/renderer/src/search-results.css` | **New** — Gate 4 certificate layout |
+| `apps/electron/src/renderer/src/components/panel.tsx` | Search tab wired |
+| `apps/electron/electron.vite.config.ts` | `@updated/search` alias |
+
+**API key storage:** Brave key stored encrypted in main-process userData via `safeStorage` (`search:set-brave-key` IPC). Server route accepts `X-Search-Api-Key` header injected by main on `search:query`. Without a key, `MockSearchProvider` serves deterministic citations (`UPDATED_SEARCH_MOCK=1` forces mock).
+
+**Not fully wired (honest):**
+
+- Hotkey modifier mode flip (Gate 6) — mode toggled in Search tab UI only
+- Settings UI for Brave API key (Gate 6) — IPC exists, no settings panel field yet
+- Multi-provider divergence (Gate 5)
+- Claim-to-citation mapping is one card per citation + summary card (no LLM claim extraction)
+
+---
+
 ## Verification
 
 ```powershell
 cd C:\Users\User\Desktop\AGICY.AI\UPDATED
-pnpm biome check --write apps/electron packages/search packages/updated-design apps/server/src/lib/search
+pnpm install
+pnpm --filter @updated/search test
+pnpm biome check --write apps/electron packages/search packages/updated-design apps/server/src/routes/search.ts apps/server/src/lib/search
 ```
 
 Manual smoke:
@@ -70,3 +110,6 @@ Manual smoke:
 4. Hold hotkey — dictation still records and pastes
 5. Escape with panel open — panel hides
 6. Visual — no blur/glass on panel or bubbles; paper palette
+7. Open panel → **Search** tab → type query → Enter — mock claim cards render with primary rate + age strip
+8. Toggle **Search** input mode → hold hotkey → speak query — panel opens on Search tab with results
+9. Set Brave key via devtools: `await window.api.setBraveSearchKey('BSA...')` then repeat search (live Brave)

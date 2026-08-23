@@ -1,6 +1,6 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 3 — contracts and routing plan only. No search UI yet (Gate 4).
+> **Status:** Gate 4 — search UI, classifier, Brave/mock providers, keychain IPC wired. Hotkey modifier flip deferred to Gate 6.
 
 ---
 
@@ -118,6 +118,6 @@ Renderer never receives raw keys — only `{ configured: boolean, providerId }`.
 - [x] This document
 - [x] `packages/search/` interfaces + Brave stub
 - [x] `apps/server/src/lib/search/` mirror types
-- [ ] Keychain IPC (Gate 4)
-- [ ] Mode persistence (Gate 6)
-- [ ] Search UI (Gate 4)
+- [x] Keychain IPC (Gate 4 — `safeStorage` in main)
+- [ ] Mode persistence hotkey modifier (Gate 6 — panel toggle only in Gate 4)
+- [x] Search UI (Gate 4)
