@@ -113,4 +113,25 @@ describe("PanelRendererMessageQueue", () => {
       payload: { kind: "final", text: "Transcript after reload" },
     });
   });
+
+  it("delivers a voice search query after the renderer becomes ready", () => {
+    const delivered: PanelRendererMessage[] = [];
+    const queue = new PanelRendererMessageQueue((message) => {
+      delivered.push(message);
+    });
+
+    queue.send({
+      channel: "panel:search-query",
+      payload: "Cyprus annual return",
+    });
+
+    expect(delivered).toEqual([]);
+    queue.markReady();
+    expect(delivered).toEqual([
+      {
+        channel: "panel:search-query",
+        payload: "Cyprus annual return",
+      },
+    ]);
+  });
 });

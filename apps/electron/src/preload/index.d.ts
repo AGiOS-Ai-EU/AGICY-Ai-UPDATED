@@ -1,4 +1,5 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
+import type { DivergenceReport, ProviderSearchResult } from "@updated/search";
 import type { ActiveAudioPlaybackMode } from "../shared/audio-playback";
 import type { CompanionForm, CompanionState } from "../shared/companion";
 import type { DictationPrefs } from "../shared/dictation-prefs";
@@ -74,8 +75,8 @@ declare global {
             ok: true;
             query: string;
             contested: boolean;
-            divergence: unknown;
-            results: unknown[];
+            divergence: DivergenceReport;
+            results: ProviderSearchResult[];
           }
         | { ok: false; error: string }
       >;
