@@ -1,0 +1,44 @@
+/**
+ * UPDATED design tokens — Gate 1 canonical palette.
+ * Import after overlay.css; overrides tavern.css variables without glass.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Martian+Mono:wght@400..600&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&display=swap");
+
+:root {
+  /* Core surfaces */
+  --updated-paper: #f7f8f6;
+  --updated-ink: #16211f;
+  --updated-graphite: #5c6663;
+  --updated-rule: #d6dbd7;
+  --updated-field: #ffffff;
+
+  /* Spacing & shape */
+  --updated-space-base: 4px;
+  --updated-space-rhythm: 8px;
+  --updated-radius: 2px;
+  --updated-hairline: 0.5px;
+
+  /* Typography */
+  --updated-font-claim: "Newsreader", "Iowan Old Style", "Palatino Linotype", serif;
+  --updated-font-ui: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --updated-font-mono: "Martian Mono", ui-monospace, monospace;
+
+  /* Decay ramp (evidence freshness) */
+  --updated-decay-fresh: #2a6b4f;
+  --updated-decay-aging: #5a7a32;
+  --updated-decay-stale: #9a7b2e;
+  --updated-decay-expired: #9c4a38;
+  --updated-decay-contested: #5e4e78;
+
+  /* Bridge into legacy tavern token names */
+  --tavern-parchment: var(--updated-paper);
+  --tavern-card: var(--updated-field);
+  --tavern-ink: var(--updated-ink);
+  --tavern-lantern: var(--updated-decay-stale);
+  --tavern-robe: var(--updated-graphite);
+  --tavern-rust: var(--updated-decay-expired);
+  --tavern-rule: var(--updated-rule);
+  --tavern-mute: var(--updated-graphite);
+  --tavern-wash: color-mix(in srgb, var(--updated-paper) 88%, var(--updated-rule));
+}

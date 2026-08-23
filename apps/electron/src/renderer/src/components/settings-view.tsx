@@ -408,7 +408,7 @@ function AccountCard({
 
   return (
     <div className="tavern-set-card">
-      <div className="tavern-set-card-title">Sign in to Freestyle</div>
+      <div className="tavern-set-card-title">Sign in to UPDATED</div>
       <div className="tavern-set-card-sub">
         {auth.signingIn && auth.userCode
           ? `Your code: ${auth.userCode} — finish in the browser.`
@@ -811,7 +811,7 @@ function BillingPage(): React.JSX.Element {
 
       <SectionLabel>Plan</SectionLabel>
       {usage.isPro ? (
-        <InfoRow label="Freestyle Pro" value="Unlimited runs" />
+        <InfoRow label="UPDATED Pro" value="Unlimited runs" />
       ) : (
         <>
           <div className="tavern-plan-picker">
@@ -1566,12 +1566,12 @@ export function SettingsView({
         ) : page === "talk" ? (
           <>
             <p className="tavern-set-hint is-lead">
-              Talking is how you ask Freestyle to do things. Hold the talk key,
+              Talking is how you ask UPDATED to do things. Hold the talk key,
               say what you need, and it lands in the chat when you let go — the
               agent takes it from there. Summon opens this panel from anywhere.
             </p>
             <HotkeyRow
-              label="Talk to Freestyle"
+              label="Talk to UPDATED"
               accel={
                 value(SETTINGS_KEYS.remixHotkey) || getDefaultRemixHotkey()
               }
@@ -1623,7 +1623,7 @@ export function SettingsView({
       <NavRow label="Permissions" onClick={() => setPage("permissions")} />
       <NavRow label="Data" onClick={() => setPage("data")} />
       {version ? (
-        <div className="tavern-set-version">Freestyle v{version}</div>
+        <div className="tavern-set-version">UPDATED v{version}</div>
       ) : null}
     </>
   );

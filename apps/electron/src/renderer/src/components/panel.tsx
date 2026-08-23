@@ -1,6 +1,6 @@
 import "../overlay.css";
 import "../tavern.css";
-import "../glass.css";
+import "../updated-design.css";
 
 import { useChat } from "@ai-sdk/react";
 import { BrainFiles } from "@renderer/components/brain-files";
@@ -83,8 +83,8 @@ const TAB_PLACEHOLDER: Record<PanelTab, string> = {
   todos: "Nothing to do yet.",
   notes: "No notes yet.",
   brain:
-    "Everything Freestyle knows lives here — scheduled tasks, memories, notes, skills, todos.",
-  apps: "Connect the apps you live in, and Freestyle can work them for you.",
+    "Everything UPDATED knows lives here — scheduled tasks, memories, notes, skills, todos.",
+  apps: "Connect the apps you live in, and UPDATED can work them for you.",
 };
 
 function ShikiJson({ value }: { value: unknown }): React.JSX.Element {
@@ -607,11 +607,11 @@ function SignInGate(): React.JSX.Element {
         <div className="tavern-gate-lockup">
           <span className="tavern-gate-spark" />
           <span className="tavern-gate-wordmark">
-            freestyle<span className="tavern-gate-accent">.</span>
+            updated<span className="tavern-gate-accent">.</span>
           </span>
         </div>
         <h1 className="tavern-gate-heading">The intelligent reminders app.</h1>
-        <p className="tavern-gate-sub">Sign in to your Freestyle account</p>
+        <p className="tavern-gate-sub">Sign in to your UPDATED account</p>
         {auth.signingIn ? (
           <>
             <div className="tavern-gate-code">{auth.userCode ?? "…"}</div>
@@ -843,7 +843,7 @@ function PanelInner({
       const message = typeof err.message === "string" ? err.message : "";
       setNotice(
         message.includes("cloud_auth_required") || message.includes("401")
-          ? "Sign in to Freestyle Cloud to chat."
+          ? "Sign in to transcribe to chat."
           : message.includes("thread_too_long")
             ? "This conversation is too long to continue. Start a new one from the menu."
             : message && message !== "[object Object]"
@@ -1116,7 +1116,7 @@ function PanelInner({
         <div className="tavern-head">
           <SpriteBadge form={spriteForm} working={busy} size={22} />
           <span className="tavern-head-name">
-            freestyle<i>.</i>
+            updated<i>.</i>
           </span>
           <span className="tavern-head-spacer" />
           {updateStatus.version ? (
@@ -1207,7 +1207,7 @@ function PanelInner({
                 className="tavern-file-back"
                 onClick={() => setCapabilitiesOpen(false)}
               >
-                ← What Freestyle can do
+                ← What UPDATED can do
               </button>
               <Capabilities
                 onPrompt={(text) => {

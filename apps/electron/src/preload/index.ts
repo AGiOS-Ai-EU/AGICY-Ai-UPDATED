@@ -93,6 +93,9 @@ const api = {
     rect: { x: number; y: number; width: number; height: number } | null,
   ): void => ipcRenderer.send("companion:set-hot-rect", rect),
   companionHover: (): void => ipcRenderer.send("companion:hover"),
+  widgetDragMove: (dx: number, dy: number): void =>
+    ipcRenderer.send("widget:drag-move", { dx, dy }),
+  widgetDragEnd: (): void => ipcRenderer.send("widget:drag-end"),
   setCompanionForm: (form: CompanionForm): void =>
     ipcRenderer.send("companion:set-form", form),
   panelOpenForDictation: (): void =>

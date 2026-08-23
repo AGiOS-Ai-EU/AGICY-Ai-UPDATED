@@ -34,8 +34,8 @@ type TonePreset = "start" | "stop";
 const TRANSCRIBE_TIMEOUT_MS = 15_000;
 
 const ERROR_COPY: Record<string, string> = {
-  cloud_auth_required: "Sign in to Freestyle to dictate",
-  usage_exceeded: "You've reached your Freestyle usage limit",
+  cloud_auth_required: "Sign in to UPDATED to dictate",
+  usage_exceeded: "You've reached your UPDATED usage limit",
   provider_unavailable: "Transcription is temporarily unavailable",
 };
 

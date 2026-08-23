@@ -1,5 +1,6 @@
 import "../overlay.css";
-import "../glass.css";
+import "../tavern.css";
+import "../updated-design.css";
 
 import { Spark, sparkScaleFor } from "@renderer/components/spark";
 import { initApiBase } from "@renderer/lib/api";
@@ -255,19 +256,17 @@ function SparkStage({
           max-width: ${COMPANION_WINDOW_SIZE - SPARK_HOT_RECT.x - 4}px;
           display: flex;
           pointer-events: none;
-          font-family: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+          font-family: var(--updated-font-ui, "Instrument Sans", ui-sans-serif, system-ui, sans-serif);
         }
         .bubble-chip {
           display: inline-flex;
           align-items: flex-end;
           gap: 6px;
           padding: 6px 12px 6px 10px;
-          border-radius: 999px;
-          background: var(--glass-pill-bg, rgba(10, 12, 18, 0.52));
-          border: 1px solid var(--glass-pill-border, rgba(255, 255, 255, 0.2));
-          box-shadow: var(--glass-shadow-soft, 0 10px 28px rgba(0, 0, 0, 0.28));
-          backdrop-filter: blur(18px) saturate(1.35);
-          -webkit-backdrop-filter: blur(18px) saturate(1.35);
+          border-radius: var(--updated-radius, 2px);
+          background: var(--updated-field, #ffffff);
+          border: var(--updated-hairline, 0.5px) solid var(--updated-rule, #d6dbd7);
+          box-shadow: none;
           min-width: 0;
         }
         .bubble-bars {
@@ -303,7 +302,7 @@ function SparkStage({
         .bubble-text {
           font-size: 11px;
           line-height: 1.35;
-          color: rgba(232, 230, 223, 0.72);
+          color: var(--updated-graphite, #5c6663);
           overflow-wrap: break-word;
           overflow: hidden;
           min-width: 0;
@@ -334,6 +333,26 @@ function SparkStage({
           height: SPARK_HOT_RECT.height,
           display: "grid",
           placeItems: "center",
+          cursor: "grab",
+        }}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          const start = { x: event.screenX, y: event.screenY };
+          const move = (ev: PointerEvent): void => {
+            window.api.widgetDragMove(
+              ev.screenX - start.x,
+              ev.screenY - start.y,
+            );
+            start.x = ev.screenX;
+            start.y = ev.screenY;
+          };
+          const up = (): void => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            window.api.widgetDragEnd();
+          };
+          window.addEventListener("pointermove", move);
+          window.addEventListener("pointerup", up);
         }}
       >
         <Spark state={state} listening={listening} levelRef={levelRef} />

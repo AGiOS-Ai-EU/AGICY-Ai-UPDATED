@@ -105,7 +105,6 @@ import {
 import { getDefaultHotkey } from "../shared/hotkey-defaults";
 import type { OpenAppCandidate } from "../shared/open-apps";
 import {
-  COMPANION_CLEARANCE,
   PANEL_GAP,
   PANEL_HEIGHT,
   PANEL_MAX_WIDTH,
@@ -119,6 +118,17 @@ import {
 import { bearerAuthHeaders } from "../shared/server-auth";
 import { SETTINGS_KEYS } from "../shared/settings-keys";
 import { SPRITES_INFO } from "../shared/sprites";
+import {
+  clampWidgetPosition,
+  defaultWidgetPosition,
+  displayStorageKey,
+  WIDGET_HOTKEY_TAP_MS,
+  WIDGET_INSET,
+  WIDGET_PILL_HEIGHT,
+  WIDGET_PILL_WIDTH,
+  type WidgetDisplay,
+  type WidgetPositionStore,
+} from "../shared/widget";
 import { AudioPlaybackController } from "./audio-control/controller";
 import { recoverDuckedVolumeFromCrash } from "./audio-control/volume-ducker";
 import { HotkeyRecorder } from "./hotkey-recorder";
@@ -211,8 +221,8 @@ process.on("uncaughtException", (err, origin) => {
   try {
     dialog.showMessageBoxSync({
       type: "error",
-      title: "Freestyle ran into a problem",
-      message: "Freestyle hit an unexpected error and needs to close.",
+      title: "UPDATED ran into a problem",
+      message: "UPDATED hit an unexpected error and needs to close.",
       detail:
         `${String(err?.message ?? err)}\n\n` + `Logs are saved at:\n${logsDir}`,
       buttons: ["Quit"],
@@ -686,7 +696,7 @@ function execAsync(
 
 function getFreestyleAppExclusions(): Set<string> {
   return new Set(
-    [app.getName(), app.name, "Freestyle", "Electron"]
+    [app.getName(), app.name, "UPDATED", "Freestyle", "Electron"]
       .map((name) => name?.trim().toLowerCase())
       .filter((name): name is string => Boolean(name)),
   );
@@ -1030,7 +1040,7 @@ function hidePill(): void {
   try {
   } catch {}
   updateRemixBar();
-  updateDictationEscape();
+  updateWidgetEscape();
 }
 
 function wait(ms: number): Promise<void> {
@@ -1192,7 +1202,7 @@ async function factoryReset(): Promise<void> {
     defaultId: 0,
     cancelId: 0,
     title: "Hard Reset (Dev)",
-    message: "Delete all Freestyle settings & data and restart?",
+    message: "Delete all UPDATED settings & data and restart?",
     detail:
       "Removes settings, API keys, history, and dictionary/vocabulary, then " +
       "relaunches into onboarding. Downloaded voice models are kept. macOS " +
@@ -1316,10 +1326,10 @@ function showRequiredPermissionDialog(
         ? "Accessibility permission is required for dictation and text insertion."
         : "Microphone access is required to record dictation.",
       detail: accessibility
-        ? "Enable Freestyle in System Settings > Privacy & Security > Accessibility."
+        ? "Enable UPDATED in System Settings > Privacy & Security > Accessibility."
         : process.platform === "darwin"
-          ? "Enable Freestyle in System Settings > Privacy & Security > Microphone."
-          : "Enable microphone access for Freestyle in Windows Settings.",
+          ? "Enable UPDATED in System Settings > Privacy & Security > Microphone."
+          : "Enable microphone access for UPDATED in Windows Settings.",
       buttons: ["Open System Settings", "Cancel"],
       defaultId: 0,
       cancelId: 1,
@@ -1364,9 +1374,9 @@ function showMoveToApplicationsDialog(): void {
     type: "warning",
     title: "Move to Applications",
     message:
-      "Freestyle is running from a read-only location and can\u2019t update itself.",
+      "UPDATED is running from a read-only location and can\u2019t update itself.",
     detail:
-      "Please drag Freestyle into your Applications folder and relaunch it from there.",
+      "Please drag UPDATED into your Applications folder and relaunch it from there.",
     buttons: ["OK"],
   });
 }
@@ -1496,7 +1506,7 @@ function createTray(): void {
   trayImage.setTemplateImage(true);
 
   tray = new Tray(trayImage);
-  tray.setToolTip("Freestyle");
+  tray.setToolTip("UPDATED");
 
   if (process.platform === "linux") {
     // Linux desktop panels often don't fire the right-click event, so
@@ -1579,7 +1589,7 @@ function rebuildMenus(): void {
       role: "help",
       submenu: [
         {
-          label: "Freestyle Help",
+          label: "UPDATED Help",
           click: () => void shell.openExternal("https://freestylevoice.com"),
         },
       ],
@@ -1613,10 +1623,10 @@ app.whenReady().then(async () => {
   void recoverDuckedVolumeFromCrash();
 
   // Set app user model id for windows
-  electronApp.setAppUserModelId("com.freestyle.app");
+  electronApp.setAppUserModelId("com.updated.app");
 
-  // Override app.name so macOS menu shows "Freestyle" instead of the package name
-  app.setName("Freestyle");
+  // Override app.name so macOS menu shows "UPDATED" instead of the package name
+  app.setName("UPDATED");
 
   // Register the custom app:// protocol for production SPA support
   registerAppProtocol();
@@ -1774,9 +1784,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("cloud:prompt-sign-in", async () => {
     const { response } = await dialog.showMessageBox({
       type: "info",
-      message: "Sign in to Freestyle Transcribe",
+      message: "Sign in to transcribe",
       detail:
-        "Freestyle Transcribe needs you to sign in before it can transcribe or clean up text. Open Models settings to sign in or switch providers.",
+        "UPDATED needs you to sign in before it can transcribe or clean up text. Open Models settings to sign in or switch providers.",
       buttons: ["Open Models", "Not Now"],
       defaultId: 0,
       cancelId: 1,
@@ -2067,7 +2077,7 @@ app.whenReady().then(async () => {
       ) {
         notifiedAvailableVersion = info.version;
         const note = new Notification({
-          title: "Freestyle Update Available",
+          title: "UPDATED Update Available",
           body: autoUpdater.autoDownload
             ? `Version ${info.version} is downloading…`
             : `Version ${info.version} is available. Open settings to download.`,
@@ -2117,8 +2127,8 @@ app.whenReady().then(async () => {
     if (isRunningFromReadOnlyLocation()) {
       if (Notification.isSupported()) {
         const note = new Notification({
-          title: "Move Freestyle to Applications",
-          body: "Freestyle can\u2019t update from this location. Move it to your Applications folder and relaunch.",
+          title: "Move UPDATED to Applications",
+          body: "UPDATED can\u2019t update from this location. Move it to your Applications folder and relaunch.",
         });
         note.on("click", () => openPanelSettings());
         note.show();
@@ -2916,6 +2926,32 @@ async function activateAnchorApp(appName: string): Promise<void> {
 
 // Remix bar — bottom-edge sliver; hides while the pill is up.
 
+function toWidgetDisplay(display: Display): WidgetDisplay {
+  return { id: display.id, workArea: display.workArea };
+}
+
+function readWidgetPositions(): WidgetPositionStore {
+  const raw = readSettings().widgetPositions;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return raw as WidgetPositionStore;
+}
+
+function writeWidgetPosition(display: Display, x: number, y: number): void {
+  const key = displayStorageKey(toWidgetDisplay(display));
+  writeSettings({
+    widgetPositions: { ...readWidgetPositions(), [key]: { x, y } },
+  });
+}
+
+function widgetPillPosition(display: Display): { x: number; y: number } {
+  const widgetDisplay = toWidgetDisplay(display);
+  const stored = readWidgetPositions()[displayStorageKey(widgetDisplay)];
+  if (stored) {
+    return clampWidgetPosition(stored.x, stored.y, widgetDisplay);
+  }
+  return defaultWidgetPosition(widgetDisplay);
+}
+
 let companionWindow: BrowserWindow | null = null;
 let companionHotRect: PillHotRect | null = null;
 let companionLastRect: PillHotRect | null = null;
@@ -2924,24 +2960,12 @@ let companionHotPollTimer: NodeJS.Timeout | null = null;
 function companionPosition(display?: Display): { x: number; y: number } {
   const targetDisplay =
     display ?? screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const { x: waX, y: waY, height } = targetDisplay.workArea;
+  const pill = widgetPillPosition(targetDisplay);
   const info = SPRITES_INFO[companionFormSetting()];
-  // Sheet sprites have transparent margin around the drawn body; the anchor
-  // hangs the window off the work area so the BODY touches the corner.
-  if (info.anchor) {
-    return {
-      x: waX + info.anchor.margin - info.anchor.bodyLeft,
-      y:
-        waY +
-        height -
-        info.windowSize +
-        info.anchor.bodyBottom -
-        info.anchor.margin,
-    };
-  }
+  const size = info.windowSize;
   return {
-    x: waX,
-    y: waY + height - info.windowSize,
+    x: pill.x + Math.round((WIDGET_PILL_WIDTH - size) / 2),
+    y: pill.y + WIDGET_PILL_HEIGHT - size,
   };
 }
 
@@ -3158,6 +3182,40 @@ ipcMain.on("companion:set-form", (_event, form: string) => {
   }
   // The panel's head badge mirrors the active sprite too.
   panelWindow?.webContents.send("companion:form", next);
+});
+
+ipcMain.on(
+  "widget:drag-move",
+  (_event, payload: { dx: number; dy: number }) => {
+    const win = companionWindow;
+    if (!win || win.isDestroyed()) return;
+    const [x, y] = win.getPosition();
+    const size = SPRITES_INFO[companionFormSetting()].windowSize;
+    const nextX = x + payload.dx;
+    const nextY = y + payload.dy;
+    const display = screen.getDisplayNearestPoint({ x: nextX, y: nextY });
+    const pillX = nextX + Math.round((size - WIDGET_PILL_WIDTH) / 2);
+    const pillY = nextY + size - WIDGET_PILL_HEIGHT;
+    const clamped = clampWidgetPosition(pillX, pillY, toWidgetDisplay(display));
+    win.setPosition(
+      clamped.x + Math.round((WIDGET_PILL_WIDTH - size) / 2),
+      clamped.y + WIDGET_PILL_HEIGHT - size,
+    );
+    if (panelWindow && !panelWindow.isDestroyed() && panelWindow.isVisible()) {
+      positionPanelOnDisplay(display);
+    }
+  },
+);
+
+ipcMain.on("widget:drag-end", () => {
+  const win = companionWindow;
+  if (!win || win.isDestroyed()) return;
+  const [x, y] = win.getPosition();
+  const display = screen.getDisplayNearestPoint({ x, y });
+  const size = SPRITES_INFO[companionFormSetting()].windowSize;
+  const pillX = x + Math.round((size - WIDGET_PILL_WIDTH) / 2);
+  const pillY = y + size - WIDGET_PILL_HEIGHT;
+  writeWidgetPosition(display, pillX, pillY);
 });
 
 ipcMain.on("sprite:event", (event, ev: unknown) => {
@@ -3554,10 +3612,13 @@ function panelPosition(display: Display): {
 } {
   const { x: waX, y: waY, width, height } = display.workArea;
   const panelWidth = clampPanelWidth(storedPanelWidth(), display);
-  const x = Math.min(waX + 16, waX + Math.max(0, width - panelWidth - 16));
-  const available = height - COMPANION_CLEARANCE - PANEL_GAP;
-  const panelHeight = Math.max(320, Math.min(PANEL_HEIGHT, available));
-  const y = Math.max(waY, waY + height - COMPANION_CLEARANCE - panelHeight);
+  const panelHeight = Math.max(
+    320,
+    Math.min(PANEL_HEIGHT, height - WIDGET_INSET * 2 - WIDGET_PILL_HEIGHT),
+  );
+  const x = waX + Math.round((width - panelWidth) / 2);
+  const pill = widgetPillPosition(display);
+  const y = Math.max(waY + WIDGET_INSET, pill.y - PANEL_GAP - panelHeight);
   return { x, y, width: panelWidth, height: panelHeight };
 }
 
@@ -3679,12 +3740,14 @@ function openPanel(
   } else {
     win.showInactive();
   }
+  updateWidgetEscape();
 }
 
 function closePanel(): void {
   cancelPanelHide();
   if (panelWindow && !panelWindow.isDestroyed()) panelWindow.hide();
   rearmCompanionHotRect();
+  updateWidgetEscape();
 }
 
 function cursorWithin(win: BrowserWindow | null, pad = 0): boolean {
@@ -3786,7 +3849,7 @@ function createCompanionWindow(): void {
   companionWindow.on("closed", () => {
     stopCompanionHotPoll();
     dictationInProgress = false;
-    updateDictationEscape();
+    updateWidgetEscape();
     companionWindow = null;
   });
 
@@ -3902,8 +3965,11 @@ function dictationTargets(): BrowserWindow[] {
   return targets;
 }
 
-function updateDictationEscape(): void {
-  if (!dictationInProgress) {
+function updateWidgetEscape(): void {
+  const needEscape =
+    dictationInProgress ||
+    (!!panelWindow && !panelWindow.isDestroyed() && panelWindow.isVisible());
+  if (!needEscape) {
     try {
       globalShortcut.unregister("Escape");
     } catch {}
@@ -3912,19 +3978,29 @@ function updateDictationEscape(): void {
 
   if (globalShortcut.isRegistered("Escape")) return;
   try {
-    if (!globalShortcut.register("Escape", cancelActiveDictation)) {
-      hotkeyLog.warn("Could not register Escape to cancel dictation.");
+    if (!globalShortcut.register("Escape", handleWidgetEscape)) {
+      hotkeyLog.warn("Could not register Escape for widget shell.");
     }
   } catch (err) {
     hotkeyLog.warn(
-      `Could not register Escape to cancel dictation: ${err instanceof Error ? err.message : String(err)}`,
+      `Could not register Escape for widget shell: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+}
+
+function handleWidgetEscape(): void {
+  if (dictationInProgress) {
+    cancelActiveDictation();
+    return;
+  }
+  if (panelWindow && !panelWindow.isDestroyed() && panelWindow.isVisible()) {
+    closePanel();
   }
 }
 
 function setDictationPhase(phase: "idle" | "recording" | "transcribing"): void {
   dictationInProgress = phase !== "idle";
-  updateDictationEscape();
+  updateWidgetEscape();
 }
 
 function cancelActiveDictation(): void {
@@ -4088,6 +4164,15 @@ async function registerRemixHotkey(hotkey?: string): Promise<void> {
 
 const HOTKEY_STUCK_TIMEOUT_MS = 5 * 60 * 1000;
 let hotkeyStuckTimer: NodeJS.Timeout | null = null;
+let hotkeyHoldTimer: NodeJS.Timeout | null = null;
+let hotkeyRecordingArmed = false;
+
+function clearHotkeyHoldTimer(): void {
+  if (hotkeyHoldTimer) {
+    clearTimeout(hotkeyHoldTimer);
+    hotkeyHoldTimer = null;
+  }
+}
 
 function clearHotkeyStuckWatchdog(): void {
   if (hotkeyStuckTimer) {
@@ -4123,8 +4208,14 @@ function handleNativeHotkeyDown(): void {
 
   if (!hotkeyPressed) {
     hotkeyPressed = true;
+    hotkeyRecordingArmed = false;
     armHotkeyStuckWatchdog();
-    sendHotkeyDown();
+    clearHotkeyHoldTimer();
+    hotkeyHoldTimer = setTimeout(() => {
+      hotkeyHoldTimer = null;
+      hotkeyRecordingArmed = true;
+      sendHotkeyDown();
+    }, WIDGET_HOTKEY_TAP_MS);
   }
 }
 
@@ -4134,7 +4225,16 @@ function handleNativeHotkeyUp(): void {
   if (hotkeyPressed) {
     hotkeyPressed = false;
     clearHotkeyStuckWatchdog();
-    sendHotkeyUp();
+    clearHotkeyHoldTimer();
+    if (hotkeyRecordingArmed) {
+      hotkeyRecordingArmed = false;
+      sendHotkeyUp();
+    } else {
+      const visible =
+        !!panelWindow && !panelWindow.isDestroyed() && panelWindow.isVisible();
+      if (visible) closePanel();
+      else openPanel({ focusComposer: false, trigger: "hotkey" });
+    }
   }
 }
 
@@ -4146,7 +4246,7 @@ function reportHotkeyError(message: string): void {
   lastHotkeyError = message;
   if (Notification.isSupported()) {
     new Notification({
-      title: "Freestyle hotkey problem",
+      title: "UPDATED hotkey problem",
       body: message,
     }).show();
   }
@@ -4169,7 +4269,7 @@ function notifyHotkeyDegraded(accel: string, nativeError: string): void {
   const body = `Hold-to-talk isn't available, so "${accel}" now toggles recording on and off.${fix}`;
   hotkeyLog.warn(body);
   if (Notification.isSupported()) {
-    new Notification({ title: "Freestyle is in toggle mode", body }).show();
+    new Notification({ title: "UPDATED is in toggle mode", body }).show();
   }
 }
 
@@ -4187,7 +4287,7 @@ function notifyPasteFailed(): void {
     if (isWaylandSession()) {
       const desktop = (process.env.XDG_CURRENT_DESKTOP ?? "").toLowerCase();
       hint = desktop.includes("gnome")
-        ? " If a permission dialog appears on the next paste, allow Freestyle to control input."
+        ? " If a permission dialog appears on the next paste, allow UPDATED to control input."
         : " If a permission dialog appears on the next paste, allow it — or install wtype (e.g. sudo apt install wtype).";
     } else {
       hint =
@@ -4196,7 +4296,7 @@ function notifyPasteFailed(): void {
   }
   if (Notification.isSupported()) {
     new Notification({
-      title: "Freestyle couldn't paste",
+      title: "UPDATED couldn't paste",
       body: `Your transcript is on the clipboard — press ${shortcut} to paste it.${hint}`,
     }).show();
   }
@@ -4273,8 +4373,10 @@ async function registerHotkey(hotkey?: string): Promise<void> {
     }
     hotkeyPressed = false;
     clearHotkeyStuckWatchdog();
+    clearHotkeyHoldTimer();
+    hotkeyRecordingArmed = false;
     globalShortcut.unregisterAll();
-    updateDictationEscape();
+    updateWidgetEscape();
     // unregisterAll() drops every accelerator this app holds, including the
     // panel summon claimed at boot — re-claim it or it dies on the first
     // hotkey registration and never comes back within the session.
@@ -4323,7 +4425,7 @@ async function registerHotkey(hotkey?: string): Promise<void> {
           notifyHotkeyDegraded(accel, nativeError);
         } else {
           reportHotkeyError(
-            `The hotkey listener stopped working and "${accel}" could not be re-registered. Restart Freestyle or pick a different combination in Settings.`,
+            `The hotkey listener stopped working and "${accel}" could not be re-registered. Restart UPDATED or pick a different combination in Settings.`,
           );
         }
       },

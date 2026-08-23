@@ -10,6 +10,7 @@ const workspaceAliases = {
   "@freestyle-voice/validations": resolve(
     "../../packages/validations/src/index.ts",
   ),
+  "@updated/design": resolve("../../packages/updated-design"),
 };
 
 // Bundle analysis is opt-in via `ANALYZE=1` (see the `analyze` npm script).

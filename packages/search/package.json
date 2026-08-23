@@ -1,0 +1,11 @@
+{
+  "name": "@updated/search",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UPDATED search provider contracts (Gate 3 — interfaces only)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./providers/brave": "./src/providers/brave.ts"
+  }
+}

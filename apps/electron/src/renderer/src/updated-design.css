@@ -1,0 +1,73 @@
+/**
+ * UPDATED runtime theme — certificate aesthetic layered on tavern.css.
+ * Loaded after tavern.css; retires glass.css overrides.
+ */
+
+@import "@updated/design/tokens.css";
+
+.tavern {
+  background: var(--updated-paper);
+  color: var(--updated-ink);
+  font-family: var(--updated-font-ui);
+  font-size: calc(var(--updated-space-base) * 3 + 1px);
+  line-height: 1.55;
+}
+
+.tavern-label {
+  font-family: var(--updated-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--updated-graphite);
+}
+
+.tavern-panel {
+  margin: 0 0 var(--updated-space-rhythm) 0;
+  border: var(--updated-hairline) solid var(--updated-rule);
+  border-radius: var(--updated-radius);
+  box-shadow: none;
+  background: var(--updated-field);
+  background-image: none;
+}
+
+.tavern-bub,
+.tavern-bub-chip {
+  border-radius: var(--updated-radius);
+  border: var(--updated-hairline) solid var(--updated-rule);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--updated-field);
+}
+
+.tavern-gate-title,
+.tavern-head-title {
+  font-family: var(--updated-font-claim);
+  font-weight: 500;
+}
+
+.tavern-set-version,
+.tavern-meta,
+.tavern-mono {
+  font-family: var(--updated-font-mono);
+  font-size: 11px;
+  color: var(--updated-graphite);
+}
+
+.tavern-tabs {
+  border-bottom: var(--updated-hairline) solid var(--updated-rule);
+}
+
+.tavern-composer,
+.tavern-set-card {
+  border: var(--updated-hairline) solid var(--updated-rule);
+  border-radius: var(--updated-radius);
+  box-shadow: none;
+}
+
+.tavern-tail,
+.tavern-bub-tail-o,
+.tavern-bub-tail-f {
+  display: none;
+}

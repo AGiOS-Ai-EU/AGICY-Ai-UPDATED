@@ -1,9 +1,9 @@
 {
   "name": "@freestyle-voice/electron",
-  "productName": "Freestyle",
-  "desktopName": "freestyle.desktop",
+  "productName": "UPDATED",
+  "desktopName": "updated.desktop",
   "version": "0.8.8",
-  "description": "The intelligent reminders app",
+  "description": "Desktop search instrument with voice dictation",
   "author": "freestyle-voice",
   "homepage": "https://github.com/freestyle-voice/freestyle",
   "main": "./out/main/index.js",

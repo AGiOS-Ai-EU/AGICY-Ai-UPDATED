@@ -44,6 +44,8 @@ declare global {
         rect: { x: number; y: number; width: number; height: number } | null,
       ) => void;
       companionHover: () => void;
+      widgetDragMove: (dx: number, dy: number) => void;
+      widgetDragEnd: () => void;
       setCompanionForm: (form: CompanionForm) => void;
       panelOpenForDictation: () => void;
       panelDictationPartial: (text: string) => void;

@@ -1,6 +1,6 @@
 import "../overlay.css";
 import "../tavern.css";
-import "../glass.css";
+import "../updated-design.css";
 
 import { capture } from "@renderer/lib/analytics";
 import { initApiBase } from "@renderer/lib/api";
