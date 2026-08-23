@@ -242,4 +242,8 @@ One line per step, file path only:
 
 ---
 
-**STOP — Gate 0 complete. Awaiting approval before Phase 2 (Rebrand and design system).**
+**STOP — Gate 0 complete.**
+
+**Gates 1–3:** Implemented in commit `354a7ff`. See `docs/CHANGES.md` and `docs/SEARCH-ARCHITECTURE.md`. Gate 4 (search UI + keychain) not started.
+
+**Awaiting approval before Gate 4 (result rendering).**
