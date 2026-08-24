@@ -1,6 +1,8 @@
 import { AGICY_HOSTED_PROVIDER_ID } from "./agicy-platform.js";
 import { getAgicySessionToken } from "./agicy-session.js";
+import { DEEPGRAM_PROVIDER_ID, getDeepgramByokKey } from "./deepgram-byok.js";
 import { FREESTYLE_CLOUD_PROVIDER_ID } from "./freestyle-cloud.js";
+import { LOCAL_WHISPER_PROVIDER_ID } from "./local-whisper.js";
 import { getSessionToken } from "./sessions.js";
 import { getProvider, supportsSessionTransport } from "./streaming/registry.js";
 import type {
@@ -16,11 +18,17 @@ export {
 } from "./streaming/registry.js";
 export type { StreamCallbacks, StreamSession } from "./streaming/types.js";
 
-export type VoiceProviderCategory = "agicy_hosted" | "freestyle_cloud";
+export type VoiceProviderCategory =
+  | "local"
+  | "byok"
+  | "agicy_hosted"
+  | "freestyle_cloud";
 
 export function voiceProviderCategory(
   providerId: string,
 ): VoiceProviderCategory {
+  if (providerId === LOCAL_WHISPER_PROVIDER_ID) return "local";
+  if (providerId === DEEPGRAM_PROVIDER_ID) return "byok";
   if (providerId === AGICY_HOSTED_PROVIDER_ID) return "agicy_hosted";
   return "freestyle_cloud";
 }
@@ -74,6 +82,13 @@ export function openStreamingSession(opts: {
 }
 
 export function getApiKeyForProvider(providerId: string): string | null {
+  if (providerId === LOCAL_WHISPER_PROVIDER_ID) {
+    // Zero-key path — truthy sentinel so route auth checks pass.
+    return "local";
+  }
+  if (providerId === DEEPGRAM_PROVIDER_ID) {
+    return getDeepgramByokKey();
+  }
   if (providerId === AGICY_HOSTED_PROVIDER_ID) {
     return getAgicySessionToken();
   }

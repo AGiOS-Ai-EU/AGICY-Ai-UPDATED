@@ -1,17 +1,17 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, LLM claim extraction (cards today are citation formatting only), widget merge, **on-device STT restore**.
+> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, LLM claim extraction, widget merge. **STT:** combined Phase 1+2 — local whisper default + Deepgram BYOK opt-in (scaffold in progress).
 
-> **Voice / STT:** Search and dictation share the same STT front-door. Canonical path for beta.3+: [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) — AGICY hosted Deepgram EU. Do not document Freestyle Cloud as the live mic path.
+> **Voice / STT:** Canonical path: [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) — **local whisper default**; Deepgram EU BYOK opt-in. Cleanup **on** in dictation, **off** in search.
 
 ---
 
 ## 1. Goals
 
-- **Dictation path:** hotkey hold → mic → **AGICY hosted STT** → paste/clipboard via existing `dictation.ts` / `paste.ts` pipeline.
-- **Search path:** hotkey hold in search mode → mic → **AGICY hosted STT** → `SearchProvider.search()` → certificate UI (Gate 4).
-- **Secrets:** Brave API keys in OS keychain (`safeStorage`), never plaintext in SQLite or renderer.
-- **Privacy goal (P0):** restore selectable **on-device whisper.cpp** so audio need not leave the machine (Phase 2 in [STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md)).
+- **Dictation path:** hotkey hold → mic → **local STT (default)** → paste/clipboard via existing `dictation.ts` / `paste.ts` pipeline (LLM cleanup **on**).
+- **Search path:** hotkey hold in search mode → mic → **local STT (default)** → `SearchProvider.search()` → certificate UI (LLM cleanup **off**).
+- **Secrets:** Brave / Deepgram BYOK keys in OS keychain (`safeStorage`), never plaintext in SQLite or renderer.
+- **Privacy goal (P0):** local whisper is the default so audio need not leave the machine ([STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md)).
 
 ---
 

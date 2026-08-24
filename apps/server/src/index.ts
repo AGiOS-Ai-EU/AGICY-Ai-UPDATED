@@ -290,6 +290,10 @@ export async function startServer(
 }
 
 export { closeDb, readSetting, writeSetting } from "./lib/db.js";
+export {
+  getDeepgramByokKey,
+  setDeepgramByokKey,
+} from "./lib/deepgram-byok.js";
 export { configureNetwork } from "./lib/network.js";
 export {
   disposeServerPlugins,

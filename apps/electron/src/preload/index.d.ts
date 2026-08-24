@@ -91,6 +91,13 @@ declare global {
       }>;
       setBraveSearchKey: (apiKey: string) => Promise<boolean>;
       clearBraveSearchKey: () => Promise<boolean>;
+      getSttKeyStatus: () => Promise<{
+        configured: boolean;
+        providerId: string;
+        encryptionAvailable: boolean;
+      }>;
+      setDeepgramSttKey: (apiKey: string) => Promise<boolean>;
+      clearDeepgramSttKey: () => Promise<boolean>;
       getDivergenceLogPath: () => Promise<string>;
       revealDivergenceLog: () => Promise<
         { ok: true; path: string } | { ok: false; path: string; error: string }

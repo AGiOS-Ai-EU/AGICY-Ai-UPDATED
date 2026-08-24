@@ -77,7 +77,12 @@ export interface PostProcessOptions {
   api?: HookApi;
 }
 
+/**
+ * Decision 2: cleanup **on** in dictation, **off** in search (routing).
+ * Search needs raw query text; dictation may polish for paste.
+ */
 export function isLlmCleanupEnabled(): boolean {
+  if (readSetting("input_mode") === "search") return false;
   return readSetting("llm_cleanup") === "true";
 }
 

@@ -1,8 +1,12 @@
 import { AgicyHostedTranscriptionProvider } from "./providers/agicy-hosted.js";
+import { DeepgramTranscriptionProvider } from "./providers/deepgram.js";
 import { FreestyleCloudTranscriptionProvider } from "./providers/freestyle-cloud.js";
+import { WhisperLocalTranscriptionProvider } from "./providers/whisper-local.js";
 import type { TranscriptionProvider } from "./types.js";
 
 const providers: TranscriptionProvider[] = [
+  new WhisperLocalTranscriptionProvider(),
+  new DeepgramTranscriptionProvider(),
   new AgicyHostedTranscriptionProvider(),
   new FreestyleCloudTranscriptionProvider(),
 ];

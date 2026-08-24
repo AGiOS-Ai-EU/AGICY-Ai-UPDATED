@@ -14,35 +14,40 @@ This document describes personal-data processing for the **UPDATED desktop beta*
 
 | Role | Party |
 |------|--------|
-| **Controller** | AGICY.Ai — decides purposes of account auth, inference metering, and hosted STT |
-| **Processor (STT)** | Deepgram (EU endpoint `api.eu.deepgram.com`) — audio → transcript under AGICY’s instruction |
-| **Processor (auth)** | Supabase Auth (`auth.agicy.ai`) — account identity for device pairing |
+| **Controller** | AGICY.Ai — product, optional account auth, and (if resumed) hosted STT |
+| **Default STT** | On-device whisper.cpp — **no processor**; audio stays on device |
+| **Processor (opt-in STT)** | Deepgram EU — only if user pastes a Deepgram API key (BYOK). Counsel note: BYOK may make the **user controller** and Deepgram **their** processor — confirm before final notice. |
+| **Processor (auth)** | Supabase Auth (`auth.agicy.ai`) — only when user signs in |
 | **Optional processor (search)** | Brave Search — only if you paste a Brave API key |
 
-UPDATED does **not** use Freestyle Cloud for voice in beta.3+. Legacy Freestyle Cloud code may remain in the repository for compatibility; the default shipped path does not send microphone audio to Freestyle.
+UPDATED does **not** require Freestyle Cloud or AGICY hosted STT for first dictation after the combined local+BYOK release. Legacy cloud code may remain; default path is local.
 
 ---
 
 ## 2. Voice / STT data flow (canonical)
 
+**Default (local):**
+
 ```
-Microphone (device)
-  → UPDATED Electron (local PCM/WAV)
-  → HTTPS POST https://agicy.ai/api/stt/transcribe
-       Authorization: Bearer <Supabase access token from device pairing>
-  → AGICY platform (auth + inference credit gate)
-  → Deepgram EU (audio processing)
-  → transcript text returned to UPDATED
+Microphone (device) → UPDATED Electron → whisper.cpp on device → transcript
 ```
 
-| Data | Leaves device? | Retention (as implemented / intended) |
-|------|----------------|----------------------------------------|
-| Microphone audio | Yes — to AGICY → Deepgram EU for the request | Not stored long-term by UPDATED; processed for transcription. Confirm Deepgram retention in DPA. |
-| Transcript text | Returned to device; may appear in paste/search UI | Local app state; not uploaded for search history |
-| AGICY account (email, user id) | Yes — session / device pairing | Per AGICY account policy |
-| Inference usage (seconds) | Yes — metered on AGICY Neon | Usage events for billing/limits |
-| Search queries / divergence JSONL | **No** — local only | `{userData}/logs/search-divergence.jsonl` until you delete |
-| Brave API key | Stored encrypted locally (`safeStorage`); query text sent to Brave if configured | Until you clear the key |
+**Opt-in (Deepgram EU BYOK):**
+
+```
+Microphone → UPDATED → api.eu.deepgram.com (user API key) → transcript
+```
+
+| Data | Leaves device? | Retention |
+|------|----------------|-----------|
+| Microphone audio (local default) | **No** | N/A off-device |
+| Microphone audio (BYOK) | Yes — to Deepgram EU | Per Deepgram DPA / user agreement — **Art. 28 DPA is a release blocker** when BYOK ships |
+| Transcript text | Returned to device; may appear in paste/search UI | Local app state |
+| AGICY account (email, user id) | Only if signed in | Per AGICY account policy |
+| Search queries / divergence JSONL | **No** — local only | Until you delete |
+| Brave API key | Encrypted locally (`safeStorage`) | Until you clear the key |
+
+See [docs/VOICE-DATA-FLOW.md](docs/VOICE-DATA-FLOW.md).
 
 ---
 
@@ -50,9 +55,9 @@ Microphone (device)
 
 | Processing | Intended basis |
 |------------|----------------|
-| Account + device pairing | Contract / steps prior to contract (Art. 6(1)(b)) |
-| Hosted STT for dictation/search | Contract (Art. 6(1)(b)) — core product feature you request |
-| Inference metering | Legitimate interests / contract (Art. 6(1)(b)/(f)) — prevent abuse, allocate free tier |
+| Local STT | Contract / steps prior to contract (Art. 6(1)(b)) — core feature; processing on-device |
+| Optional BYOK STT | Consent / contract when you supply a Deepgram key |
+| Account + device pairing | Contract / steps prior to contract (Art. 6(1)(b)) — optional |
 | Optional Brave search | Consent / contract when you supply a key |
 
 **Special category risk:** raw voice may allow identification. Treat audio as personal data; avoid unnecessary retention; do not use audio for secondary profiling in this beta.
@@ -63,49 +68,40 @@ Microphone (device)
 
 | Record | Intent |
 |--------|--------|
-| Audio buffers | Ephemeral for the STT request only |
-| Deepgram | Per Deepgram EU DPA — **must be documented in production DPA** |
-| Inference usage events | Account lifetime / statutory accounting |
+| Audio buffers (local) | Ephemeral decode on device |
+| Audio (BYOK) | Ephemeral for the STT request; Deepgram per DPA |
 | Local divergence JSONL | Until user deletes / uninstalls |
-| Device pairing codes | Short-lived (minutes); tokens until sign-out / expiry |
-
-Exact Deepgram retention and subprocessors must appear in the published agicy.ai privacy notice and DPA pack.
+| Device pairing codes | Short-lived; tokens until sign-out / expiry |
 
 ---
 
 ## 5. Data-subject rights
 
-Email **privacy@agicy.ai** (or the address published on agicy.ai) to:
-
-- Access / rectify account data  
-- Erase account and associated metering (subject to legal holds)  
-- Export machine-readable account data where applicable  
-- Object / restrict where Art. 6(1)(f) is relied upon  
-
-Desktop local files (settings, divergence log, Brave key) are under your control: uninstall or delete `%APPDATA%` / application support directories.
+Email **privacy@agicy.ai** to access, rectify, erase, export, or object where applicable. Desktop local files are under your control via uninstall / userData deletion.
 
 ---
 
 ## 6. International transfers
 
-STT is routed to **Deepgram’s EU API**. Auth uses AGICY’s Supabase project on `auth.agicy.ai`. If any US or other transfer applies, SCCs / appropriate safeguards must be listed on agicy.ai.
+Default STT does not transfer audio. Opt-in BYOK uses **Deepgram’s EU API**. Auth (if used) uses AGICY’s Supabase project on `auth.agicy.ai`.
 
 ---
 
 ## 7. Open compliance work (before 1.0)
 
 - [ ] Publish full privacy notice at `agicy.ai/legal/privacy`  
-- [ ] Execute DPA with Deepgram (EU)  
+- [ ] **Art. 28 DPA** with Deepgram (EU) before marketing BYOK as a supported path — blocking checklist in [STT-MIGRATION-PLAN.md §11](docs/STT-MIGRATION-PLAN.md)  
+- [ ] Counsel confirmation of BYOK controller/processor framing (§1)  
 - [ ] Article 30 record of processing  
-- [ ] Confirm audio retention = zero / ephemeral on AGICY side  
-- [ ] Restore **on-device STT** as optional provider (no cloud audio) — see `docs/STT-MIGRATION-PLAN.md` Phase 2  
+- [ ] Complete on-device STT binary/model restore (default path)  
 - [ ] Age-appropriate / parental guidance if under-16 use is expected  
 
 ---
 
 ## 8. Related docs
 
-- [README.md](../README.md) — user-facing install + data-flow summary  
-- [NOTICE](../NOTICE) — third-party notices  
-- [docs/STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md) — hosted vs local STT roadmap  
-- [docs/CODE_SIGNING.md](CODE_SIGNING.md) — signed installers (trust / SmartScreen)
+- [README.md](README.md) — user-facing install + data-flow summary  
+- [NOTICE](NOTICE) — third-party notices  
+- [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md) — local default + BYOK opt-in  
+- [docs/VOICE-DATA-FLOW.md](docs/VOICE-DATA-FLOW.md) — canonical STT path  
+- [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) — signed installers  

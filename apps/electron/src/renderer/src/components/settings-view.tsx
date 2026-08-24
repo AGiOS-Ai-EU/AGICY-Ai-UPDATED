@@ -26,9 +26,10 @@ import {
   useHotkeyRecorder,
 } from "@renderer/hooks/use-hotkey-recorder";
 import { capture } from "@renderer/lib/analytics";
-import { apiFetch } from "@renderer/lib/api";
+import { apiFetch, getClient } from "@renderer/lib/api";
 import { useCloudAuth } from "@renderer/lib/auth-context";
 import { LANGUAGES } from "@renderer/lib/languages";
+import { VOICE_STT_OPTIONS } from "@renderer/lib/models";
 import { queryKeys, settingsQueryOptions } from "@renderer/lib/query";
 import { replaceSetting, settingsForView } from "@renderer/lib/settings";
 import { useCloudConfig } from "@renderer/lib/use-cloud-config";
@@ -1120,7 +1121,40 @@ function DictationPage({
   );
   const translateOn = value(SETTINGS_KEYS.translateMode) === "true";
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const [voiceProvider, setVoiceProvider] = useState<string>("local-whisper");
+  const [deepgramConfigured, setDeepgramConfigured] = useState(false);
+  const [deepgramDraft, setDeepgramDraft] = useState("");
+  const [sttBusy, setSttBusy] = useState(false);
+  const [sttNote, setSttNote] = useState<string | null>(null);
+
   useEffect(() => window.api.onHotkeyError(setHotkeyError), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await getClient().api.models.configured.$get();
+        if (!res.ok || cancelled) return;
+        const rows = await res.json();
+        const def = rows.find(
+          (r: { type: string; is_default: number }) =>
+            r.type === "voice" && r.is_default === 1,
+        ) as { provider: string } | undefined;
+        if (def?.provider && !cancelled) setVoiceProvider(def.provider);
+      } catch {
+        // keep default
+      }
+      try {
+        const status = await window.api.getSttKeyStatus();
+        if (!cancelled) setDeepgramConfigured(status.configured);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const setLanguages = (next: string[]): void => {
     const normalized = normalizeLanguageList(next);
@@ -1129,12 +1163,129 @@ function DictationPage({
       setSetting(SETTINGS_KEYS.translateMode, "false");
   };
 
+  const selectVoiceStt = async (
+    providerId: string,
+    modelId: string,
+    modelName: string,
+  ) => {
+    setSttBusy(true);
+    setSttNote(null);
+    try {
+      const res = await getClient().api.models.configured.$post({
+        json: {
+          provider: providerId,
+          model_id: modelId,
+          model_name: modelName,
+          type: "voice",
+          is_default: true,
+        },
+      });
+      if (!res.ok) throw new Error("Could not save voice provider");
+      setVoiceProvider(providerId);
+      setSttNote(
+        providerId === "local-whisper"
+          ? "Local (on-device) is the default. Runtime restore still landing — first dictation will work once whisper.cpp ships."
+          : "Deepgram EU selected. Paste your API key below if not already saved.",
+      );
+    } catch (err) {
+      setSttNote(
+        err instanceof Error ? err.message : "Could not save STT provider",
+      );
+    } finally {
+      setSttBusy(false);
+    }
+  };
+
+  const saveDeepgramKey = async () => {
+    setSttBusy(true);
+    setSttNote(null);
+    try {
+      const ok = await window.api.setDeepgramSttKey(deepgramDraft);
+      if (!ok) throw new Error("Could not store key (encryption unavailable?)");
+      setDeepgramConfigured(true);
+      setDeepgramDraft("");
+      setSttNote("Deepgram EU key saved in OS keychain.");
+    } catch (err) {
+      setSttNote(err instanceof Error ? err.message : "Could not save key");
+    } finally {
+      setSttBusy(false);
+    }
+  };
+
+  const clearDeepgramKey = async () => {
+    setSttBusy(true);
+    try {
+      await window.api.clearDeepgramSttKey();
+      setDeepgramConfigured(false);
+      setSttNote("Deepgram key cleared.");
+    } finally {
+      setSttBusy(false);
+    }
+  };
+
   return (
     <>
       <p className="tavern-set-hint is-lead">
         Dictation types for you. Hold the hotkey in any app, speak, and let go —
-        your words are cleaned up and typed right where your cursor is.
+        your words are cleaned up and typed right where your cursor is. Search
+        mode skips cleanup so queries stay raw.
       </p>
+      <SectionLabel>Speech-to-text</SectionLabel>
+      <ChoiceRow
+        label="Provider"
+        value={voiceProvider}
+        options={VOICE_STT_OPTIONS.map((o) => ({
+          id: o.providerId,
+          label: o.label,
+        }))}
+        onChange={(id) => {
+          const opt = VOICE_STT_OPTIONS.find((o) => o.providerId === id);
+          if (!opt || sttBusy) return;
+          void selectVoiceStt(opt.providerId, opt.modelId, opt.label);
+        }}
+      />
+      <p className="tavern-set-hint">
+        {VOICE_STT_OPTIONS.find((o) => o.providerId === voiceProvider)
+          ?.detail ?? "Local is the zero-key default."}
+      </p>
+      {voiceProvider === "deepgram" ? (
+        <>
+          <InfoRow
+            label="Deepgram key"
+            value={deepgramConfigured ? "Configured" : "Not set"}
+          />
+          <div className="tavern-set-row is-static" style={{ gap: 8 }}>
+            <input
+              type="password"
+              className="tavern-input"
+              placeholder="Deepgram EU API key"
+              value={deepgramDraft}
+              onChange={(e) => setDeepgramDraft(e.target.value)}
+              style={{ flex: 1 }}
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="tavern-btn"
+              disabled={sttBusy || !deepgramDraft.trim()}
+              onClick={() => void saveDeepgramKey()}
+            >
+              Save
+            </button>
+            {deepgramConfigured ? (
+              <button
+                type="button"
+                className="tavern-btn"
+                disabled={sttBusy}
+                onClick={() => void clearDeepgramKey()}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+      {sttNote ? <p className="tavern-notice">{sttNote}</p> : null}
       <HotkeyRow
         label="Hotkey"
         accel={value(SETTINGS_KEYS.hotkey) || getDefaultHotkey()}
@@ -1925,8 +2076,8 @@ function ModelsPage({
         })}
       </ul>
       <p className="tavern-set-hint">
-        Voice STT stays on AGICY hosted Deepgram EU (Settings → Dictation /
-        account credits). This list is for LLM cleanup and chat.
+        Voice STT defaults to Local (on-device); Deepgram EU is opt-in under
+        Settings → Dictation. This list is for LLM cleanup and chat.
       </p>
     </>
   );

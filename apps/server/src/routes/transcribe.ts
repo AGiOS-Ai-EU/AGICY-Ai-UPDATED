@@ -3,7 +3,6 @@ import { createAppLogger } from "@freestyle-voice/utils";
 import { Hono } from "hono";
 import { AGICY_HOSTED_PROVIDER_ID } from "../lib/agicy-platform.js";
 import { invalidateAgicySession } from "../lib/agicy-session.js";
-import { readSetting } from "../lib/db.js";
 import { getRewritePromptContext } from "../lib/editor/rewrite-context.js";
 import { formatError } from "../lib/format-error.js";
 import {
@@ -30,6 +29,7 @@ import {
 import {
   applyFinalRewrites,
   getCleanupAppAssignments,
+  isLlmCleanupEnabled,
   postProcess,
   resolveAppContextForCleanup,
 } from "../lib/post-process.js";
@@ -202,7 +202,7 @@ const transcribeRoute = new Hono().post("/", async (c) => {
   const freestyleCleanupActive =
     !skipPostProcess &&
     defaults.llm?.provider === FREESTYLE_CLOUD_PROVIDER_ID &&
-    readSetting("llm_cleanup") === "true";
+    isLlmCleanupEnabled();
 
   // Freestyle Cloud's combined STT+cleanup mode does its work remotely.
   // `afterTranscribe` needs the raw transcript, so when a plugin implements
@@ -641,7 +641,7 @@ export const transcribePreWarmRoute = new Hono().post("/pre-warm", (c) => {
     // is enabled). undici pools the socket by origin for the real request.
     const cloudCleanup =
       defaults.llm?.provider === FREESTYLE_CLOUD_PROVIDER_ID &&
-      readSetting("llm_cleanup") === "true";
+      isLlmCleanupEnabled();
     if (provider === FREESTYLE_CLOUD_PROVIDER_ID || cloudCleanup) {
       const token = getApiKeyForProvider(FREESTYLE_CLOUD_PROVIDER_ID);
       if (token) prewarmFreestyleCloudConnection(token);
