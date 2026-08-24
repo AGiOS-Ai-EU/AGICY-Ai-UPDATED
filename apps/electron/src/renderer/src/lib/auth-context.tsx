@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import type { CloudUser } from "../../../shared/cloud-user";
+import { agicyDeviceSignInUrl } from "./agicy-device-url";
 import { getClient } from "./api";
 import { resetBrainCache } from "./brain-fs";
 import { queryKeys } from "./query";
@@ -140,9 +141,14 @@ function useCloudAuthState(): UseCloudAuth {
         throw new Error(`Could not start sign-in (${codeRes.status})`);
       const code = await codeRes.json();
       setUserCode(code.user_code);
-      await window.api.openExternal(
-        code.verification_uri_complete || code.verification_uri,
+      const opened = await window.api.openExternal(
+        agicyDeviceSignInUrl(code.user_code),
       );
+      if (!opened) {
+        throw new Error(
+          `Could not open the sign-in page. Open https://agicy.ai/updated/my_device and enter ${code.user_code}.`,
+        );
+      }
 
       const deadline = Date.now() + code.expires_in * 1000;
       let intervalMs = Math.max(1, code.interval) * 1000;

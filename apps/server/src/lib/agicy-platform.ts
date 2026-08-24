@@ -1,6 +1,42 @@
 export const DEFAULT_AGICY_PLATFORM_URL = "https://agicy.ai";
 export const AGICY_HOSTED_PROVIDER_ID = "agicy-hosted";
 export const AGICY_HOSTED_TRANSCRIBE_MODEL_ID = "agicy-hosted/stt";
+const DEVICE_PAGE_PATH = "/updated/my_device";
+
+export function isVercelProtectedHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "vercel.com" ||
+    host.endsWith(".vercel.com") ||
+    host === "vercel.app" ||
+    host.endsWith(".vercel.app")
+  );
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+function isAgicyProductHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "agicy.ai" || host === "www.agicy.ai";
+}
+
+function parseHttpUrl(value: string): URL | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/** Browser URL for device approval — always the production agicy.ai page. */
+export function canonicalDeviceVerificationUrl(userCode: string): string {
+  return `${DEFAULT_AGICY_PLATFORM_URL}${DEVICE_PAGE_PATH}?user_code=${encodeURIComponent(userCode)}`;
+}
 
 export class AgicyDeviceFlowError extends Error {
   constructor(
@@ -56,10 +92,14 @@ export interface AgicyTranscribeResult {
 }
 
 export function agicyPlatformUrl(): string {
-  return (process.env.AGICY_PLATFORM_URL || DEFAULT_AGICY_PLATFORM_URL).replace(
-    /\/+$/,
-    "",
-  );
+  const raw = (
+    process.env.AGICY_PLATFORM_URL || DEFAULT_AGICY_PLATFORM_URL
+  ).replace(/\/+$/, "");
+  const url = parseHttpUrl(raw);
+  if (!url) return DEFAULT_AGICY_PLATFORM_URL;
+  if (isAgicyProductHost(url.hostname)) return DEFAULT_AGICY_PLATFORM_URL;
+  if (isLoopbackHost(url.hostname)) return raw;
+  return DEFAULT_AGICY_PLATFORM_URL;
 }
 
 export async function requestAgicyDeviceCode(): Promise<AgicyDeviceCodeResult> {
@@ -70,18 +110,22 @@ export async function requestAgicyDeviceCode(): Promise<AgicyDeviceCodeResult> {
   if (!res.ok) {
     throw new Error(`Could not start AGICY sign-in (${res.status})`);
   }
-  const data = (await res.json()) as AgicyDeviceCodeResult & {
+  let data: AgicyDeviceCodeResult & {
     verification_uri?: string;
     verification_uri_complete?: string;
   };
+  try {
+    data = (await res.json()) as typeof data;
+  } catch {
+    throw new Error("Could not start AGICY sign-in");
+  }
+  if (!data.device_code || !data.user_code) {
+    throw new Error("Could not start AGICY sign-in");
+  }
   return {
     device_code: data.device_code,
     user_code: data.user_code,
-    verification_url:
-      data.verification_url ||
-      data.verification_uri_complete ||
-      data.verification_uri ||
-      `${agicyPlatformUrl()}/updated/my_device`,
+    verification_url: canonicalDeviceVerificationUrl(data.user_code),
     expires_in: data.expires_in,
     interval: data.interval ?? 5,
   };
