@@ -157,14 +157,7 @@ function removeModelArtifacts(modelPath: string): void {
 
 async function sha256File(filePath: string): Promise<string> {
   const hash = createHash("sha256");
-  await new Promise<void>((resolve, reject) => {
-    const stream = createReadStream(filePath);
-    stream.on("data", (chunk: Buffer) => {
-      hash.update(chunk);
-    });
-    stream.on("error", reject);
-    stream.on("end", () => resolve());
-  });
+  await pipeline(createReadStream(filePath), hash);
   return hash.digest("hex");
 }
 
