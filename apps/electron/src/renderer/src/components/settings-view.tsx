@@ -7,6 +7,18 @@ import {
   normalizeLanguageList,
   resolveLanguageOptions,
 } from "@freestyle-voice/validations";
+import { ModelProviderAvatar } from "@renderer/components/model-provider-avatar";
+import { applyAppearanceToDocument } from "@renderer/lib/apply-appearance";
+import {
+  ACCENT_OPTIONS,
+  APPEARANCE_PRESETS,
+  DEFAULT_LLM_MODEL_ID,
+  getUpdatedLlmModel,
+  TEXT_SCALE_OPTIONS,
+  UI_LOCALES,
+  UPDATED_LLM_MODELS,
+} from "@renderer/lib/updated-models";
+import "../model-picker.css";
 import { NotificationsHistory } from "@renderer/components/notifications-history";
 import {
   acceleratorsEqual,
@@ -59,6 +71,8 @@ type SettingsPage =
   | "dictation"
   | "search"
   | "talk"
+  | "appearance"
+  | "models"
   | "application"
   | "permissions"
   | "data";
@@ -70,6 +84,8 @@ const PAGE_TITLES: Record<Exclude<SettingsPage, "root">, string> = {
   dictation: "Dictation",
   search: "Search",
   talk: "Talk & Summon",
+  appearance: "Appearance & Language",
+  models: "Models",
   application: "Application",
   permissions: "Permissions",
   data: "Data",
@@ -1741,6 +1757,205 @@ function DataPage({
   );
 }
 
+function AppearancePage({
+  value,
+  setSetting,
+}: {
+  value: (key: string, fallback?: string) => string;
+  setSetting: (key: string, value: string) => void;
+}): React.JSX.Element {
+  const preset = value(SETTINGS_KEYS.appearancePreset, "vasilikos-light");
+  const accent = value(SETTINGS_KEYS.appearanceAccent, "copper");
+  const textScale = value(SETTINGS_KEYS.textScale, "comfortable");
+  const uiLocale = value(SETTINGS_KEYS.uiLocale, "en");
+  const reduceMotion = value(SETTINGS_KEYS.reduceMotion, "false") === "true";
+
+  useEffect(() => {
+    applyAppearanceToDocument({
+      preset,
+      accent,
+      textScale,
+      uiLocale,
+      reduceMotion,
+    });
+  }, [preset, accent, textScale, uiLocale, reduceMotion]);
+
+  return (
+    <>
+      <p className="tavern-set-hint is-lead">
+        Colors follow AGICY playground (Vasilikos paper + copper). Larger text
+        and high contrast help older readers; language picks the panel UI locale
+        shared with agicy.ai/updated.
+      </p>
+      <SectionLabel>Theme</SectionLabel>
+      {APPEARANCE_PRESETS.map((p) => (
+        <AppearanceChoiceRow
+          key={p.id}
+          label={p.label}
+          detail={p.note}
+          selected={preset === p.id}
+          onSelect={() => setSetting(SETTINGS_KEYS.appearancePreset, p.id)}
+        />
+      ))}
+      <SectionLabel>Accent</SectionLabel>
+      <div className="tavern-set-row is-static">
+        <span className="tavern-set-label">Accent color</span>
+        <div className="tavern-sprite-pick">
+          {ACCENT_OPTIONS.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`tavern-sprite-pick-btn${accent === a.id ? " is-on" : ""}`}
+              onClick={() => setSetting(SETTINGS_KEYS.appearanceAccent, a.id)}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 999,
+                  background: a.color,
+                  display: "inline-block",
+                }}
+              />
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <SectionLabel>Text size</SectionLabel>
+      {TEXT_SCALE_OPTIONS.map((t) => (
+        <AppearanceChoiceRow
+          key={t.id}
+          label={t.label}
+          detail={t.note}
+          selected={textScale === t.id}
+          onSelect={() => setSetting(SETTINGS_KEYS.textScale, t.id)}
+        />
+      ))}
+      <SectionLabel>Language</SectionLabel>
+      <p className="tavern-set-hint">
+        Panel language (eight hub languages). Dictation languages stay under
+        Dictation.
+      </p>
+      <div className="tavern-sprite-pick" style={{ flexWrap: "wrap" }}>
+        {UI_LOCALES.map((l) => (
+          <button
+            key={l.id}
+            type="button"
+            className={`tavern-sprite-pick-btn${uiLocale === l.id ? " is-on" : ""}`}
+            onClick={() => setSetting(SETTINGS_KEYS.uiLocale, l.id)}
+          >
+            {l.nativeLabel}
+          </button>
+        ))}
+      </div>
+      <SectionLabel>Motion</SectionLabel>
+      <ToggleRow
+        label="Reduce motion"
+        on={reduceMotion}
+        onChange={(next) =>
+          setSetting(SETTINGS_KEYS.reduceMotion, next ? "true" : "false")
+        }
+      />
+      <p className="tavern-set-hint">
+        Softens animations for vestibular sensitivity and
+        prefers-reduced-motion.
+      </p>
+    </>
+  );
+}
+
+function ModelsPage({
+  value,
+  setSetting,
+}: {
+  value: (key: string, fallback?: string) => string;
+  setSetting: (key: string, value: string) => void;
+}): React.JSX.Element {
+  const selected = value(SETTINGS_KEYS.llmModel, DEFAULT_LLM_MODEL_ID);
+  const active = getUpdatedLlmModel(selected);
+
+  return (
+    <>
+      <p className="tavern-set-hint is-lead">
+        Same provider marks as the playground composer. AGICY Auto routes via
+        Copperway when available; pick a specific model for cleanup and chat.
+      </p>
+      <SectionLabel>Active model</SectionLabel>
+      <div className="tavern-set-row is-static">
+        <span className="tavern-set-label">Current</span>
+        <span
+          className="tavern-set-value"
+          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+        >
+          <ModelProviderAvatar model={active} size={20} />
+          {active.name}
+        </span>
+      </div>
+      <SectionLabel>Models</SectionLabel>
+      <ul className="updated-model-picker-list" style={{ maxHeight: "none" }}>
+        {UPDATED_LLM_MODELS.map((m) => {
+          const on = m.apiId === active.apiId;
+          return (
+            <li key={m.apiId}>
+              <button
+                type="button"
+                className={`updated-model-picker-option${on ? " is-selected" : ""}`}
+                onClick={() => setSetting(SETTINGS_KEYS.llmModel, m.apiId)}
+              >
+                <ModelProviderAvatar model={m} size={22} />
+                <span className="updated-model-picker-option-text">
+                  <span className="updated-model-picker-option-name">
+                    {m.name}
+                  </span>
+                  <span className="updated-model-picker-option-meta">
+                    {m.provider}
+                    {m.note ? ` · ${m.note}` : ` · ${m.tier}`}
+                  </span>
+                </span>
+                {on ? (
+                  <span className="updated-model-picker-check" aria-hidden>
+                    ✓
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="tavern-set-hint">
+        Voice STT stays on AGICY hosted Deepgram EU (Settings → Dictation /
+        account credits). This list is for LLM cleanup and chat.
+      </p>
+    </>
+  );
+}
+
+function AppearanceChoiceRow({
+  label,
+  detail,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  detail?: string;
+  selected: boolean;
+  onSelect: () => void;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      className={`tavern-set-row${selected ? " is-on" : ""}`}
+      onClick={onSelect}
+      style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
+    >
+      <span className="tavern-set-label">{label}</span>
+      {detail ? <span className="tavern-set-value">{detail}</span> : null}
+    </button>
+  );
+}
+
 export function SettingsView({
   onClose,
   onThreadsCleared,
@@ -1817,6 +2032,10 @@ export function SettingsView({
             />
             <InfoRow label="Summon the panel" value="⌥ Space" />
           </>
+        ) : page === "appearance" ? (
+          <AppearancePage value={value} setSetting={setSetting} />
+        ) : page === "models" ? (
+          <ModelsPage value={value} setSetting={setSetting} />
         ) : page === "application" ? (
           <ApplicationPage onReplayIntro={onReplayIntro} />
         ) : page === "permissions" ? (
@@ -1858,6 +2077,20 @@ export function SettingsView({
         label="Talk & Summon"
         detail={value(SETTINGS_KEYS.remixHotkey) || getDefaultRemixHotkey()}
         onClick={() => setPage("talk")}
+      />
+      <NavRow
+        label="Models"
+        detail={
+          getUpdatedLlmModel(
+            value(SETTINGS_KEYS.llmModel, DEFAULT_LLM_MODEL_ID),
+          ).name
+        }
+        onClick={() => setPage("models")}
+      />
+      <NavRow
+        label="Appearance & Language"
+        detail={value(SETTINGS_KEYS.uiLocale, "en").toUpperCase()}
+        onClick={() => setPage("appearance")}
       />
       <NavRow label="Application" onClick={() => setPage("application")} />
       <NavRow label="Permissions" onClick={() => setPage("permissions")} />

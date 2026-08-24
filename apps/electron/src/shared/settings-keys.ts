@@ -28,6 +28,18 @@ export const SETTINGS_KEYS = {
   inputMode: "input_mode",
   /** dual (default) | single — Gate 6 provider selection for divergence. */
   searchProviderMode: "search_provider_mode",
+  /** Playground-equivalent: chat/cleanup LLM model id */
+  llmModel: "llm_model",
+  /** UI locale: en|zh|hi|de|es|el|it|fr */
+  uiLocale: "ui_locale",
+  /** Appearance preset: vasilikos-light|copper-glow|high-contrast|aegean-depth */
+  appearancePreset: "appearance_preset",
+  /** Accent: copper|cyan */
+  appearanceAccent: "appearance_accent",
+  /** Text scale: comfortable|large|xlarge — age-friendly readability */
+  textScale: "text_scale",
+  /** Reduce motion / animations for accessibility */
+  reduceMotion: "reduce_motion",
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];

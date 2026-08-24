@@ -1,6 +1,7 @@
 import "../overlay.css";
 import "../tavern.css";
 import "../updated-design.css";
+import "../model-picker.css";
 
 import { useChat } from "@ai-sdk/react";
 import { BrainFiles } from "@renderer/components/brain-files";
@@ -8,6 +9,7 @@ import { Capabilities } from "@renderer/components/capabilities";
 import { ConnectSuggestions } from "@renderer/components/connect-suggestions";
 import { ConnectedApps } from "@renderer/components/connected-apps";
 import { Markdown } from "@renderer/components/markdown";
+import { ModelPickerButton } from "@renderer/components/model-picker-button";
 import { NotesTab } from "@renderer/components/notes-tab";
 import { OnboardingGate, useOnboarding } from "@renderer/components/onboarding";
 import { OpenerCards } from "@renderer/components/opener-cards";
@@ -26,6 +28,7 @@ import {
 } from "@renderer/lib/agent-tools";
 import { capture } from "@renderer/lib/analytics";
 import { apiFetch, initApiBase, refreshApiBase } from "@renderer/lib/api";
+import { applyAppearanceToDocument } from "@renderer/lib/apply-appearance";
 import { CloudAuthProvider, useCloudAuth } from "@renderer/lib/auth-context";
 import { resetBrainCache } from "@renderer/lib/brain-fs";
 import { composerAction } from "@renderer/lib/composer-action";
@@ -37,6 +40,7 @@ import {
   latestThreadQueryOptions,
   prependThreadToHistory,
   queryKeys,
+  settingsQueryOptions,
 } from "@renderer/lib/query";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
 import { useSpriteEmitter } from "@renderer/lib/sprite-emitter";
@@ -47,10 +51,12 @@ import {
   type ToolPhase,
   toolPresentation,
 } from "@renderer/lib/tool-presentation";
+import { DEFAULT_LLM_MODEL_ID } from "@renderer/lib/updated-models";
 import { SpriteBadge } from "@renderer/sprites/badge";
 import { type CompanionForm, DEFAULT_COMPANION_FORM } from "@shared/companion";
 import type { InputMode } from "@shared/dictation-prefs";
 import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, type PanelTab } from "@shared/panel";
+import { SETTINGS_KEYS } from "@shared/settings-keys";
 import { SPRITES_INFO } from "@shared/sprites";
 import {
   QueryClientProvider,
@@ -761,6 +767,37 @@ function PanelInner({
     window.api.setCompanionProductVisible(onboarding.status === "done");
   }, [auth.user, auth.loading, onboarding.status]);
 
+  const settingsQuery = useQuery(settingsQueryOptions());
+  const llmModelId =
+    settingsQuery.data?.[SETTINGS_KEYS.llmModel] ?? DEFAULT_LLM_MODEL_ID;
+
+  useEffect(() => {
+    const s = settingsQuery.data;
+    if (!s) return;
+    applyAppearanceToDocument({
+      preset: s[SETTINGS_KEYS.appearancePreset],
+      accent: s[SETTINGS_KEYS.appearanceAccent],
+      textScale: s[SETTINGS_KEYS.textScale],
+      uiLocale: s[SETTINGS_KEYS.uiLocale],
+      reduceMotion: s[SETTINGS_KEYS.reduceMotion] === "true",
+    });
+  }, [settingsQuery.data]);
+
+  const setLlmModel = useCallback(
+    (id: string) => {
+      void apiFetch(`/api/settings/${SETTINGS_KEYS.llmModel}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: id }),
+      }).then((res) => {
+        if (res.ok) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+        }
+      });
+    },
+    [queryClient],
+  );
+
   const [updateStatus, setUpdateStatus] = useState<{
     version: string | null;
     downloadState: "idle" | "downloading" | "downloaded";
@@ -1373,6 +1410,11 @@ function PanelInner({
 
           {chatActive && !settingsOpen && !capabilitiesOpen ? (
             <div className="tavern-composer">
+              <ModelPickerButton
+                value={llmModelId}
+                onChange={setLlmModel}
+                disabled={status === "streaming" || status === "submitted"}
+              />
               <textarea
                 id="panel-composer"
                 className="tavern-input"

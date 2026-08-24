@@ -1673,6 +1673,11 @@
   background: var(--tavern-wash);
 }
 
+.tavern-set-row.is-on {
+  border-color: var(--updated-accent-strong, var(--tavern-lantern));
+  background: color-mix(in srgb, var(--updated-accent-muted, #e5d4b1) 28%, var(--tavern-card));
+}
+
 .tavern-set-row + .tavern-set-row {
   margin-top: -5px;
 }

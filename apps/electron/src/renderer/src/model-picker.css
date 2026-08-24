@@ -1,0 +1,183 @@
+/* Model picker + avatar — playground-inspired, Vasilikos tokens */
+
+.updated-model-avatar {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
+.updated-model-avatar.is-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: var(--updated-font-mono, ui-monospace, monospace);
+  font-weight: 600;
+  border-radius: 5px;
+  line-height: 1;
+}
+
+.updated-model-picker {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.updated-model-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  height: 32px;
+  padding: 0 8px 0 6px;
+  border: var(--updated-hairline, 0.5px) solid var(--updated-rule, #e1dcd4);
+  border-radius: 8px;
+  background: var(--updated-field, #fff);
+  color: var(--updated-ink, #1a1a2e);
+  font-family: var(--updated-font-ui, system-ui, sans-serif);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.updated-model-picker-trigger:hover:not(:disabled) {
+  border-color: var(--updated-accent-strong, #b87333);
+}
+
+.updated-model-picker-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.updated-model-picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.updated-model-picker-caret {
+  color: var(--updated-graphite, #64748b);
+  font-size: 10px;
+}
+
+.updated-model-picker-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  width: min(300px, 78vw);
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  border: var(--updated-hairline, 0.5px) solid var(--updated-rule, #e1dcd4);
+  border-radius: 12px;
+  background: var(--updated-field, #fff);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--updated-ink, #1a1a2e) 12%, transparent);
+  overflow: hidden;
+}
+
+.updated-model-picker-search {
+  margin: 8px 8px 0;
+  padding: 8px 10px;
+  border: var(--updated-hairline, 0.5px) solid var(--updated-rule, #e1dcd4);
+  border-radius: 8px;
+  background: var(--updated-paper, #f5f0eb);
+  color: var(--updated-ink, #1a1a2e);
+  font-size: 13px;
+}
+
+.updated-model-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  max-height: 260px;
+}
+
+.updated-model-picker-option {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--updated-ink, #1a1a2e);
+  cursor: pointer;
+  min-height: 44px; /* touch-friendly for all ages */
+}
+
+.updated-model-picker-option:hover,
+.updated-model-picker-option.is-selected {
+  background: color-mix(in srgb, var(--updated-accent-muted, #e5d4b1) 35%, var(--updated-field, #fff));
+}
+
+.updated-model-picker-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.updated-model-picker-option-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.updated-model-picker-option-meta {
+  font-size: 11px;
+  color: var(--updated-graphite, #64748b);
+  line-height: 1.35;
+}
+
+.updated-model-picker-check {
+  color: var(--updated-accent-strong, #b87333);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* Appearance theme hooks on documentElement */
+html[data-updated-preset="high-contrast"] {
+  --updated-ink: #0a0a12;
+  --updated-ink-body: #111827;
+  --updated-graphite: #374151;
+  --updated-rule: #9ca3af;
+  --updated-paper: #ffffff;
+  --updated-paper-muted: #f3f4f6;
+}
+
+html[data-updated-preset="copper-glow"] {
+  --updated-accent: #c9894a;
+  --updated-accent-strong: #b87333;
+  --updated-paper: #f7f1ea;
+}
+
+html[data-updated-preset="aegean-depth"] {
+  --updated-paper: #eef2f6;
+  --updated-paper-muted: #e2e8f0;
+  --updated-accent: #3db8d4;
+  --updated-accent-strong: #0e7490;
+}
+
+html[data-updated-accent="cyan"] {
+  --updated-accent: #3db8d4;
+  --updated-accent-strong: #0e7490;
+  --updated-accent-muted: #b6e7f2;
+}
+
+html[data-updated-text="large"] {
+  font-size: 112.5%;
+}
+
+html[data-updated-text="xlarge"] {
+  font-size: 125%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .updated-model-picker-menu {
+    box-shadow: none;
+  }
+}
