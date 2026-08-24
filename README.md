@@ -80,7 +80,7 @@ After install, expect this sequence on first launch:
 3. **Browser device sign-in** — your browser opens [agicy.ai/updated/my_device](https://agicy.ai/updated/my_device). Sign in with your AGICY email first, confirm the code matches the app, then approve the device. Voice transcription uses hosted Deepgram EU through agicy.ai (inference credits apply).
 4. **Microphone** — allow mic access when prompted. Hold the platform hotkey and speak once signed in.
 
-Until sign-in completes, the floating companion sprite stays hidden during the auth gate.
+Until sign-in completes, the floating companion stays hidden. After sign-in it stays **off by default** — enable it in Settings → Widget if you want the corner sprite.
 
 ## How it works
 
@@ -94,8 +94,8 @@ The app also retains dictation mode: the same speech pipeline can paste transcri
 
 | Surface | Behavior |
 | --- | --- |
-| Dictation mode | Hotkey → microphone → Freestyle Cloud STT → paste or clipboard |
-| Search mode | Hotkey → microphone → Freestyle Cloud STT → multi-provider search → citation cards |
+| Dictation mode | Hotkey → microphone → AGICY hosted STT → paste or clipboard |
+| Search mode | Hotkey → microphone → AGICY hosted STT → multi-provider search → citation cards |
 | Primary-source rate | Shown as `primary / total`, including `0 / N` |
 | CONTESTED | Jaccard similarity below `0.35`; providers remain separated |
 | Search history | Last 30 queries stored locally and available to re-run |
@@ -109,12 +109,10 @@ This beta is **not** fully local-first for voice:
 
 | Service | Required for | Data sent |
 | --- | --- | --- |
-| **Freestyle Cloud** (`freestyle.sh`) | Voice transcription and optional text cleanup | Microphone audio, transcript text, account session |
+| **AGICY** (`agicy.ai`) | Account sign-in + hosted voice transcription (Deepgram EU) | Account session, microphone audio, transcript usage metering |
 | **Brave Search** (optional) | Live web search | Search query text and your API key (stored encrypted locally) |
 
-Voice transcription requires a **Freestyle Cloud sign-in** and an internet connection. On-device STT providers present in upstream Freestyle are removed in this fork (database migration v23). Search history and divergence logs stay on your machine; voice data does not.
-
-**Business note:** UPDATED depends on Freestyle Cloud remaining available under its current terms. A service change, outage, or pricing shift would affect dictation and search-voice flows until an alternative STT path is wired.
+Voice transcription requires an **AGICY account** and an internet connection. On-device STT is planned for a later phase. Search history and divergence logs stay on your machine; voice audio is processed via AGICY's hosted STT path.
 
 ## Build from source
 

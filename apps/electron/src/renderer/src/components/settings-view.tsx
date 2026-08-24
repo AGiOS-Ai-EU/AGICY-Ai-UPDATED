@@ -1399,6 +1399,7 @@ function ApplicationPage({
   const [companionForm, setCompanionForm] = useState<CompanionForm>(
     DEFAULT_COMPANION_FORM,
   );
+  const [companionEnabled, setCompanionEnabled] = useState(false);
   const [version, setVersion] = useState("");
   const [updateStatus, setUpdateStatus] = useState<
     | { kind: "idle" }
@@ -1425,7 +1426,16 @@ function ApplicationPage({
       .companionForm()
       .then(setCompanionForm)
       .catch(() => {});
-    return window.api.onCompanionForm(setCompanionForm);
+    void window.api
+      .getCompanionEnabled()
+      .then(setCompanionEnabled)
+      .catch(() => {});
+    const offForm = window.api.onCompanionForm(setCompanionForm);
+    const offEnabled = window.api.onCompanionEnabled(setCompanionEnabled);
+    return () => {
+      offForm?.();
+      offEnabled?.();
+    };
   }, []);
 
   const checkForUpdates = (): void => {
@@ -1449,37 +1459,50 @@ function ApplicationPage({
   return (
     <>
       <SectionLabel>Widget</SectionLabel>
-      <div className="tavern-set-row is-static">
-        <span className="tavern-set-label">Sprite</span>
-        <div className="tavern-sprite-pick">
-          {Object.values(SPRITES_INFO).map((s) => {
-            const id = parseCompanionForm(s.id);
-            return (
-              <button
-                key={s.id}
-                type="button"
-                className={`tavern-sprite-pick-btn${
-                  companionForm === id ? " is-on" : ""
-                }`}
-                onClick={() => {
-                  setCompanionForm(id);
-                  window.api.setCompanionForm(id);
-                }}
-              >
-                <SpriteBadge form={id} size={24} />
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <ToggleRow
+        label="Show desktop companion"
+        on={companionEnabled}
+        onChange={(next) => {
+          setCompanionEnabled(next);
+          window.api.setCompanionEnabled(next);
+        }}
+      />
       <p className="tavern-set-hint">
-        The little companion that lives in the corner of your screen.
+        Optional floating sprite in the screen corner. Off by default — UPDATED
+        is voice-first; hold the hotkey without a companion.
       </p>
-      <ActionRow label="Intro" action="Replay" onClick={onReplayIntro} />
-      <p className="tavern-set-hint">
-        Meet Jeb again — the guided intro from your first launch.
-      </p>
+      {companionEnabled ? (
+        <>
+          <div className="tavern-set-row is-static">
+            <span className="tavern-set-label">Sprite</span>
+            <div className="tavern-sprite-pick">
+              {Object.values(SPRITES_INFO).map((s) => {
+                const id = parseCompanionForm(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`tavern-sprite-pick-btn${
+                      companionForm === id ? " is-on" : ""
+                    }`}
+                    onClick={() => {
+                      setCompanionForm(id);
+                      window.api.setCompanionForm(id);
+                    }}
+                  >
+                    <SpriteBadge form={id} size={24} />
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <ActionRow label="Intro" action="Replay" onClick={onReplayIntro} />
+          <p className="tavern-set-hint">
+            Replay the first-run intro for the selected sprite.
+          </p>
+        </>
+      ) : null}
       <SectionLabel>App</SectionLabel>
       <ToggleRow
         label="Launch at login"
@@ -1670,7 +1693,7 @@ function DataPage({
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "freestyle-brain.json";
+        a.download = "updated-brain.json";
         a.click();
         URL.revokeObjectURL(url);
       })

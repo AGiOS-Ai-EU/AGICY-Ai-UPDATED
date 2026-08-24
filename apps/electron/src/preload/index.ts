@@ -100,6 +100,15 @@ const api = {
   widgetDragEnd: (): void => ipcRenderer.send("widget:drag-end"),
   setCompanionForm: (form: CompanionForm): void =>
     ipcRenderer.send("companion:set-form", form),
+  getCompanionEnabled: (): Promise<boolean> =>
+    ipcRenderer.invoke("companion:enabled"),
+  setCompanionEnabled: (enabled: boolean): void =>
+    ipcRenderer.send("companion:set-enabled", enabled),
+  onCompanionEnabled: (callback: (enabled: boolean) => void): (() => void) => {
+    const handler = (_e: unknown, enabled: boolean): void => callback(enabled);
+    ipcRenderer.on("companion:enabled", handler);
+    return () => ipcRenderer.removeListener("companion:enabled", handler);
+  },
   setCompanionProductVisible: (visible: boolean): void =>
     ipcRenderer.send("companion:product-visible", visible),
   panelOpenForDictation: (): void =>

@@ -354,7 +354,7 @@
   max-width: 260px;
   height: 44px;
   border-radius: 12px;
-  border: 2px solid var(--tavern-ink);
+  border: 2px solid var(--updated-accent-strong, var(--tavern-ink));
   background: var(--tavern-lantern);
   color: var(--tavern-card);
   cursor: pointer;

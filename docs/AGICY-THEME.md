@@ -83,3 +83,18 @@ Existing README assets still show pre-Vasilikos cool green paper until regenerat
 - Muted graphite `#64748b` on paper: ~4.8:1 for metadata strips.
 
 No purple AI gradients. Glass shell uses warm cream tint only.
+
+---
+
+## Package A — Instrument panel (beta.4 UI)
+
+Voice-first customization on top of Vasilikos tokens:
+
+| Change | Why |
+|--------|-----|
+| Companion **off by default** (`companionEnabled` in `settings.json`) | Beta is a search instrument, not a character app; opt-in in Settings → Widget |
+| Copper left-rule on claim cards; stronger PRIMARY wash | Certificate hierarchy reads as AGICY evidence, not chat bubbles |
+| Help / tray links → `agicy.ai/updated` | Drop Freestyle marketing destinations from chrome |
+| Gate CTA border uses copper-strong | Sign-in gate matches brand accent without renaming every `tavern-*` class yet |
+
+Legacy CSS class names (`tavern-*`) remain as bridges; visual tokens already map to `--updated-*` / `--agicy-*`.

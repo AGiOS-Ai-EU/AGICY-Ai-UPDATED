@@ -225,11 +225,21 @@
 
 .updated-search-card {
   border: var(--updated-hairline) solid var(--updated-rule);
+  border-left: 2px solid var(--updated-accent-muted);
   border-radius: var(--updated-radius);
   background: var(--updated-field);
-  box-shadow: none;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--updated-ink) 4%, transparent);
   display: flex;
   flex-direction: column;
+}
+
+.updated-search-card.is-primary {
+  border-left-color: var(--updated-accent-strong);
+  background: color-mix(in srgb, var(--updated-accent-muted) 18%, var(--updated-field));
+}
+
+.updated-search-card.is-summary {
+  border-left-color: var(--updated-cyan);
 }
 
 .updated-search-card-chip {
