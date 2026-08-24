@@ -379,7 +379,7 @@ Freestyle Cloud streamed partials; local whisper.cpp default is **batch** (recor
 |--------|--------|
 | **Accept batch latency** for first local ship | **Chosen** |
 | Clear **“Transcribing…”** (or equivalent) after hotkey release | **Required** — not an indefinite spinner |
-| Cold-start note | First utterance may include model load; if hotkey→text is **≥ ~10s**, show an explicit warming / loading state, not a silent hang |
+| Cold-start note | First utterance may include model load; if hotkey→text is **≥ ~10s**, show an explicit warming / loading state, not a silent hang. **Measured (§11): 1.9 s cold on the default `base-q5_1`, 4.2 s on `small-q5_1` — threshold not reached; `large` unmeasured** |
 | Chunked / pseudo-streaming partials | **Follow-up** — not blocking combined Phase 1+2 |
 
 QA must not treat missing live partials as a local-STT regression.
@@ -534,14 +534,32 @@ Automated coverage lives in `apps/server/tests/`:
 | 1 | Fresh profile, no cached model | ✅ | ⬜ |
 | 2 | Visible progress; interrupt at 60% → **resume** (not restart) | ✅ resumed from 35,553,792 / 59,707,625 B via HTTP Range | ⬜ |
 | 3 | Offline dictation after download | ✅ all non-loopback fetch blocked; transcript still returned | ⬜ |
-| 4 | Download failure → offers Deepgram EU BYOK | ⬜ manual UI check | ⬜ |
-| 5 | Cold-start hotkey→text latency | ✅ **1.8 s** cold / 1.1 s warm — well under the ~10 s warming threshold | ⬜ |
-| 6 | Batch path shows **Transcribing…** | ⬜ manual UI check | ⬜ |
-| 7 | Brave key preserved on upgrade | ⬜ manual upgrade check | ⬜ |
+| 4 | Download failure → offers Deepgram EU BYOK | ✅ code-audited — see below | ⬜ |
+| 5 | Cold-start hotkey→text latency | ✅ **1.9 s** cold / 1.5 s warm on the shipping default | ⬜ |
+| 6 | Batch path shows **Transcribing…** | ✅ **was failing**, fixed — see below | ⬜ |
+| 7 | Brave key preserved on upgrade | ⚠️ code-audited PASS; **needs a real beta.3 profile** | ⬜ |
 | 9 | Insufficient disk → named space, no corrupt leftover | ✅ unit-level (`disk.test.ts`, wipe-on-ENOSPC) | ⬜ |
 | 10 | Checksum after download + before load | ✅ unit + E2E (`.sha256` sidecar) | ⬜ |
 
-Remaining before release: items 4, 6, 7 (Electron UI, not server-testable) and cross-platform runs of 1–3, 5.
+**Item 5 — measured cold start by model size** (win32 x64, `jfk.wav`, cold process each time):
+
+| Model | On disk | Cold hotkey→text | Warm |
+|-------|---------|------------------|------|
+| **`base-q5_1` — the shipping default** | 59,707,625 B (**56.9 MiB**) | **1.9 s** | 1.5 s |
+| `small-q5_1` — Whisper Balanced | 190,085,487 B (181.3 MiB) | 4.2 s | 3.0 s |
+| `large` — Whisper Pro | ~1.6 GB | **not measured** | — |
+
+**No warming UX is needed for the default.** 3.2× the model size cost 2.2× the cold start, so the ~10 s threshold in Decision 2b is not in play for `base-q5_1` or `small-q5_1`.
+
+> **⚠️ Open risk — `large` (Whisper Pro) vs the 15 s transcribe watchdog.** `TRANSCRIBE_TIMEOUT_MS = 15_000` in `apps/electron/src/renderer/src/lib/dictation.ts` re-submits the whole WAV over REST if no final arrives in time. Extrapolating the measured curve, a 1.6 GB cold load plausibly exceeds 15 s, which would fire the watchdog **while the first inference is still running** — a duplicate request queued behind the same busy whisper-server, not a recovery. Before shipping Whisper Pro as a selectable option, either scale the watchdog with model size, have the server signal "still warming", or gate the model behind a first-use warning. Not a blocker for the default path.
+
+**Item 4 — verified by code audit.** On `status: "error"` the Dictation settings pane auto-reveals a **“Fallback — Deepgram EU”** section with the key input, plus a **“Use Deepgram EU instead”** button that calls `selectVoiceStt("deepgram", …)` (`settings-view.tsx`). It is a real click-path, not just prose. **Nuance:** pasting a key while the provider is still `local-whisper` saves the key but does **not** switch providers — the user must press the button. Worth a GUI pass to confirm the section is visible without scrolling.
+
+**Item 6 — was genuinely broken; fixed on this branch.** Both bubbles fell through to a bare `"…"` between hotkey release and insertion, because the batch path streams no partials. Indistinguishable from a hang. Now `"Transcribing…"`, with the label logic in `renderer/src/lib/dictation-bubble.ts` and a regression test.
+
+**Item 7 — audit passes, but the real check is still owed.** Write and read both use `{userData}/keychain/brave-search.key` via `safeStorage` (`search-keychain.ts`); migrations v22–v27 touch SQLite only and never the keychain. **However** v23 does `DROP TABLE api_keys`, and `getBraveSearchApiKey()` returns `null` on any decrypt failure, after which search silently falls back to mock — the exact silent-failure shape this item exists to catch. Must be verified by upgrading **a real beta.3 profile that already had a Brave key**, not by pasting a key post-upgrade; those are different code paths.
+
+Remaining before release: a GUI pass on items 4 and 6, the beta.3-profile check for item 7, and macOS/Linux runs of 1–3, 5.
 
 ### Non-blocking / later
 
