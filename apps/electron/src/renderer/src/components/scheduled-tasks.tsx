@@ -211,7 +211,13 @@ export function ScheduledTasks({
           entry.id === task.id ? { ...entry, enabled } : entry,
         ) ?? current,
     );
-    capture("scheduled_task_toggled", { task: task.name, enabled });
+    // Task names are user-written ("Chase Maria about the Larnaca invoice"),
+    // so only the shape of the name travels — the funnel needs the event, not
+    // the wording.
+    capture("scheduled_task_toggled", {
+      name_length: task.name.length,
+      enabled,
+    });
     void updateScheduledTask(task.id, { enabled })
       .then(() => refresh())
       .catch((err: unknown) => {
@@ -276,7 +282,7 @@ export function ScheduledTasks({
 
   const remove = (task: ScheduledTaskView): void => {
     setBusy(task.id);
-    capture("scheduled_task_deleted", { task: task.name });
+    capture("scheduled_task_deleted", { name_length: task.name.length });
     void deleteScheduledTask(task.id)
       .then(() => {
         setView({ kind: "list" });
@@ -295,7 +301,7 @@ export function ScheduledTasks({
     void request
       .then((task) => {
         capture(id ? "scheduled_task_edited" : "scheduled_task_created", {
-          task: task.name,
+          name_length: task.name.length,
         });
         void refresh();
         setView({ kind: "detail", id: task.id });

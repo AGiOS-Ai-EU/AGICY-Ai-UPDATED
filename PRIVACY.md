@@ -92,7 +92,50 @@ STT is routed to **Deepgram’s EU API**. Auth uses AGICY’s Supabase project o
 
 ---
 
-## 7. Open compliance work (before 1.0)
+## 7. Telemetry / product analytics
+
+**Sub-processor:** PostHog (project endpoint `https://us.i.posthog.com`)
+**Default:** **off.** Nothing is sent until you turn it on.
+**Opt out / opt in:** Settings → Data → **Share anonymous usage data**. Takes effect immediately, no restart. `DO_NOT_TRACK=1` in the environment disables it unconditionally.
+
+### 7.1 International transfer
+
+PostHog is addressed on its **US** endpoint, so enabling this setting transfers the data below **outside the EEA**. That transfer needs SCCs / an appropriate safeguard listed on agicy.ai before 1.0 (§8). The EU-region PostHog endpoint (`eu.i.posthog.com`) would remove the transfer question entirely and is the recommended fix.
+
+### 7.2 What is collected when it is on
+
+| Category | Examples |
+|---|---|
+| Feature events | app installed / updated / launched, panel opened, tab opened, onboarding beat reached / skipped / completed, capability opened, suggestion shown / accepted / dismissed, automation applied |
+| Counts and shapes | message length in characters, number of todos, number of vocabulary terms imported, scheduled-task **name length** (never the name), transcription duration in ms |
+| Configuration ids | STT/LLM provider and model id, sprite id, connector slug (e.g. `gmail`), UI tab id, permission kind, setting **key** (never its value) |
+| Anonymous identity | a random device UUID generated locally; after sign-in, your AGICY **account id** |
+| Super properties (on every event) | `app_version`, `environment` (`production`/`development`), `os` (platform string), `plan` (`free`/`pro`) |
+| Crash reports | error **message and stack trace**, plus a source label. `enableExceptionAutocapture: true` is set, so unhandled exceptions in the server process are reported automatically as well as the ones reported explicitly. Stack traces name file paths and function names from the app bundle. |
+
+Crash reports are always written to the local log file for diagnostics; only the upload to PostHog is gated by this setting.
+
+### 7.3 What is never collected
+
+This is a product commitment, enforced in code by a server-side content guard on the telemetry relay (`apps/server/src/lib/telemetry-guard.ts`) that drops any event property containing free text:
+
+- **No transcripts.** No dictated or cleaned text, ever.
+- **No audio.** No recordings or audio buffers.
+- **No search queries** and no divergence-log contents.
+- **No LLM prompts or completions.**
+- **No window titles, application content, or URLs.**
+- **No clipboard contents.**
+- **No brain files** — no memories, notes, todo text, or evidence-card text.
+- **No email address or display name.** Sign-in identifies you to PostHog by account id only; account details stay in AGICY's own systems.
+- **No setting values** — only which key changed.
+
+### 7.4 Lawful basis
+
+Consent (Art. 6(1)(a)), given by turning the setting on and withdrawn by turning it off. Nothing is collected before consent.
+
+---
+
+## 8. Open compliance work (before 1.0)
 
 - [ ] Publish full privacy notice at `agicy.ai/legal/privacy`  
 - [ ] Execute DPA with Deepgram (EU)  
@@ -100,10 +143,11 @@ STT is routed to **Deepgram’s EU API**. Auth uses AGICY’s Supabase project o
 - [ ] Confirm audio retention = zero / ephemeral on AGICY side  
 - [ ] Restore **on-device STT** as optional provider (no cloud audio) — see `docs/STT-MIGRATION-PLAN.md` Phase 2  
 - [ ] Age-appropriate / parental guidance if under-16 use is expected  
+- [ ] List **PostHog** as a sub-processor on agicy.ai, and either move analytics to PostHog's EU endpoint or document the US transfer safeguard (§7.1)  
 
 ---
 
-## 8. Related docs
+## 9. Related docs
 
 - [README.md](../README.md) — user-facing install + data-flow summary  
 - [NOTICE](../NOTICE) — third-party notices  

@@ -13,29 +13,49 @@ function getEnvironment(): string {
     : "development";
 }
 
-// Cached `telemetry_enabled` setting. `isEnabled()` is called on every
-// `capture()`/`captureException()` — multiple times per dictation — so we read
-// the DB once and reuse the value. Invalidated via `invalidateTelemetrySetting`
-// whenever the setting is written or deleted.
+// Cached `telemetry_enabled` setting. `isTelemetryOptedOut()` is called on
+// every `capture()`/`captureException()` — multiple times per dictation — so we
+// read the DB once and reuse the value. Invalidated via
+// `invalidateTelemetrySetting` whenever the setting is written or deleted.
 let _telemetryOptedOut: boolean | null = null;
 
+/**
+ * Analytics is opt-in: absent or anything other than `"true"` means no.
+ *
+ * A default-on analytics client is consent-by-silence, which does not hold up
+ * for the EU users this build ships to, so a fresh install sends nothing until
+ * someone turns on "Share anonymous usage data" in Settings › Data.
+ */
 function isTelemetryOptedOut(): boolean {
   if (_telemetryOptedOut !== null) return _telemetryOptedOut;
   try {
     const row = getDb()
       .prepare("SELECT value FROM settings WHERE key = 'telemetry_enabled'")
       .get() as { value: string } | undefined;
-    _telemetryOptedOut = row?.value === "false";
+    _telemetryOptedOut = row?.value !== "true";
   } catch {
-    // DB not ready yet — treat as opted-in and re-read next time.
-    return false;
+    // DB not ready yet — stay opted out and re-read next time.
+    return true;
   }
   return _telemetryOptedOut;
 }
 
-/** Drop the cached `telemetry_enabled` value so the next check re-reads it. */
+/**
+ * Drop the cached `telemetry_enabled` value so the next check re-reads it.
+ *
+ * Turning the setting off also tears down the client. It is a lazy singleton
+ * that owns a background flush timer and the exception-autocapture hooks, so
+ * re-reading a flag is not enough on its own: `disable()` puts the client into
+ * opt-out (autocapture checks `isDisabled` too) and dropping the reference
+ * means a later opt-in builds a fresh one. The toggle therefore takes effect
+ * immediately rather than at the next launch.
+ */
 export function invalidateTelemetrySetting(): void {
   _telemetryOptedOut = null;
+  if (!isTelemetryOptedOut()) return;
+  const client = _client;
+  _client = null;
+  void client?.disable().catch(() => {});
 }
 
 function isEnabled(): boolean {
@@ -141,10 +161,13 @@ function activeDistinctId(): string {
   return _userDistinctId ?? getDeviceId();
 }
 
+/**
+ * Deliberately narrower than `CloudUser`: the account id is the only field
+ * analytics is allowed to see. Widening this type is how email or display name
+ * would find their way back to PostHog.
+ */
 export interface CloudIdentity {
   id: string;
-  email: string;
-  name?: string | null;
 }
 
 /**
@@ -178,10 +201,11 @@ export function identifyCloudUser(user: CloudIdentity): void {
         ? { properties: { $anon_distinct_id: getDeviceId() } }
         : {}),
     });
-    setPersonProperties({
-      email: user.email,
-      ...(user.name ? { name: user.name } : {}),
-    });
+    // The account id is enough to join a PostHog person to the AGICY account
+    // record, and it is the only identifier this build sends. Email and display
+    // name used to ride along as person properties, which put directly
+    // identifying account data on a US processor for no analytical gain — look
+    // the user up in AGICY's own systems by id instead.
   } catch {
     // Never let analytics errors affect the app
   }

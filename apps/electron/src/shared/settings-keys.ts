@@ -40,6 +40,8 @@ export const SETTINGS_KEYS = {
   textScale: "text_scale",
   /** Reduce motion / animations for accessibility */
   reduceMotion: "reduce_motion",
+  /** Opt-in product analytics. Absent or anything but "true" means off. */
+  telemetryEnabled: "telemetry_enabled",
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];

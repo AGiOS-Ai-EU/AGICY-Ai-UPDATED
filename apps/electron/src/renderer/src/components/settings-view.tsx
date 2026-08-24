@@ -1652,13 +1652,19 @@ function PermissionsPage(): React.JSX.Element {
 
 function DataPage({
   onThreadsCleared,
+  value,
+  setSetting,
 }: {
   onThreadsCleared: () => void;
+  value: (key: string, fallback?: string) => string;
+  setSetting: (key: string, value: string) => void;
 }): React.JSX.Element {
   const [clearingChats, setClearingChats] = useState(false);
   const [clearingBrain, setClearingBrain] = useState(false);
   const [brainCleared, setBrainCleared] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const telemetryEnabled =
+    value(SETTINGS_KEYS.telemetryEnabled, "false") === "true";
 
   const clearChats = (): void => {
     if (!window.confirm("Delete every conversation? This can't be undone."))
@@ -1753,6 +1759,22 @@ function DataPage({
         action="Open folder"
         onClick={() => void window.api.openLogsFolder()}
       />
+      <SectionLabel>Usage data</SectionLabel>
+      <ToggleRow
+        label="Share anonymous usage data"
+        on={telemetryEnabled}
+        onChange={(next) =>
+          setSetting(SETTINGS_KEYS.telemetryEnabled, next ? "true" : "false")
+        }
+      />
+      <p className="tavern-set-hint">
+        Off by default. When on, UPDATED sends product analytics and crash
+        reports to PostHog in the United States: which features you used, how
+        often, model ids, app version, and error messages with stack traces.
+        Never your recordings, transcripts, searches, prompts, window titles,
+        clipboard, or brain files. Turning it off takes effect immediately. See
+        PRIVACY.md.
+      </p>
     </>
   );
 }
@@ -2041,7 +2063,11 @@ export function SettingsView({
         ) : page === "permissions" ? (
           <PermissionsPage />
         ) : (
-          <DataPage onThreadsCleared={onThreadsCleared} />
+          <DataPage
+            onThreadsCleared={onThreadsCleared}
+            value={value}
+            setSetting={setSetting}
+          />
         )}
       </>
     );

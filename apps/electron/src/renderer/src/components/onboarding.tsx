@@ -28,6 +28,7 @@ import {
   SKIP_LINE,
   TRADE_CHIPS,
   TRADE_TO_INDUSTRY,
+  tradeBucket,
 } from "@renderer/lib/onboarding-core";
 import {
   connectorConnectionsQueryOptions,
@@ -620,7 +621,7 @@ export function OnboardingGate({
   const complete = useCallback((): void => {
     capture("onboarding_completed", {
       hasTask: task.trim().length > 0,
-      trade: trade.trim() || null,
+      trade: tradeBucket(trade),
       connected: [...activeSlugs],
       automations: [...applied],
     });
