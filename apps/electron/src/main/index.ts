@@ -1482,7 +1482,7 @@ function buildTrayContextMenu(): Menu {
     },
     {
       label: "Help",
-      click: () => void shell.openExternal("https://freestylevoice.com"),
+      click: () => void shell.openExternal("https://agicy.ai/updated"),
     },
     buildUpdateMenuItem(),
     ...(is.dev
@@ -1606,7 +1606,7 @@ function rebuildMenus(): void {
       submenu: [
         {
           label: "UPDATED Help",
-          click: () => void shell.openExternal("https://freestylevoice.com"),
+          click: () => void shell.openExternal("https://agicy.ai/updated"),
         },
       ],
     },
@@ -2023,9 +2023,10 @@ app.whenReady().then(async () => {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     const user = await serverClient()
-      .api.auth.status.$get()
+      .api.auth.agicy.status.$get()
       .then(async (res) => (res.ok ? ((await res.json()).user ?? null) : null))
       .catch(() => null);
+    // Product gate only — floating companion stays hidden unless Settings opt-in.
     setCompanionProductVisible(!!user);
     if (!user) openPanel();
   })();
@@ -3154,6 +3155,11 @@ function companionFormSetting(): CompanionForm {
   return parseCompanionForm(readSettings().companionForm as string | undefined);
 }
 
+/** Opt-in floating sprite — off by default for the voice-first beta instrument. */
+function companionEnabledSetting(): boolean {
+  return readSettings().companionEnabled === true;
+}
+
 async function dictationPrefs(): Promise<DictationPrefs> {
   const settings = (await getServerSettings()) ?? {};
   const mode = settings.audio_playback_mode;
@@ -3292,6 +3298,13 @@ ipcMain.handle("search:query", async (_event, query: unknown) => {
 ipcMain.on("dictation:reload-prefs", () => broadcastDictationPrefs());
 
 ipcMain.handle("companion:form", () => companionFormSetting());
+
+ipcMain.handle("companion:enabled", () => companionEnabledSetting());
+
+ipcMain.on("companion:set-enabled", (_event, enabled: boolean) => {
+  setCompanionEnabled(!!enabled);
+  panelWindow?.webContents.send("companion:enabled", companionEnabledSetting());
+});
 
 ipcMain.on("companion:set-form", (_event, form: string) => {
   const next = parseCompanionForm(form);
@@ -3955,7 +3968,7 @@ function destroyPanelWindow(): void {
 
 function applyCompanionProductVisibility(): void {
   if (!companionWindow || companionWindow.isDestroyed()) return;
-  if (companionProductVisible) {
+  if (companionProductVisible && companionEnabledSetting()) {
     companionWindow.showInactive();
   } else {
     companionWindow.hide();
@@ -3964,6 +3977,11 @@ function applyCompanionProductVisibility(): void {
 
 function setCompanionProductVisible(visible: boolean): void {
   companionProductVisible = visible;
+  applyCompanionProductVisibility();
+}
+
+function setCompanionEnabled(enabled: boolean): void {
+  writeSettings({ companionEnabled: enabled });
   applyCompanionProductVisibility();
 }
 

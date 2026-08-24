@@ -1,28 +1,51 @@
 # UPDATED roadmap
 
-Prioritized gaps after Gate 7 (search query history). Ranked by user value for a **voice-driven search instrument**.
+Prioritized after external audit (2026-08-24) and beta.3 AGICY-hosted STT ship.
+
+## P0 — Before next public build
 
 | Rank | Gap | Status | Notes |
 |------|-----|--------|-------|
-| 1 | **Search query history** | **Shipped (Gate 7)** | Last 30 queries in Search tab; persisted in `{userData}/search-query-history.json`; re-run from Recent list |
-| 2 | In-app divergence log viewer | Backlog | JSONL append works; Settings reveals file path only |
-| 3 | Export search results (JSON/CSV) | Backlog | Claim cards are on-screen only |
-| 4 | Modifier + hotkey input-mode flip | Backlog | Mode toggles in Search tab + Settings today |
-| 5 | Third live provider (Exa, etc.) | Backlog | Brave + mock/mock-alt only |
-| 6 | LLM claim extraction | Backlog | One card per citation + summary |
-| 7 | Single merged widget window | Backlog | Still companion + panel + notification |
-| 8 | Rakazo thread bridge | Backlog | Spec in `specs/rakazo-agios-bridge.md`; no plugin |
-| 9 | Full Freestyle string / onboarding rebrand | Backlog | Product shell is UPDATED; upstream strings remain |
-| 10 | Mobile client (Expo) | Concept | Hybrid README imagery; desktop Electron is shipped |
+| 1 | **Single STT story in docs** | **Fixed** | [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) + README + [PRIVACY.md](../PRIVACY.md) |
+| 2 | **Restore on-device STT** (whisper.cpp selectable) | **Committed** | Cloud default for accuracy; local option for EU / offline. Spec: [STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md) Phase 2. Code was removed in v23 — rebuild provider. |
+| 3 | **GDPR surface** | **In progress** | PRIVACY.md draft shipped; need agicy.ai notice, Deepgram DPA, Art. 30 ROP |
+| 4 | **Publish corrected README to main** | Open | GitHub main still had Freestyle STT rows — merge this branch |
 
-## Differentiation vs Freestyle / Rakazo
+## P1 — Before 1.0
 
-- **Certificate claim cards** with plain primary-source rate (`N / M`, including `0 / N`)
-- **CONTESTED** via Jaccard divergence — no merge or vote across providers
-- **Dual-provider transparency** with append-only divergence JSONL
-- **Hybrid glass shell** (nav rail) wrapping certificate Search content
-- **Voice-first search loop** — hotkey STT → panel Search tab → persisted query history
+| Rank | Gap | Status | Notes |
+|------|-----|--------|-------|
+| 1 | Modifier + hotkey mode flip | Backlog | Highest UX value; Settings/Search tab only today |
+| 2 | Divergence log export beyond reveal | Partial | Reveal + copy path live; add Save As / share JSONL |
+| 3 | Companion → instrument state pill (or keep off) | Partial | Companion **off by default** (Package A) |
+| 4 | Code signing (Apple + Windows EV/OV) | Docs ready | [CODE_SIGNING.md](CODE_SIGNING.md); secrets optional in CI |
+| 5 | Pricing clarity pre-install | Partial | Credits called out in README first-run; surface on `/updated` |
 
-## README honesty
+## P2 — Worth doing
 
-Features list tracks **seven shipped capabilities** (Gates 1–6 + query history). Hybrid shell is part of the widget/panel experience (Gate 11) and is called out in Usage/Mobile sections, not duplicated as a separate gate number.
+| Rank | Gap | Status | Notes |
+|------|-----|--------|-------|
+| 1 | Source classifier domain list + Greek/Cypriot gaps | Backlog | Publish + tests for `cylaw.org` etc. |
+| 2 | Confirm fork point vs MIT relicense | Check | Upstream MIT via PR #103 / commit `2c01c5c` (May 2026); NOTICE cites it — verify first UPDATED commit is post-relicense |
+| 3 | Third live search provider | Backlog | Brave + mock/mock-alt |
+| 4 | LLM claim extraction | Backlog | Cards are citation formatting only (stated in README) |
+| 5 | Single merged widget window | Backlog | Still companion + panel + notification |
+| 6 | In-app divergence viewer | Backlog | |
+| 7 | Rakazo thread bridge | Backlog | `specs/rakazo-agios-bridge.md` |
+
+## Shipped (Gates 1–7 + beta.3)
+
+| Item | Notes |
+|------|--------|
+| Search query history | Last 30; local JSON |
+| Certificate claim cards + CONTESTED | Jaccard 0.35 |
+| Divergence JSONL | Local append; Settings reveal |
+| AGICY device auth + hosted Deepgram EU | Default voice path |
+| Instrument UI Package A | Companion off; copper cards; playground model picker (PR) |
+
+## Differentiation
+
+- Certificate claim cards with primary-source rate (`N / M`, including `0 / N`)
+- CONTESTED via Jaccard — no merge/vote
+- Dual-provider transparency + local divergence JSONL
+- Voice-first search loop — **hosting honesty**: cloud STT today, local STT restore is the privacy differentiator we owe the thesis

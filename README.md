@@ -75,46 +75,51 @@ Download only from the official [UPDATED Releases](https://github.com/AGiOS-Ai-E
 
 After install, expect this sequence on first launch:
 
-1. **Windows SmartScreen** (or macOS Gatekeeper) — the beta is unsigned. Use **More info → Run anyway** (Windows) or **Open** from the context menu (macOS). See the install steps above.
-2. **AGICY sign-in panel** — the app opens a sign-in window with a device code. Click **Continue in browser** if the browser does not open automatically.
-3. **Browser device sign-in** — your browser opens [agicy.ai/updated/my_device](https://agicy.ai/updated/my_device). Sign in with your AGICY email first, confirm the code matches the app, then approve the device. Voice transcription uses hosted Deepgram EU through agicy.ai (inference credits apply).
-4. **Microphone** — allow mic access when prompted. Hold the platform hotkey and speak once signed in.
+1. **Windows SmartScreen** (or macOS Gatekeeper) — beta builds are unsigned unless CI signing secrets are configured (see [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md)). Use **More info → Run anyway** (Windows) or **Open** from the context menu (macOS).
+2. **AGICY sign-in** — the app shows a device code and opens the browser. Complete sign-in at [agicy.ai/updated/my_device](https://agicy.ai/updated/my_device) with your AGICY email, then approve the device.
+3. **Microphone** — allow mic access. Hold the platform hotkey and speak.
 
-Until sign-in completes, the floating companion sprite stays hidden during the auth gate.
+**Cost (say this before you install):** Voice uses **metered inference credits** on your AGICY account. New accounts receive a free allotment (see [agicy.ai/dashboard/usage](https://agicy.ai/dashboard/usage) after sign-in). Search itself is free; optional Brave Search uses **your** Brave key. The app is not “unlimited free cloud STT.”
 
-## How it works
+Until sign-in completes, the floating companion stays hidden. After sign-in the companion stays **off by default** (Settings → Widget). Prefer the instrument panel over the sprite for beta.
 
-1. **Download and install** the desktop beta.
-2. **Hold and speak** using the platform hotkey. Select **Search** as the input mode in Settings.
-3. **Read sourced results** in the Search panel: claim cards, primary-source rate, freshness, and CONTESTED provider sections.
+## How voice works (canonical — do not contradict)
 
-The app also retains dictation mode: the same speech pipeline can paste transcription into the focused application instead of running a search.
+Full diagram: [docs/VOICE-DATA-FLOW.md](docs/VOICE-DATA-FLOW.md). Privacy notice draft: [PRIVACY.md](PRIVACY.md).
 
-## Search behavior
+```
+Mic → UPDATED app → https://agicy.ai/api/stt/transcribe → Deepgram EU → transcript back to app
+```
 
-| Surface | Behavior |
+| Mode | Behavior |
 | --- | --- |
-| Dictation mode | Hotkey → microphone → Freestyle Cloud STT → paste or clipboard |
-| Search mode | Hotkey → microphone → Freestyle Cloud STT → multi-provider search → citation cards |
+| Dictation | Hotkey → mic → **AGICY hosted STT (Deepgram EU)** → paste or clipboard |
+| Search | Hotkey → mic → **AGICY hosted STT (Deepgram EU)** → multi-provider search → citation cards |
 | Primary-source rate | Shown as `primary / total`, including `0 / N` |
 | CONTESTED | Jaccard similarity below `0.35`; providers remain separated |
-| Search history | Last 30 queries stored locally and available to re-run |
+| Search history | Last 30 queries stored **locally** |
+| Divergence log | Append-only JSONL **locally** — Settings → Search → Reveal / Copy path |
 | Brave key | Optional; encrypted with Electron `safeStorage` |
 
 Without a Brave Search API key, mock providers demonstrate the CONTESTED interface locally.
 
+**Not available in this beta:** on-device (whisper.cpp) STT. Upstream Freestyle supported local STT; this fork removed it in schema migration v23. Restoring local STT as a selectable provider is a **P0 product priority** (see [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md) Phase 2) so EU users can keep audio on-device.
+
 ## Third-party services and privacy
 
-This beta is **not** fully local-first for voice:
+This beta is **not** local-first for voice. Audio leaves the device.
 
 | Service | Required for | Data sent |
 | --- | --- | --- |
-| **Freestyle Cloud** (`freestyle.sh`) | Voice transcription and optional text cleanup | Microphone audio, transcript text, account session |
-| **Brave Search** (optional) | Live web search | Search query text and your API key (stored encrypted locally) |
+| **AGICY** (`agicy.ai`) | Sign-in + hosted STT + credit metering | Account session, **microphone audio**, usage events |
+| **Deepgram EU** (via AGICY) | Speech-to-text | Audio for the transcription request (sub-processor) |
+| **Brave Search** (optional) | Live web search | Search query text + your API key (key stored encrypted locally) |
 
-Voice transcription requires a **Freestyle Cloud sign-in** and an internet connection. On-device STT providers present in upstream Freestyle are removed in this fork (database migration v23). Search history and divergence logs stay on your machine; voice data does not.
+**Freestyle Cloud is not on the default voice path in beta.3+.** Do not treat `freestylevoice.com` or Freestyle STT as where your mic goes unless you deliberately enable a legacy path (not offered in the default UI).
 
-**Business note:** UPDATED depends on Freestyle Cloud remaining available under its current terms. A service change, outage, or pricing shift would affect dictation and search-voice flows until an alternative STT path is wired.
+Controller: AGICY.Ai (EU). Draft product privacy: [PRIVACY.md](PRIVACY.md). Canonical web notice (when published): [agicy.ai/legal/privacy](https://agicy.ai/legal/privacy). Data-subject requests: privacy@agicy.ai.
+
+Search history and divergence logs stay on your machine. Voice audio does not — until local STT returns.
 
 ## Build from source
 
@@ -140,10 +145,14 @@ pnpm --filter @freestyle-voice/electron run build:linux
 
 - [`docs/ARCHITECTURE-MAP.md`](docs/ARCHITECTURE-MAP.md)
 - [`docs/SEARCH-ARCHITECTURE.md`](docs/SEARCH-ARCHITECTURE.md)
+- [`docs/VOICE-DATA-FLOW.md`](docs/VOICE-DATA-FLOW.md) — **canonical STT / privacy path**
+- [`docs/STT-MIGRATION-PLAN.md`](docs/STT-MIGRATION-PLAN.md) — hosted → local whisper restore → gateway
+- [`PRIVACY.md`](PRIVACY.md) — GDPR-oriented product disclosure (draft)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/CHANGES.md`](docs/CHANGES.md)
+- [`docs/CODE_SIGNING.md`](docs/CODE_SIGNING.md)
 
-Not yet wired: modifier-plus-hotkey mode switching, a third live search provider, in-app divergence-log viewer, LLM claim extraction, single-window merge, and search-result export.
+**Not yet wired:** modifier-plus-hotkey mode switching (Settings / Search tab only today), a third live search provider, in-app divergence-log viewer (Reveal JSONL + copy path exist), LLM claim extraction, single-window merge, search-result CSV export, **on-device STT**, signed installers by default.
 
 ## License and credits
 

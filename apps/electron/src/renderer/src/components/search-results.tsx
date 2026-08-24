@@ -35,7 +35,9 @@ function SearchClaimCard({
   const age = citationAgeLabel(citation);
 
   return (
-    <article className="updated-search-card">
+    <article
+      className={`updated-search-card${sourceClass === "primary" ? " is-primary" : ""}`}
+    >
       <div
         className={`updated-search-card-chip${sourceClass === "primary" ? " is-primary" : ""}`}
       >
@@ -135,7 +137,7 @@ function ProviderResultsSection({
       </header>
 
       {answer.answer.trim() ? (
-        <article className="updated-search-card">
+        <article className="updated-search-card is-summary">
           <div className="updated-search-card-chip">SUMMARY</div>
           <p className="updated-search-card-claim">{answer.answer.trim()}</p>
           <div className="updated-search-card-strip">

@@ -1,14 +1,17 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, LLM claim extraction (cards today are citation formatting only), widget merge.
+> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, LLM claim extraction (cards today are citation formatting only), widget merge, **on-device STT restore**.
+
+> **Voice / STT:** Search and dictation share the same STT front-door. Canonical path for beta.3+: [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) — AGICY hosted Deepgram EU. Do not document Freestyle Cloud as the live mic path.
 
 ---
 
 ## 1. Goals
 
-- **Dictation path unchanged:** hotkey hold → mic → STT → paste/clipboard via existing `dictation.ts` / `paste.ts` pipeline.
-- **Search path (new):** hotkey hold in search mode → mic → STT → `SearchProvider.search()` → certificate UI (Gate 4).
-- **Secrets:** provider API keys in OS keychain, never plaintext in SQLite or renderer.
+- **Dictation path:** hotkey hold → mic → **AGICY hosted STT** → paste/clipboard via existing `dictation.ts` / `paste.ts` pipeline.
+- **Search path:** hotkey hold in search mode → mic → **AGICY hosted STT** → `SearchProvider.search()` → certificate UI (Gate 4).
+- **Secrets:** Brave API keys in OS keychain (`safeStorage`), never plaintext in SQLite or renderer.
+- **Privacy goal (P0):** restore selectable **on-device whisper.cpp** so audio need not leave the machine (Phase 2 in [STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md)).
 
 ---
 

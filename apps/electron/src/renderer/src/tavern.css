@@ -354,7 +354,7 @@
   max-width: 260px;
   height: 44px;
   border-radius: 12px;
-  border: 2px solid var(--tavern-ink);
+  border: 2px solid var(--updated-accent-strong, var(--tavern-ink));
   background: var(--tavern-lantern);
   color: var(--tavern-card);
   cursor: pointer;
@@ -1671,6 +1671,11 @@
 
 .tavern-set-row:not(.is-static):hover {
   background: var(--tavern-wash);
+}
+
+.tavern-set-row.is-on {
+  border-color: var(--updated-accent-strong, var(--tavern-lantern));
+  background: color-mix(in srgb, var(--updated-accent-muted, #e5d4b1) 28%, var(--tavern-card));
 }
 
 .tavern-set-row + .tavern-set-row {
