@@ -15,6 +15,7 @@ import {
 } from "../lib/freestyle-cloud.js";
 import { saveProcessedHistory, saveRawHistory } from "../lib/history-store.js";
 import { getLanguagesSetting } from "../lib/language.js";
+import { LOCAL_WHISPER_PROVIDER_ID } from "../lib/local-whisper.js";
 import {
   FreestyleEventType,
   PipelineStage,
@@ -39,6 +40,7 @@ import { invalidateSession } from "../lib/sessions.js";
 import { CloudAuthError as AgicyCloudAuthError } from "../lib/streaming/providers/agicy-hosted.js";
 import { CloudAuthError } from "../lib/streaming/providers/freestyle-cloud.js";
 import { getProvider } from "../lib/streaming/registry.js";
+import { stripProviderPrefix } from "../lib/streaming/types.js";
 import {
   getApiKeyForProvider,
   voiceProviderCategory,
@@ -47,6 +49,7 @@ import {
   buildAsrVocabularyBias,
   resolveAsrVocabularyBias,
 } from "../lib/vocabulary-bias.js";
+import { startInBackground } from "../lib/whisper/server.js";
 import { prewarmModelCostRegistry } from "./models.js";
 
 const log = createAppLogger("transcribe");
@@ -649,6 +652,12 @@ export const transcribePreWarmRoute = new Hono().post("/pre-warm", (c) => {
 
     if (!defaults.voice || !provider) {
       return c.json({ ok: true, warming: null });
+    }
+
+    if (provider === LOCAL_WHISPER_PROVIDER_ID) {
+      const modelId = stripProviderPrefix(defaults.voice.model_id);
+      startInBackground(modelId);
+      return c.json({ ok: true, warming: "whisper" });
     }
 
     return c.json({ ok: true, warming: null });

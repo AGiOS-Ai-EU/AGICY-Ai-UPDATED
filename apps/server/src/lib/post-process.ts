@@ -78,12 +78,14 @@ export interface PostProcessOptions {
 }
 
 /**
- * Decision 2: cleanup **on** in dictation, **off** in search (routing).
- * Search needs raw query text; dictation may polish for paste.
+ * Decision 2: search always off; dictation on only when the user opted in
+ * (`llm_cleanup=true`) **and** a cleanup LLM is configured. Zero-key local
+ * STT has no packaged cleanup model — raw transcript.
  */
 export function isLlmCleanupEnabled(): boolean {
   if (readSetting("input_mode") === "search") return false;
-  return readSetting("llm_cleanup") === "true";
+  if (readSetting("llm_cleanup") !== "true") return false;
+  return getDefaultModels().llm != null;
 }
 
 export function getCleanupAppAssignments(): CleanupAppAssignment[] {

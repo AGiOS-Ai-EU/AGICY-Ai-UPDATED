@@ -7,10 +7,12 @@ Prioritized after product decisions (2026-08-24): **combined Phase 1+2 release**
 | Rank | Gap | Status | Notes |
 |------|-----|--------|-------|
 | 1 | **Docs match decisions** | **This PR** | Local = zero-key default; BYOK opt-in; Phase 3 deferred. [STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md), [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) |
-| 2 | **Restore on-device STT** (whisper.cpp) as **default** | **In progress** | Registry + settings scaffold; binary/model path still to land. Spec: Phase 1+2 combined. |
+| 2 | **Restore on-device STT** (whisper.cpp) as **default** | **Landing in PR** | Binary ensure + model download (resume/progress) + whisper-server inference. Spec: Phase 1+2 combined. |
 | 3 | **Deepgram EU BYOK** (opt-in only) | Scaffold | Keychain + provider stub; not first-use gate |
 | 4 | **GDPR / Art. 28 DPA** | Blocking | Deepgram subprocessor DPA + disclosures — [STT §11](STT-MIGRATION-PLAN.md#11-approval--blocking-checklist) |
-| 5 | **Mode-dependent cleanup** | **This PR** | Cleanup **on** in dictation, **off** in search |
+| 5 | **Mode-dependent cleanup** | **This PR** | Search always off; dictation on **only with cleanup LLM**; zero-key = raw (“requires a cleanup provider”) |
+| 6 | **Local batch STT (v1)** | **Decided** | Accept batch latency + Transcribing…; pseudo-streaming follow-up |
+| 7 | **Brave key migration** | Spec’d | Preserve `search-keychain` / Brave `safeStorage` on upgrade — [STT §7](STT-MIGRATION-PLAN.md#7-migration-for-existing-beta-users) |
 
 ## P1 — Before 1.0
 

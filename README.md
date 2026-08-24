@@ -94,9 +94,10 @@ Opt-in:   Mic → UPDATED → Deepgram EU (your API key) → transcript
 
 | Mode | Behavior |
 | --- | --- |
-| Dictation | Hotkey → mic → **local STT (default)** → paste or clipboard (LLM cleanup **on**) |
-| Search | Hotkey → mic → **local STT (default)** → multi-provider search → citation cards (LLM cleanup **off**) |
+| Dictation | Hotkey → mic → **local STT (default)** → paste or clipboard (LLM cleanup **only if a cleanup provider is configured**; otherwise raw) |
+| Search | Hotkey → mic → **local STT (default)** → multi-provider search → citation cards (LLM cleanup **always off**) |
 | Cloud STT | Optional **Deepgram EU BYOK** in Settings → Dictation |
+| Local latency | **Batch** after hotkey release — UI shows **Transcribing…** (no live partials in v1) |
 | Primary-source rate | Shown as `primary / total`, including `0 / N` |
 | CONTESTED | Jaccard similarity below `0.35`; providers remain separated |
 | Search history | Last 30 queries stored **locally** |
@@ -105,7 +106,7 @@ Opt-in:   Mic → UPDATED → Deepgram EU (your API key) → transcript
 
 Without a Brave Search API key, mock providers demonstrate the CONTESTED interface locally.
 
-**Product default (combined Phase 1+2):** on-device whisper.cpp — **zero keys / no account** for first successful dictation. Deepgram EU BYOK is an accuracy upgrade, not a gate. Spec: [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md). **Scaffolding ships in this branch; full binary/model path is still landing.**
+**Product default (combined Phase 1+2):** on-device whisper.cpp — **zero keys / no account** for first successful dictation. Deepgram EU BYOK is an accuracy upgrade, not a gate. Spec: [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md). First dictation: Settings → Dictation → Download model (or auto-download on first hold), then hold hotkey — no account required.
 
 ## Third-party services and privacy
 

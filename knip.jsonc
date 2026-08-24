@@ -12,8 +12,12 @@
     "pactl",
     "pkg-config",
     "powershell.exe",
+    "powershell",
     "python",
-    "python3"
+    "python3",
+    "cmake",
+    "install_name_tool",
+    "objdump"
   ],
   "ignoreDependencies": ["nano-staged"],
   "ignoreFiles": [
@@ -25,7 +29,10 @@
     "templates/**",
     // Mirror contracts kept in sync with packages/search until shared import is wired.
     "apps/server/src/lib/search/index.ts",
-    "apps/server/src/lib/search/types.ts"
+    "apps/server/src/lib/search/types.ts",
+    // AGICY desktop auth scaffolding — wired when Phase 3 / connect lands.
+    "apps/electron/src/main/agicy-keychain.ts",
+    "apps/electron/src/renderer/src/lib/agicy-auth-context.tsx"
   ],
   "workspaces": {
     "apps/electron": {

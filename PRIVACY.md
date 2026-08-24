@@ -90,8 +90,8 @@ Default STT does not transfer audio. Opt-in BYOK uses **Deepgram’s EU API**. A
 ## 7. Open compliance work (before 1.0)
 
 - [ ] Publish full privacy notice at `agicy.ai/legal/privacy`  
-- [ ] **Art. 28 DPA** with Deepgram (EU) before marketing BYOK as a supported path — blocking checklist in [STT-MIGRATION-PLAN.md §11](docs/STT-MIGRATION-PLAN.md)  
-- [ ] Counsel confirmation of BYOK controller/processor framing (§1)  
+- [ ] **Art. 28 DPA** with Deepgram (EU) before marketing BYOK as a supported path — blocking checklist in [STT-MIGRATION-PLAN.md §11](docs/STT-MIGRATION-PLAN.md). **Lawyer-track parallel:** eng does not wait on DPA to land local whisper; counsel confirms BYOK may make user controller / Deepgram their processor (lighter than Phase 3 hosted).  
+- [ ] Counsel confirmation of BYOK controller/processor framing (§1)
 - [ ] Article 30 record of processing  
 - [ ] Complete on-device STT binary/model restore (default path)  
 - [ ] Age-appropriate / parental guidance if under-16 use is expected  

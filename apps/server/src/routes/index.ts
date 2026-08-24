@@ -40,6 +40,7 @@ import suggestionsRoute from "./suggestions.js";
 import transcribe, { transcribePreWarmRoute } from "./transcribe.js";
 import usage from "./usage.js";
 import vocabulary from "./vocabulary.js";
+import whisper from "./whisper.js";
 
 const clientLog = createAppLogger("renderer");
 
@@ -95,6 +96,7 @@ const apiRouter = new Hono()
   .route("/auth", auth)
   .route("/auth/agicy", agicyAuth)
   .route("/models", models)
+  .route("/whisper", whisper)
   .route("/transcribe", transcribe)
   .route("/transcribe", transcribePreWarmRoute)
   .route("/history", history)

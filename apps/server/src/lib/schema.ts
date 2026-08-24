@@ -754,10 +754,11 @@ function applyMigrations(db: DatabaseSync, currentVersion: number): void {
          VALUES ('deepgram', 'deepgram/nova-3', 'Deepgram EU (BYOK)', 'voice', 0)
          ON CONFLICT(provider, model_id, type) DO NOTHING`,
       );
-      // Seed cleanup on for dictation only if unset (search routing forces off).
+      // Seed cleanup off on fresh installs — zero-key path has no cleanup LLM.
+      // Users enable after configuring a provider (Settings: requires cleanup provider).
       db.exec(
         `INSERT INTO settings (key, value, updated_at)
-         VALUES ('llm_cleanup', 'true', datetime('now'))
+         VALUES ('llm_cleanup', 'false', datetime('now'))
          ON CONFLICT(key) DO NOTHING`,
       );
     } catch {
