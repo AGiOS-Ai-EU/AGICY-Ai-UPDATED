@@ -5,6 +5,10 @@ import "../updated-design.css";
 import { Spark, sparkScaleFor } from "@renderer/components/spark";
 import { initApiBase } from "@renderer/lib/api";
 import { DictationController } from "@renderer/lib/dictation";
+import {
+  type BubbleState,
+  sparkBubbleText,
+} from "@renderer/lib/dictation-bubble";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
 import { SPRITES } from "@renderer/sprites/registry";
 import { SpriteStage } from "@renderer/sprites/stage";
@@ -22,10 +26,7 @@ import { createRoot } from "react-dom/client";
 
 const SPARK_HOT_RECT = SPRITES_INFO.spark.body;
 
-export interface BubbleState {
-  phase: "recording" | "transcribing" | "error";
-  partial: string;
-}
+export type { BubbleState };
 
 const ERROR_BUBBLE_MS = 4000;
 
@@ -167,13 +168,7 @@ function SparkBubble({
   levelHostRef: React.RefObject<HTMLDivElement | null>;
 }): React.JSX.Element {
   const recording = bubble.phase === "recording";
-  const text = bubble.partial.trim()
-    ? bubble.partial.length > 220
-      ? `…${bubble.partial.slice(-220)}`
-      : bubble.partial
-    : recording
-      ? "Listening"
-      : "…";
+  const text = sparkBubbleText(bubble);
   return (
     <div className="bubble" ref={levelHostRef}>
       <div

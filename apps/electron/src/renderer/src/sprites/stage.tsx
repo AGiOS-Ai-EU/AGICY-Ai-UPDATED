@@ -1,23 +1,13 @@
-import type { BubbleState } from "@renderer/components/companion";
+import {
+  type BubbleState,
+  spriteBubbleText,
+} from "@renderer/lib/dictation-bubble";
 import type { CompanionState } from "@shared/companion";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { SheetEngine } from "./engine";
 import { Performer } from "./performer";
 import type { SheetSpriteDefinition } from "./types";
-
-function bubbleText(
-  bubble: BubbleState | null,
-  maxChars: number,
-): string | null {
-  if (!bubble) return null;
-  const partial = bubble.partial.trim();
-  if (partial) {
-    return partial.length > maxChars ? `…${partial.slice(-maxChars)}` : partial;
-  }
-  if (bubble.phase === "error") return "Something went wrong";
-  return bubble.phase === "recording" ? "I'm listening…" : "…";
-}
 
 /**
  * The stage for any sheet sprite: one canvas driven by SheetEngine, a
@@ -93,7 +83,7 @@ export function SpriteStage({
       kind: "listening",
       on: bubble !== null && bubble.phase !== "error",
     });
-    setSay(bubbleText(bubble, def.bubble.maxChars));
+    setSay(spriteBubbleText(bubble, def.bubble.maxChars));
   }, [bubble, def]);
 
   return (
