@@ -1,8 +1,8 @@
 # UPDATED STT Migration Plan — Off Freestyle Cloud
 
 **Document ID:** UPDATED-STT-MIGRATION-001  
-**Status:** Research complete — **awaiting product approval before build**  
-**Date:** 2026-08-23  
+**Status:** Phase 1 (AGICY hosted) shipping in beta.3+ — **Phase 2 (local whisper) elevated to P0** after external audit: cloud-only voice is strategically backwards for EU beachhead and auditability thesis.  
+**Date:** 2026-08-24 (updated)  
 **Repos:** `UPDATED-international-launch` (desktop), `agicy-platform` (web auth + Phase 3 gateway)  
 **Sources:** STT research (agent fd127cfd), auth audit (agent 8cfdce5a), API keys matrix (this doc)
 

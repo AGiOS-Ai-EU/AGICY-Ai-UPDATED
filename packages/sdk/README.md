@@ -1,9 +1,10 @@
 # Freestyle Voice
 
-The plugin SDK for [Freestyle](../../README.md) — the voice dictation app
-(upstream describes itself as local-first; the **UPDATED** fork removes on-device
-STT and requires Freestyle Cloud for transcription — see root README). This
-package is the **public contract** for writing plugins that extend the dictation
+The plugin SDK for [UPDATED](../../README.md) / upstream Freestyle.
+UPDATED’s default voice path is **AGICY hosted STT (Deepgram EU)** — not Freestyle Cloud
+and not on-device whisper (removed in fork migration v23; restore planned). See root
+[README](../../README.md) and [docs/VOICE-DATA-FLOW.md](../../docs/VOICE-DATA-FLOW.md).
+This package is the **public contract** for writing plugins that extend the dictation
 pipeline: rewrite transcripts, inject cleanup prompts, transform final text, and
 control how text is delivered.
 
