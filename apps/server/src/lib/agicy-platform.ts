@@ -18,6 +18,11 @@ function isLoopbackHost(hostname: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
+function isAgicyProductHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "agicy.ai" || host === "www.agicy.ai";
+}
+
 function parseHttpUrl(value: string): URL | null {
   try {
     const url = new URL(value);
@@ -28,32 +33,9 @@ function parseHttpUrl(value: string): URL | null {
   }
 }
 
-/** Browser URL for AGICY device approval — never a Vercel SSO wall. */
-export function canonicalDeviceVerificationUrl(
-  rawUrl: string | undefined,
-  userCode: string,
-  platformUrl: string = DEFAULT_AGICY_PLATFORM_URL,
-): string {
-  const canonical = `${DEFAULT_AGICY_PLATFORM_URL}${DEVICE_PAGE_PATH}?user_code=${encodeURIComponent(userCode)}`;
-  const platform = parseHttpUrl(platformUrl);
-  const allowLoopback = !!platform && isLoopbackHost(platform.hostname);
-
-  if (!rawUrl?.trim()) return canonical;
-  const url = parseHttpUrl(rawUrl.trim());
-  if (!url) return canonical;
-  if (isVercelProtectedHost(url.hostname)) return canonical;
-
-  const host = url.hostname.toLowerCase();
-  if (host === "agicy.ai" || host === "www.agicy.ai") {
-    return `${DEFAULT_AGICY_PLATFORM_URL}${DEVICE_PAGE_PATH}?user_code=${encodeURIComponent(userCode)}`;
-  }
-  if (isLoopbackHost(host)) {
-    if (!allowLoopback) return canonical;
-    const local = new URL(DEVICE_PAGE_PATH, `${url.protocol}//${url.host}`);
-    local.searchParams.set("user_code", userCode);
-    return local.toString();
-  }
-  return canonical;
+/** Browser URL for device approval — always the production agicy.ai page. */
+export function canonicalDeviceVerificationUrl(userCode: string): string {
+  return `${DEFAULT_AGICY_PLATFORM_URL}${DEVICE_PAGE_PATH}?user_code=${encodeURIComponent(userCode)}`;
 }
 
 export class AgicyDeviceFlowError extends Error {
@@ -110,15 +92,14 @@ export interface AgicyTranscribeResult {
 }
 
 export function agicyPlatformUrl(): string {
-  const raw = (process.env.AGICY_PLATFORM_URL || DEFAULT_AGICY_PLATFORM_URL).replace(
-    /\/+$/,
-    "",
-  );
+  const raw = (
+    process.env.AGICY_PLATFORM_URL || DEFAULT_AGICY_PLATFORM_URL
+  ).replace(/\/+$/, "");
   const url = parseHttpUrl(raw);
-  if (!url || isVercelProtectedHost(url.hostname)) {
-    return DEFAULT_AGICY_PLATFORM_URL;
-  }
-  return raw;
+  if (!url) return DEFAULT_AGICY_PLATFORM_URL;
+  if (isAgicyProductHost(url.hostname)) return DEFAULT_AGICY_PLATFORM_URL;
+  if (isLoopbackHost(url.hostname)) return raw;
+  return DEFAULT_AGICY_PLATFORM_URL;
 }
 
 export async function requestAgicyDeviceCode(): Promise<AgicyDeviceCodeResult> {
@@ -141,17 +122,10 @@ export async function requestAgicyDeviceCode(): Promise<AgicyDeviceCodeResult> {
   if (!data.device_code || !data.user_code) {
     throw new Error("Could not start AGICY sign-in");
   }
-  const platform = agicyPlatformUrl();
   return {
     device_code: data.device_code,
     user_code: data.user_code,
-    verification_url: canonicalDeviceVerificationUrl(
-      data.verification_url ||
-        data.verification_uri_complete ||
-        data.verification_uri,
-      data.user_code,
-      platform,
-    ),
+    verification_url: canonicalDeviceVerificationUrl(data.user_code),
     expires_in: data.expires_in,
     interval: data.interval ?? 5,
   };

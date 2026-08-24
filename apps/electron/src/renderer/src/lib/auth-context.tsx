@@ -8,25 +8,10 @@ import {
   useState,
 } from "react";
 import type { CloudUser } from "../../../shared/cloud-user";
+import { agicyDeviceSignInUrl } from "./agicy-device-url";
 import { getClient } from "./api";
 import { resetBrainCache } from "./brain-fs";
 import { queryKeys } from "./query";
-
-const AGICY_DEVICE_PAGE = "https://agicy.ai/updated/my_device";
-
-/** Never open Vercel Deployment Protection / SSO instead of the AGICY device page. */
-function agicyDevicePageUrl(userCode: string, raw?: string): string {
-  const fallback = `${AGICY_DEVICE_PAGE}?user_code=${encodeURIComponent(userCode)}`;
-  if (!raw?.trim()) return fallback;
-  try {
-    const host = new URL(raw).hostname.toLowerCase();
-    if (host === "agicy.ai" || host === "www.agicy.ai") return raw;
-    if (host === "localhost" || host === "127.0.0.1") return raw;
-    return fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 function resetAccountCaches(queryClient: QueryClient): void {
   resetBrainCache();
@@ -157,10 +142,7 @@ function useCloudAuthState(): UseCloudAuth {
       const code = await codeRes.json();
       setUserCode(code.user_code);
       const opened = await window.api.openExternal(
-        agicyDevicePageUrl(
-          code.user_code,
-          code.verification_uri_complete || code.verification_uri,
-        ),
+        agicyDeviceSignInUrl(code.user_code),
       );
       if (!opened) {
         throw new Error(
