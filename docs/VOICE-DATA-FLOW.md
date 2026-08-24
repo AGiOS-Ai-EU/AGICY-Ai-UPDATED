@@ -31,7 +31,7 @@ Microphone → UPDATED → api.eu.deepgram.com (user’s Deepgram key) → trans
 
 | Path | Status |
 |------|--------|
-| **Local whisper.cpp** | **Default** — binary + model download with resume/progress; inference via local whisper-server |
+| **Local whisper.cpp** | **Default** — **`base-q5_1`** (`ggml-base-q5_1.bin`, **~57 MB** / 59,707,625 bytes); binary + model download with resume/progress; inference via local whisper-server. Cold start **1.0–1.9 s** (warming UX not needed). Optional `small-q5_1` ~181 MiB is not the default |
 | **Deepgram EU BYOK** | Opt-in upgrade in Settings → Dictation (key in `safeStorage`); offered on download failure |
 | AGICY hosted gateway | **Deferred** (Phase 3) — not the first-use path |
 | Freestyle Cloud STT | Legacy only; not default; no silent logout of existing beta sessions |
@@ -40,7 +40,7 @@ Microphone → UPDATED → api.eu.deepgram.com (user’s Deepgram key) → trans
 
 1. **Fresh profile, no cached model** (clear `~/.cache/updated/whisper-models` and `whisper-bin` if present).
 2. Open Settings → Dictation → confirm **Local (on-device)**.
-3. Click **Download model** (or first hold triggers download). Confirm **visible progress**; optionally interrupt and confirm **resume**.
+3. Click **Download model** (or first hold triggers download). Default is **`base-q5_1` ~57 MB** (not ~145 MB). Confirm **visible progress**; interrupt on a **throttled** pipe and confirm **resume** (Range, not restart-from-zero).
 4. When Ready: **disconnect network**.
 5. Focus a text field, hold dictation hotkey, speak, release → **Transcribing…** then text at cursor (**offline**).
 6. Search mode: cleanup stays off. Dictation: cleanup stays off until a cleanup LLM is configured (“requires a cleanup provider”).

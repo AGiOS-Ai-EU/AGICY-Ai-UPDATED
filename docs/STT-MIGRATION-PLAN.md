@@ -16,7 +16,7 @@
 
 | Slice | STT | Auth / keys | Role in release |
 |-------|-----|-------------|-----------------|
-| **Local whisper.cpp** | On-device | **None** | **Default** — first-use path |
+| **Local whisper.cpp** | On-device | **None** | **Default** — first-use path. Shipping model: **`base-q5_1`** (`ggml-base-q5_1.bin`) **~57 MB** (59,707,625 bytes / 56.9 MiB); cold start **1.0–1.9 s**. Optional larger: `small-q5_1` ~181 MiB |
 | **Deepgram EU BYOK** | `api.eu.deepgram.com` | User API key in Electron `safeStorage` only | **Opt-in upgrade** — never alone as first ship |
 | **Phase 3 gateway** | `stt.agicy.ai` (future) | Optional AGICY account | **Deferred** — do not block this release |
 
@@ -272,7 +272,7 @@ flowchart TB
 | Schema | `schema.ts` v27+ — seed local-whisper default; preserve existing sessions |
 | Docs | `README.md`, `NOTICE`, `VOICE-DATA-FLOW.md`, this plan |
 
-**Packaging:** ~5–15 MB binary per platform; models on first use. Default `base-q5_1` is **~57 MB** (59,707,625 bytes measured on disk) — the earlier “~145 MB” figure conflated it with the non-quantized legacy `ggml-base.bin` (142 MB).
+**Packaging:** ~5–15 MB binary per platform; models on first use. Shipping default is **`base-q5_1`** (`ggml-base-q5_1.bin`) at **~57 MB** (59,707,625 bytes / 56.9 MiB measured on disk), with **sub-2 s cold start**. Optional `small-q5_1` is ~181 MiB (not the default). Do not cite “~145 MB” for the default — that figure was the non-quantized legacy `ggml-base.bin` (~142 MB), which is catalog-legacy only.
 
 **Effort:** included in the **6–8 calendar week** combined target above.
 
@@ -379,7 +379,7 @@ Freestyle Cloud streamed partials; local whisper.cpp default is **batch** (recor
 |--------|--------|
 | **Accept batch latency** for first local ship | **Chosen** |
 | Clear **“Transcribing…”** (or equivalent) after hotkey release | **Required** — not an indefinite spinner |
-| Cold-start note | First utterance may include model load; if hotkey→text is **≥ ~10s**, show an explicit warming / loading state, not a silent hang. **Measured (§11): 1.0–1.9 s cold on shipping `base-q5_1` (56.9 MiB), 3.6–4.2 s on `small-q5_1` (181 MiB) — threshold not reached; legacy ~142 MB `ggml-base.bin` is not the default; `large` unmeasured** |
+| Cold-start note | Shipping default **`base-q5_1` (~57 MB / 56.9 MiB): 1.0–1.9 s cold, 0.85–1.5 s warm** — **warming UX is not needed**. Optional `small-q5_1` (~181 MiB) is 3.6–4.2 s cold. The ≥ ~10 s warming gate remains only for unmeasured larger models (`large`). Legacy `ggml-base.bin` (~142 MB) is not the default. |
 | Chunked / pseudo-streaming partials | **Follow-up** — not blocking combined Phase 1+2 |
 
 QA must not treat missing live partials as a local-STT regression.
@@ -508,10 +508,10 @@ The short window is the good news and the reason to move now: the sooner the DPA
 - [ ] Security review — `safeStorage` Deepgram key handling
 - [ ] **E2E acceptance (hold release against):**
   1. **Fresh profile, no cached model** (empty `~/.cache/updated/whisper-*` or equivalent)
-  2. Model download completes with **visible progress**; interrupt mid-download → **resume** continues (not restart-from-zero only)
+  2. Default download is **`base-q5_1`** (`ggml-base-q5_1.bin`, **59,707,625 bytes / ~57 MB** — not ~145 MB). Completes with **visible progress**; interrupt mid-download → **resume** continues (not restart-from-zero only). **Throttled bandwidth still matters** at ~57 MB — prove Range resume, do not assume a fast pipe
   3. **Network off after download** → hold hotkey → text still appears (**offline claim**)
   4. Simulate **download failure** → UI offers **Deepgram EU BYOK**, not a dead-end
-  5. Note **cold-start hotkey→text latency**; if **≥ ~10s**, show warming / loading state (not a silent spinner)
+  5. Note **cold-start hotkey→text latency**. Shipping default measured **1.0–1.9 s cold / 0.85–1.5 s warm** — **warming UX not required**. The ≥ ~10 s warming gate remains only for unmeasured larger models
   6. Batch local path: after release, UI shows **Transcribing…** (no expectation of Freestyle-style live partials)
   7. **Brave key preserved** — upgrade with an existing Brave key still uses live search (no silent mock)
   8. Cross-check Win / macOS / Linux for (1)–(3)
@@ -546,11 +546,11 @@ Automated coverage lives in `apps/server/tests/`:
 | Model | On disk | Cold hotkey→text | Warm |
 |-------|---------|------------------|------|
 | **`base-q5_1` — the shipping default** | 59,707,625 B (**56.9 MiB**) | **1.0–1.9 s** (re-measured 2026-08-24: spawn→text **1.0 s**; earlier E2E **1.9 s**) | **0.85–1.5 s** |
-| `small-q5_1` — Whisper Balanced (~145 MB class / larger) | 190,085,487 B (**181.3 MiB**) | **3.6–4.2 s** (re-measured **3.6 s**) | **2.6–3.0 s** |
+| `small-q5_1` — Whisper Balanced (optional, **not the default**) | 190,085,487 B (**181.3 MiB**) | **3.6–4.2 s** (re-measured **3.6 s**) | **2.6–3.0 s** |
 | Legacy `base` / `ggml-base.bin` (**not shipped**) | ~142 MB | **not the default** — catalog legacy only | — |
 | `large` — Whisper Pro | ~1.6 GB | **not measured** | — |
 
-> **Size clarification (do not re-open):** the “~145 MB default” figure was the **non-quantized legacy `ggml-base.bin` (~142 MB)**. Shipping default is **`base-q5_1` / `ggml-base-q5_1.bin` at 56.9 MiB** (`WHISPER_MODELS` + on-disk measurement). Even the next tier (`small-q5_1` at 181 MiB) stays well under the 10 s warming threshold.
+> **Size clarification (do not re-open):** do not document the shipping default as “~145 MB”. That figure was the **non-quantized legacy `ggml-base.bin` (~142 MB)**. Shipping default is **`base-q5_1` / `ggml-base-q5_1.bin` at 56.9 MiB** (`WHISPER_MODELS` + on-disk measurement). Optional next tier is `small-q5_1` at **181 MiB**, not a 145 MB class.
 
 **No warming UX is needed for the default.** Re-measure and the 181 MiB tier both stay **≪ 10 s**, so Decision 2b’s warming threshold is not in play for `base-q5_1` or `small-q5_1`.
 

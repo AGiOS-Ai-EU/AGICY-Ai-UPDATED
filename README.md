@@ -106,7 +106,7 @@ Opt-in:   Mic → UPDATED → Deepgram EU (your API key) → transcript
 
 Without a Brave Search API key, mock providers demonstrate the CONTESTED interface locally.
 
-**Product default (combined Phase 1+2):** on-device whisper.cpp — **zero keys / no account** for first successful dictation. Deepgram EU BYOK is an accuracy upgrade, not a gate. Spec: [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md). First dictation: Settings → Dictation → Download model (or auto-download on first hold), then hold hotkey — no account required.
+**Product default (combined Phase 1+2):** on-device whisper.cpp — **zero keys / no account** for first successful dictation. Shipping model is **`base-q5_1`** (`ggml-base-q5_1.bin`, **~57 MB** / 59,707,625 bytes) with **sub-2 s cold start**. Optional `small-q5_1` (~181 MiB) is not the default. Deepgram EU BYOK is an accuracy upgrade, not a gate. Spec: [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md). First dictation: Settings → Dictation → Download model (or auto-download on first hold), then hold hotkey — no account required.
 
 ## Third-party services and privacy
 

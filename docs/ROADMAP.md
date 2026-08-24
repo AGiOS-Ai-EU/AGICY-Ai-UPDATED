@@ -7,7 +7,7 @@ Prioritized after product decisions (2026-08-24): **combined Phase 1+2 release**
 | Rank | Gap | Status | Notes |
 |------|-----|--------|-------|
 | 1 | **Docs match decisions** | **This PR** | Local = zero-key default; BYOK opt-in; Phase 3 deferred. [STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md), [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) |
-| 2 | **Restore on-device STT** (whisper.cpp) as **default** | **Landing in PR** | Binary ensure + model download (resume/progress) + whisper-server inference. Spec: Phase 1+2 combined. |
+| 2 | **Restore on-device STT** (whisper.cpp) as **default** | **Landing in PR** | Binary ensure + **`base-q5_1` ~57 MB** first-use download (resume/progress; throttled/interrupt still matters) + whisper-server inference. Cold start **1.0–1.9 s** — no warming UX. Optional `small-q5_1` ~181 MiB is not the default. Spec: Phase 1+2 combined. |
 | 3 | **Deepgram EU BYOK** (opt-in only) | Scaffold | Keychain + provider stub; not first-use gate |
 | 4 | **GDPR / Art. 28 DPA** | Blocking | Deepgram subprocessor DPA + disclosures — [STT §11](STT-MIGRATION-PLAN.md#11-approval--blocking-checklist) |
 | 5 | **Mode-dependent cleanup** | **This PR** | Search always off; dictation on **only with cleanup LLM**; zero-key = raw (“requires a cleanup provider”) |

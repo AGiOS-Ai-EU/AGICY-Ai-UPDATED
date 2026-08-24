@@ -29,7 +29,7 @@ AGICY is the controller for this processing. An **Art. 28 sub-processor agreemen
 
 | Role | Party |
 |------|--------|
-| **Default STT** | On-device whisper.cpp — **no processor**; audio stays on device |
+| **Default STT** | On-device whisper.cpp (`base-q5_1`, ~57 MB first-use download) — **no processor**; audio stays on device |
 | **Processor (opt-in STT)** | Deepgram EU — only if user pastes their own Deepgram API key (BYOK). Counsel note: BYOK **may** make the **user** the controller and Deepgram **their** processor — confirm before final notice. **This note does not apply to the hosted path in §1.1, where AGICY is the controller.** |
 
 This change **reduces** data exposure: once it ships and you keep the default, your audio stops leaving the device.

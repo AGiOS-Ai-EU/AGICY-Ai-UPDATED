@@ -35,7 +35,7 @@ Freestyle currently exposes:
 A first-time user who clicks "Or choose a different model" during onboarding lands in a picker
 with ~30 voice options described by jargon they can't evaluate: "Q5", "quantized", RAM
 requirements, parameter counts, per-hour API pricing. The difference between `base` and
-`base-q5_1` (85 MB and a quality delta nobody can perceive) is a decision we're asking users
+`base-q5_1` (~57 MB and a quality delta nobody can perceive) is a decision we're asking users
 to make that *we* should make.
 
 The onboarding recommendation card (one model + "or choose different") is already the right

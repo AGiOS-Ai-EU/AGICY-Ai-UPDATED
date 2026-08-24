@@ -1,8 +1,8 @@
 # UPDATED — Search architecture (Gate 3)
 
-> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, LLM claim extraction, widget merge. **STT:** combined Phase 1+2 — local whisper default + Deepgram BYOK opt-in (scaffold in progress).
+> **Status:** Gate 7 — Gates 1–6 shipped; README + social hero assets landed. Remaining: modifier mode flip, third live provider, LLM claim extraction, widget merge. **STT:** combined Phase 1+2 — local whisper default (`base-q5_1`, ~57 MB, sub-2 s cold start) + Deepgram BYOK opt-in (scaffold in progress).
 
-> **Voice / STT:** Canonical path: [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) — **local whisper default**; Deepgram EU BYOK opt-in. Cleanup **on** in dictation, **off** in search.
+> **Voice / STT:** Canonical path: [VOICE-DATA-FLOW.md](VOICE-DATA-FLOW.md) — **local whisper default** (`base-q5_1` / `ggml-base-q5_1.bin`, ~57 MB); Deepgram EU BYOK opt-in. Cleanup **on** in dictation, **off** in search.
 
 ---
 
