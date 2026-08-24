@@ -3,7 +3,6 @@ import { createAppLogger } from "@freestyle-voice/utils";
 import { Hono } from "hono";
 import { AGICY_HOSTED_PROVIDER_ID } from "../lib/agicy-platform.js";
 import { invalidateAgicySession } from "../lib/agicy-session.js";
-import { readSetting } from "../lib/db.js";
 import { getRewritePromptContext } from "../lib/editor/rewrite-context.js";
 import { formatError } from "../lib/format-error.js";
 import {
@@ -16,6 +15,7 @@ import {
 } from "../lib/freestyle-cloud.js";
 import { saveProcessedHistory, saveRawHistory } from "../lib/history-store.js";
 import { getLanguagesSetting } from "../lib/language.js";
+import { LOCAL_WHISPER_PROVIDER_ID } from "../lib/local-whisper.js";
 import {
   FreestyleEventType,
   PipelineStage,
@@ -30,6 +30,7 @@ import {
 import {
   applyFinalRewrites,
   getCleanupAppAssignments,
+  isLlmCleanupEnabled,
   postProcess,
   resolveAppContextForCleanup,
 } from "../lib/post-process.js";
@@ -39,6 +40,7 @@ import { invalidateSession } from "../lib/sessions.js";
 import { CloudAuthError as AgicyCloudAuthError } from "../lib/streaming/providers/agicy-hosted.js";
 import { CloudAuthError } from "../lib/streaming/providers/freestyle-cloud.js";
 import { getProvider } from "../lib/streaming/registry.js";
+import { stripProviderPrefix } from "../lib/streaming/types.js";
 import {
   getApiKeyForProvider,
   voiceProviderCategory,
@@ -47,6 +49,7 @@ import {
   buildAsrVocabularyBias,
   resolveAsrVocabularyBias,
 } from "../lib/vocabulary-bias.js";
+import { startInBackground } from "../lib/whisper/server.js";
 import { prewarmModelCostRegistry } from "./models.js";
 
 const log = createAppLogger("transcribe");
@@ -202,7 +205,7 @@ const transcribeRoute = new Hono().post("/", async (c) => {
   const freestyleCleanupActive =
     !skipPostProcess &&
     defaults.llm?.provider === FREESTYLE_CLOUD_PROVIDER_ID &&
-    readSetting("llm_cleanup") === "true";
+    isLlmCleanupEnabled();
 
   // Freestyle Cloud's combined STT+cleanup mode does its work remotely.
   // `afterTranscribe` needs the raw transcript, so when a plugin implements
@@ -641,7 +644,7 @@ export const transcribePreWarmRoute = new Hono().post("/pre-warm", (c) => {
     // is enabled). undici pools the socket by origin for the real request.
     const cloudCleanup =
       defaults.llm?.provider === FREESTYLE_CLOUD_PROVIDER_ID &&
-      readSetting("llm_cleanup") === "true";
+      isLlmCleanupEnabled();
     if (provider === FREESTYLE_CLOUD_PROVIDER_ID || cloudCleanup) {
       const token = getApiKeyForProvider(FREESTYLE_CLOUD_PROVIDER_ID);
       if (token) prewarmFreestyleCloudConnection(token);
@@ -649,6 +652,12 @@ export const transcribePreWarmRoute = new Hono().post("/pre-warm", (c) => {
 
     if (!defaults.voice || !provider) {
       return c.json({ ok: true, warming: null });
+    }
+
+    if (provider === LOCAL_WHISPER_PROVIDER_ID) {
+      const modelId = stripProviderPrefix(defaults.voice.model_id);
+      startInBackground(modelId);
+      return c.json({ ok: true, warming: "whisper" });
     }
 
     return c.json({ ok: true, warming: null });

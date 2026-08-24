@@ -88,13 +88,16 @@ Until sign-in completes, the floating companion stays hidden. After sign-in the 
 Full diagram: [docs/VOICE-DATA-FLOW.md](docs/VOICE-DATA-FLOW.md). Privacy notice draft: [PRIVACY.md](PRIVACY.md).
 
 ```
-Mic → UPDATED app → https://agicy.ai/api/stt/transcribe → Deepgram EU → transcript back to app
+Default:  Mic → UPDATED (on-device whisper.cpp) → transcript  (audio stays on device)
+Opt-in:   Mic → UPDATED → Deepgram EU (your API key) → transcript
 ```
 
 | Mode | Behavior |
 | --- | --- |
-| Dictation | Hotkey → mic → **AGICY hosted STT (Deepgram EU)** → paste or clipboard |
-| Search | Hotkey → mic → **AGICY hosted STT (Deepgram EU)** → multi-provider search → citation cards |
+| Dictation | Hotkey → mic → **local STT (default)** → paste or clipboard (LLM cleanup **only if a cleanup provider is configured**; otherwise raw) |
+| Search | Hotkey → mic → **local STT (default)** → multi-provider search → citation cards (LLM cleanup **always off**) |
+| Cloud STT | Optional **Deepgram EU BYOK** in Settings → Dictation |
+| Local latency | **Batch** after hotkey release — UI shows **Transcribing…** (no live partials in v1) |
 | Primary-source rate | Shown as `primary / total`, including `0 / N` |
 | CONTESTED | Jaccard similarity below `0.35`; providers remain separated |
 | Search history | Last 30 queries stored **locally** |
@@ -103,23 +106,24 @@ Mic → UPDATED app → https://agicy.ai/api/stt/transcribe → Deepgram EU → 
 
 Without a Brave Search API key, mock providers demonstrate the CONTESTED interface locally.
 
-**Not available in this beta:** on-device (whisper.cpp) STT. Upstream Freestyle supported local STT; this fork removed it in schema migration v23. Restoring local STT as a selectable provider is a **P0 product priority** (see [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md) Phase 2) so EU users can keep audio on-device.
+**Product default (combined Phase 1+2):** on-device whisper.cpp — **zero keys / no account** for first successful dictation. Shipping model is **`base-q5_1`** (`ggml-base-q5_1.bin`, **~57 MB** / 59,707,625 bytes) with **sub-2 s cold start**. Optional `small-q5_1` (~181 MiB) is not the default. Deepgram EU BYOK is an accuracy upgrade, not a gate. Spec: [docs/STT-MIGRATION-PLAN.md](docs/STT-MIGRATION-PLAN.md). First dictation: Settings → Dictation → Download model (or auto-download on first hold), then hold hotkey — no account required.
 
 ## Third-party services and privacy
 
-This beta is **not** local-first for voice. Audio leaves the device.
+**Default voice path is local-first.** Audio leaves the device only if you opt into Deepgram EU BYOK.
 
 | Service | Required for | Data sent |
 | --- | --- | --- |
-| **AGICY** (`agicy.ai`) | Sign-in + hosted STT + credit metering | Account session, **microphone audio**, usage events |
-| **Deepgram EU** (via AGICY) | Speech-to-text | Audio for the transcription request (sub-processor) |
-| **Brave Search** (optional) | Live web search | Search query text + your API key (key stored encrypted locally) |
+| **On-device whisper.cpp** | Default speech-to-text | None off-device |
+| **Deepgram EU** (optional BYOK) | Cloud STT upgrade | Audio + your Deepgram API key (key in `safeStorage`) |
+| **AGICY** (`agicy.ai`) | Optional account / billing (not required for first dictation) | Account session when signed in |
+| **Brave Search** (optional) | Live web search | Search query text + your API key |
 
-**Freestyle Cloud is not on the default voice path in beta.3+.** Do not treat `freestylevoice.com` or Freestyle STT as where your mic goes unless you deliberately enable a legacy path (not offered in the default UI).
+**Freestyle Cloud is not the default voice path.** Existing beta sessions are not silently logged out on upgrade.
 
-Controller: AGICY.Ai (EU). Draft product privacy: [PRIVACY.md](PRIVACY.md). Canonical web notice (when published): [agicy.ai/legal/privacy](https://agicy.ai/legal/privacy). Data-subject requests: privacy@agicy.ai.
+Controller: AGICY.Ai (EU) for product/account processing; BYOK Deepgram may place the user as controller for that audio — confirm with counsel ([STT plan §6](docs/STT-MIGRATION-PLAN.md)). Draft product privacy: [PRIVACY.md](PRIVACY.md). Data-subject requests: privacy@agicy.ai.
 
-Search history and divergence logs stay on your machine. Voice audio does not — until local STT returns.
+Search history and divergence logs stay on your machine. Default voice audio stays on your machine.
 
 ## Build from source
 
@@ -146,13 +150,13 @@ pnpm --filter @freestyle-voice/electron run build:linux
 - [`docs/ARCHITECTURE-MAP.md`](docs/ARCHITECTURE-MAP.md)
 - [`docs/SEARCH-ARCHITECTURE.md`](docs/SEARCH-ARCHITECTURE.md)
 - [`docs/VOICE-DATA-FLOW.md`](docs/VOICE-DATA-FLOW.md) — **canonical STT / privacy path**
-- [`docs/STT-MIGRATION-PLAN.md`](docs/STT-MIGRATION-PLAN.md) — hosted → local whisper restore → gateway
+- [`docs/STT-MIGRATION-PLAN.md`](docs/STT-MIGRATION-PLAN.md) — local default + Deepgram BYOK opt-in; Phase 3 deferred
 - [`PRIVACY.md`](PRIVACY.md) — GDPR-oriented product disclosure (draft)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/CHANGES.md`](docs/CHANGES.md)
 - [`docs/CODE_SIGNING.md`](docs/CODE_SIGNING.md)
 
-**Not yet wired:** modifier-plus-hotkey mode switching (Settings / Search tab only today), a third live search provider, in-app divergence-log viewer (Reveal JSONL + copy path exist), LLM claim extraction, single-window merge, search-result CSV export, **on-device STT**, signed installers by default.
+**Not yet wired:** modifier-plus-hotkey mode switching (Settings / Search tab only today), divergence-log Save As export (Reveal + copy exist — ROADMAP P1 day-of-work), a third live search provider, LLM claim extraction, single-window merge, signed installers by default. **On-device STT:** registry/settings scaffold in progress; binary/model restore still open.
 
 ## License and credits
 

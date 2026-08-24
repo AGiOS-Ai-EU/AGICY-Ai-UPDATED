@@ -98,11 +98,21 @@ describe("freestyle cloud cleanup migration (v14)", () => {
         "SELECT is_default FROM model_configs WHERE provider = 'freestyle-cloud' AND type = 'voice'",
       )
       .get() as { is_default: number };
-    expect(voiceRow.is_default).toBe(1);
+    // v14 turned off freestyle LLM cleanup; later v27 moves the voice default
+    // to local-whisper while leaving the freestyle voice row in place.
+    expect(voiceRow.is_default).toBe(0);
+
+    const localDefault = db
+      .prepare(
+        "SELECT is_default FROM model_configs WHERE provider = 'local-whisper' AND type = 'voice'",
+      )
+      .get() as { is_default: number } | undefined;
+    expect(localDefault?.is_default).toBe(1);
 
     const cleanup = db
       .prepare("SELECT value FROM settings WHERE key = 'llm_cleanup'")
       .get() as { value: string };
+    // v14 set false; v27 only seeds llm_cleanup when unset — so false remains.
     expect(cleanup.value).toBe("false");
   });
 

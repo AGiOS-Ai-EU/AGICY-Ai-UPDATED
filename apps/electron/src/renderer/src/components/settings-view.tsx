@@ -26,9 +26,10 @@ import {
   useHotkeyRecorder,
 } from "@renderer/hooks/use-hotkey-recorder";
 import { capture } from "@renderer/lib/analytics";
-import { apiFetch } from "@renderer/lib/api";
+import { apiFetch, getClient } from "@renderer/lib/api";
 import { useCloudAuth } from "@renderer/lib/auth-context";
 import { LANGUAGES } from "@renderer/lib/languages";
+import { VOICE_STT_OPTIONS } from "@renderer/lib/models";
 import { queryKeys, settingsQueryOptions } from "@renderer/lib/query";
 import { replaceSetting, settingsForView } from "@renderer/lib/settings";
 import { useCloudConfig } from "@renderer/lib/use-cloud-config";
@@ -1120,7 +1121,82 @@ function DictationPage({
   );
   const translateOn = value(SETTINGS_KEYS.translateMode) === "true";
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const [voiceProvider, setVoiceProvider] = useState<string>("local-whisper");
+  const [deepgramConfigured, setDeepgramConfigured] = useState(false);
+  const [deepgramDraft, setDeepgramDraft] = useState("");
+  const [sttBusy, setSttBusy] = useState(false);
+  const [sttNote, setSttNote] = useState<string | null>(null);
+  const [whisperStatus, setWhisperStatus] = useState<{
+    archSupported: boolean;
+    archUnsupportedReason: string | null;
+    binaryAvailable: boolean;
+    serverBinaryAvailable: boolean;
+    binaryDownloading: boolean;
+    models: Array<{
+      model: string;
+      displayName: string;
+      status: string;
+      phase?: string;
+      downloadProgress?: {
+        percent: number;
+        bytesDownloaded: number;
+        bytesTotal: number;
+        speedBps: number;
+      };
+      error?: string;
+    }>;
+  } | null>(null);
+
   useEffect(() => window.api.onHotkeyError(setHotkeyError), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await getClient().api.models.configured.$get();
+        if (!res.ok || cancelled) return;
+        const rows = await res.json();
+        const def = rows.find(
+          (r: { type: string; is_default: number }) =>
+            r.type === "voice" && r.is_default === 1,
+        ) as { provider: string } | undefined;
+        if (def?.provider && !cancelled) setVoiceProvider(def.provider);
+      } catch {
+        // keep default
+      }
+      try {
+        const status = await window.api.getSttKeyStatus();
+        if (!cancelled) setDeepgramConfigured(status.configured);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const refreshWhisperStatus = useCallback(async () => {
+    try {
+      const res = await getClient().api.whisper.status.$get();
+      if (!res.ok) return;
+      const data = await res.json();
+      setWhisperStatus(data);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (voiceProvider !== "local-whisper") return;
+    void refreshWhisperStatus();
+    const id = window.setInterval(() => void refreshWhisperStatus(), 1000);
+    return () => window.clearInterval(id);
+  }, [voiceProvider, refreshWhisperStatus]);
+
+  const defaultLocalModel =
+    whisperStatus?.models.find((m) => m.model === "base-q5_1") ??
+    whisperStatus?.models[0];
 
   const setLanguages = (next: string[]): void => {
     const normalized = normalizeLanguageList(next);
@@ -1129,12 +1205,281 @@ function DictationPage({
       setSetting(SETTINGS_KEYS.translateMode, "false");
   };
 
+  const selectVoiceStt = async (
+    providerId: string,
+    modelId: string,
+    modelName: string,
+  ) => {
+    setSttBusy(true);
+    setSttNote(null);
+    try {
+      const res = await getClient().api.models.configured.$post({
+        json: {
+          provider: providerId,
+          model_id: modelId,
+          model_name: modelName,
+          type: "voice",
+          is_default: true,
+        },
+      });
+      if (!res.ok) throw new Error("Could not save voice provider");
+      setVoiceProvider(providerId);
+      setSttNote(
+        providerId === "local-whisper"
+          ? "Local (on-device) selected — zero keys. Download the model below if needed, then hold the hotkey to dictate."
+          : "Deepgram EU selected. Paste your API key below if not already saved.",
+      );
+    } catch (err) {
+      setSttNote(
+        err instanceof Error ? err.message : "Could not save STT provider",
+      );
+    } finally {
+      setSttBusy(false);
+    }
+  };
+
+  const startLocalDownload = async (modelId: string) => {
+    setSttBusy(true);
+    setSttNote(null);
+    try {
+      const res = await getClient().api.whisper.models[":model"].download.$post(
+        {
+          param: { model: modelId },
+        },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(body?.error ?? "Download failed to start");
+      }
+      setSttNote("Download started — progress updates below.");
+      void refreshWhisperStatus();
+    } catch (err) {
+      setSttNote(
+        err instanceof Error
+          ? `${err.message} — or switch to Deepgram EU (BYOK) below.`
+          : "Download failed — switch to Deepgram EU (BYOK) as a fallback.",
+      );
+    } finally {
+      setSttBusy(false);
+    }
+  };
+
+  const cancelLocalDownload = async (modelId: string) => {
+    try {
+      await getClient().api.whisper.models[":model"].cancel.$post({
+        param: { model: modelId },
+      });
+      void refreshWhisperStatus();
+    } catch {
+      // ignore
+    }
+  };
+
+  const saveDeepgramKey = async () => {
+    setSttBusy(true);
+    setSttNote(null);
+    try {
+      const ok = await window.api.setDeepgramSttKey(deepgramDraft);
+      if (!ok) throw new Error("Could not store key (encryption unavailable?)");
+      setDeepgramConfigured(true);
+      setDeepgramDraft("");
+      setSttNote("Deepgram EU key saved in OS keychain.");
+    } catch (err) {
+      setSttNote(err instanceof Error ? err.message : "Could not save key");
+    } finally {
+      setSttBusy(false);
+    }
+  };
+
+  const clearDeepgramKey = async () => {
+    setSttBusy(true);
+    try {
+      await window.api.clearDeepgramSttKey();
+      setDeepgramConfigured(false);
+      setSttNote("Deepgram key cleared.");
+    } finally {
+      setSttBusy(false);
+    }
+  };
+
   return (
     <>
       <p className="tavern-set-hint is-lead">
         Dictation types for you. Hold the hotkey in any app, speak, and let go —
-        your words are cleaned up and typed right where your cursor is.
+        on-device speech turns into text at your cursor (batch — you&apos;ll see
+        Transcribing…). LLM cleanup is optional and requires a cleanup provider;
+        search mode always keeps queries raw.
       </p>
+      <SectionLabel>Speech-to-text</SectionLabel>
+      <ChoiceRow
+        label="Provider"
+        value={voiceProvider}
+        options={VOICE_STT_OPTIONS.map((o) => ({
+          id: o.providerId,
+          label: o.label,
+        }))}
+        onChange={(id) => {
+          const opt = VOICE_STT_OPTIONS.find((o) => o.providerId === id);
+          if (!opt || sttBusy) return;
+          void selectVoiceStt(opt.providerId, opt.modelId, opt.label);
+        }}
+      />
+      <p className="tavern-set-hint">
+        {VOICE_STT_OPTIONS.find((o) => o.providerId === voiceProvider)
+          ?.detail ?? "Local is the zero-key default."}
+      </p>
+      {voiceProvider === "local-whisper" ? (
+        <>
+          <SectionLabel>On-device model</SectionLabel>
+          {!whisperStatus?.archSupported ? (
+            <p className="tavern-notice">
+              {whisperStatus?.archUnsupportedReason ??
+                "Local Whisper is not supported on this architecture."}{" "}
+              Switch to Deepgram EU (BYOK) below.
+            </p>
+          ) : (
+            <>
+              <InfoRow
+                label="Binary"
+                value={
+                  whisperStatus?.serverBinaryAvailable
+                    ? "Ready"
+                    : whisperStatus?.binaryDownloading
+                      ? "Downloading…"
+                      : "Not found — will download on first use"
+                }
+              />
+              <InfoRow
+                label="Model"
+                value={
+                  defaultLocalModel?.status === "ready"
+                    ? `${defaultLocalModel.displayName} ready`
+                    : defaultLocalModel?.status === "downloading"
+                      ? `${defaultLocalModel.displayName} ${defaultLocalModel.downloadProgress?.percent ?? 0}%${
+                          defaultLocalModel.phase === "building_binary"
+                            ? " (binary)"
+                            : ""
+                        }`
+                      : defaultLocalModel?.status === "error"
+                        ? `Error: ${defaultLocalModel.error ?? "download failed"}`
+                        : `${defaultLocalModel?.displayName ?? "Whisper Fast"} not downloaded`
+                }
+              />
+              {defaultLocalModel?.status === "downloading" ? (
+                <div className="tavern-set-row is-static" style={{ gap: 8 }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 6,
+                      background: "var(--border, #333)",
+                      borderRadius: 3,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, defaultLocalModel.downloadProgress?.percent ?? 0)}%`,
+                        height: "100%",
+                        background: "var(--accent, #c45c26)",
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="tavern-btn"
+                    onClick={() =>
+                      void cancelLocalDownload(defaultLocalModel.model)
+                    }
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+              {defaultLocalModel?.status === "error" ? (
+                <p className="tavern-notice">
+                  {defaultLocalModel.error} — retry download, or switch to
+                  Deepgram EU (BYOK) as a fallback.
+                </p>
+              ) : null}
+              {defaultLocalModel &&
+              defaultLocalModel.status !== "ready" &&
+              defaultLocalModel.status !== "downloading" ? (
+                <div className="tavern-set-row is-static" style={{ gap: 8 }}>
+                  <button
+                    type="button"
+                    className="tavern-btn"
+                    disabled={sttBusy}
+                    onClick={() =>
+                      void startLocalDownload(defaultLocalModel.model)
+                    }
+                  >
+                    Download model
+                  </button>
+                  <button
+                    type="button"
+                    className="tavern-btn"
+                    disabled={sttBusy}
+                    onClick={() =>
+                      void selectVoiceStt(
+                        "deepgram",
+                        "deepgram/nova-3",
+                        "Deepgram EU (BYOK)",
+                      )
+                    }
+                  >
+                    Use Deepgram EU instead
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </>
+      ) : null}
+      {voiceProvider === "deepgram" ||
+      (voiceProvider === "local-whisper" &&
+        defaultLocalModel?.status === "error") ? (
+        <>
+          {voiceProvider === "local-whisper" ? (
+            <SectionLabel>Fallback — Deepgram EU</SectionLabel>
+          ) : null}
+          <InfoRow
+            label="Deepgram key"
+            value={deepgramConfigured ? "Configured" : "Not set"}
+          />
+          <div className="tavern-set-row is-static" style={{ gap: 8 }}>
+            <input
+              type="password"
+              className="tavern-input"
+              placeholder="Deepgram EU API key"
+              value={deepgramDraft}
+              onChange={(e) => setDeepgramDraft(e.target.value)}
+              style={{ flex: 1 }}
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="tavern-btn"
+              disabled={sttBusy || !deepgramDraft.trim()}
+              onClick={() => void saveDeepgramKey()}
+            >
+              Save
+            </button>
+            {deepgramConfigured ? (
+              <button
+                type="button"
+                className="tavern-btn"
+                disabled={sttBusy}
+                onClick={() => void clearDeepgramKey()}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+      {sttNote ? <p className="tavern-notice">{sttNote}</p> : null}
       <HotkeyRow
         label="Hotkey"
         accel={value(SETTINGS_KEYS.hotkey) || getDefaultHotkey()}
@@ -1925,8 +2270,8 @@ function ModelsPage({
         })}
       </ul>
       <p className="tavern-set-hint">
-        Voice STT stays on AGICY hosted Deepgram EU (Settings → Dictation /
-        account credits). This list is for LLM cleanup and chat.
+        Voice STT defaults to Local (on-device); Deepgram EU is opt-in under
+        Settings → Dictation. This list is for LLM cleanup and chat.
       </p>
     </>
   );

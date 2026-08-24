@@ -166,6 +166,15 @@ const api = {
     ipcRenderer.invoke("search:set-brave-key", apiKey),
   clearBraveSearchKey: (): Promise<boolean> =>
     ipcRenderer.invoke("search:clear-brave-key"),
+  getSttKeyStatus: (): Promise<{
+    configured: boolean;
+    providerId: string;
+    encryptionAvailable: boolean;
+  }> => ipcRenderer.invoke("stt:key-status"),
+  setDeepgramSttKey: (apiKey: string): Promise<boolean> =>
+    ipcRenderer.invoke("stt:set-deepgram-key", apiKey),
+  clearDeepgramSttKey: (): Promise<boolean> =>
+    ipcRenderer.invoke("stt:clear-deepgram-key"),
   getDivergenceLogPath: (): Promise<string> =>
     ipcRenderer.invoke("search:divergence-log-path"),
   revealDivergenceLog: (): Promise<

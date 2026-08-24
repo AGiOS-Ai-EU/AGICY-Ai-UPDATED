@@ -1,49 +1,92 @@
 # UPDATED STT Migration Plan — Off Freestyle Cloud
 
 **Document ID:** UPDATED-STT-MIGRATION-001  
-**Status:** Phase 1 (AGICY hosted) shipping in beta.3+ — **Phase 2 (local whisper) elevated to P0** after external audit: cloud-only voice is strategically backwards for EU beachhead and auditability thesis.  
+**Status:** **Decisions 1–3 APPROVED (2026-08-24).** Combined Phase 1+2 release: **local whisper = zero-key default**; **Deepgram EU BYOK = opt-in**; **Phase 3 deferred**.  
 **Date:** 2026-08-24 (updated)  
-**Repos:** `UPDATED-international-launch` (desktop), `agicy-platform` (web auth + Phase 3 gateway)  
-**Sources:** STT research (agent fd127cfd), auth audit (agent 8cfdce5a), API keys matrix (this doc)
+**Repos:** `UPDATED-international-launch` (desktop); `agicy-platform` only if/when Phase 3 resumes  
+**Sources:** STT research (agent fd127cfd), auth audit (agent 8cfdce5a), product decisions (this revision)
 
 ---
 
 ## Executive summary
 
-**Goal:** Remove the mandatory `freestylevoice.com` device OAuth gate so UPDATED voice (hotkey → mic → paste/search) works without Freestyle Cloud sign-in.
+**Goal:** First successful dictation with **zero accounts, zero API keys, zero cards** — then optional cloud accuracy via Deepgram EU BYOK. Remove Freestyle Cloud as a gate.
 
-**Recommended path: phased hybrid**
+### Approved release shape (ONE ship)
 
-| Phase | STT | Auth required? | Timeline (eng) |
-|-------|-----|----------------|----------------|
-| **1 — ship first** | BYOK cloud STT (default suggest **Deepgram EU** `api.eu.deepgram.com`) | **No account** — user API keys in Electron `safeStorage` only | 4–6 weeks |
-| **2** | Local whisper.cpp (restore upstream path) | **No account** | +3–5 weeks |
-| **3** | AGICY-hosted EU STT gateway (`stt.agicy.ai`) | **Optional AGICY account** — browser sign-in at `agicy.ai` → short-lived STT token | +6–10 weeks |
+| Slice | STT | Auth / keys | Role in release |
+|-------|-----|-------------|-----------------|
+| **Local whisper.cpp** | On-device | **None** | **Default** — first-use path. Shipping model: **`base-q5_1`** (`ggml-base-q5_1.bin`) **~57 MB** (59,707,625 bytes / 56.9 MiB); cold start **1.0–1.9 s**. Optional larger: `small-q5_1` ~181 MiB |
+| **Deepgram EU BYOK** | `api.eu.deepgram.com` | User API key in Electron `safeStorage` only | **Opt-in upgrade** — never alone as first ship |
+| **Phase 3 gateway** | `stt.agicy.ai` (future) | Optional AGICY account | **Deferred** — do not block this release |
 
-**Auth integration:** AGICY Supabase auth (Google + email/password on `agicy.ai`) **does not replace Freestyle device OAuth in Phase 1**. Phases 1–2 are keyless with respect to AGICY accounts. Phase 3 introduces a **new desktop token-exchange flow** on `agicy-platform` — it cannot reuse Freestyle's Better Auth device flow or swap Supabase JWTs directly into the Freestyle Cloud STT API.
+**Do not** ship BYOK-only. **Do not** gate first dictation on cloud keys, Freestyle sign-in, or AGICY hosted STT.
 
-**Do not implement until the three decisions in §8 are approved.**
+### Timeline (one number)
+
+| Measure | Target |
+|---------|--------|
+| **Calendar** | **~6–8 weeks** from 2026-08-24 → ship window **~mid-October 2026** |
+| **Eng effort** | ≈ **4–6 eng-weeks** (1–2 engineers) for restore + packaging + Win/macOS/Linux QA |
+
+Deepgram public list price often cited as **~$0.29/hr streaming** — **verify** against current Deepgram EU **streaming vs batch** SKUs before marketing cost claims (batch is typically cheaper per hour of audio).
+
+**LLM cleanup (Decision 2):** Search always **off**. Dictation **on only when a cleanup LLM provider is configured** (BYOK / leftover legacy Freestyle session / Copperway later). Zero-key local STT path has **no cleanup LLM** — raw transcript; Settings copy must say cleanup “requires a cleanup provider.”
+
+**Auth:** Combined release needs **no AGICY account** for voice. Phase 3 (deferred) would add desktop token-exchange on `agicy-platform` later.
+
+**Local STT transport (v1):** **Batch** whisper.cpp (WAV → `/inference`). Accept end-of-utterance latency; show clear **“Transcribing…”** state. Chunked / pseudo-streaming partials = **follow-up**, not this ship.
 
 ---
 
-## 1. Current state — Freestyle Cloud coupling (UPDATED)
+## 1. Current state — pin shipping vs this PR
 
-### 1.1 STT data path
+> **Pin date:** 2026-08-24. Sources: GitHub release [`v0.9.0-beta.3`](https://github.com/AGiOS-Ai-EU/UPDATED/releases/tag/v0.9.0-beta.3), `origin/main` README, `applyAgicySttDefaults` / `AgicyHostedTranscriptionProvider`.
+
+### 1.0 What installers in the wild do **NOW** (`v0.9.0-beta.3` / `main`)
+
+| Fact | Detail |
+|------|--------|
+| **Default voice** | **AGICY hosted STT** — requires AGICY device sign-in + metered credits |
+| **Audio path** | Mic → UPDATED → `https://agicy.ai/api/stt/transcribe` → **Deepgram EU** (AGICY as controller; Deepgram sub-processor) → transcript |
+| **On-device whisper** | **Not available** in beta.3 installers (removed in schema v23; restore is this PR) |
+| **Freestyle Cloud** | **Not** the default mic path in beta.3+ (README: do not treat `freestylevoice.com` as where mic goes) |
+| **Primary migration cohort** | **AGICY-signed-in beta.3** users (release notes: “Sign in with your AGICY account for hosted voice transcription”) |
 
 ```
 Hotkey → Electron renderer (dictation.ts / streamer.ts)
-      → WSS localhost:4649/stream
-      → embedded Hono server (stream.ts)
-      → FreestyleCloudTranscriptionProvider
-      → wss://service.freestylevoice.com/v2/stream  (Bearer session token)
-      → Soniox ASR + Groq cleanup (in Freestyle Cloud DO)
+      → embedded Hono server
+      → AgicyHostedTranscriptionProvider
+      → POST https://agicy.ai/api/stt/transcribe  (AGICY session)
+      → Deepgram EU → transcript
 ```
 
-- **Primary transport:** streaming 16 kHz mono PCM over WebSocket  
-- **Fallback:** WAV batch → `POST /api/transcribe` → Freestyle Cloud `/v2/transcribe`  
-- **Audio egress:** all cloud STT sends microphone audio off-device (README disclosure)
+### 1.0b What **PR #11** (`feat/local-whisper-stt`) changes **after merge**
 
-### 1.2 Freestyle auth (what STT depends on today)
+| Before (beta.3) | After (combined Phase 1+2) |
+|-----------------|----------------------------|
+| AGICY account required for first dictation | **Local whisper.cpp = zero-key default** |
+| Hosted Deepgram EU via AGICY | Hosted path **deferred / non-default**; optional later |
+| No on-device model download | Binary + model download (progress, resume, disk/checksum guards) |
+| — | **Deepgram EU BYOK** opt-in via Electron `safeStorage` |
+
+Until #11 merges and a new release ships, **QA / migration tests must assume beta.3 = AGICY-hosted**, not local-whisper.
+
+### 1.1 Legacy Freestyle Cloud path (pre–beta.3 / non-default)
+
+Earlier fork history and still-present code (`FreestyleCloudTranscriptionProvider`) used:
+
+```
+Hotkey → WSS localhost → FreestyleCloudTranscriptionProvider
+      → wss://service.freestylevoice.com/v2/stream
+      → Soniox ASR + Groq cleanup (Freestyle Cloud DO)
+```
+
+- **Not** what `v0.9.0-beta.3` installers advertise or default to  
+- May still exist in SQLite for users who upgraded from Freestyle-branded beta.1/beta.2 — see §7 (no silent logout)  
+- **Audio egress:** any cloud STT path sends mic audio off-device (README / PRIVACY)
+
+### 1.2 Freestyle auth (legacy coupling — not beta.3 default voice)
 
 | Item | Value |
 |------|--------|
@@ -67,14 +110,18 @@ Hotkey → Electron renderer (dictation.ts / streamer.ts)
 | Renderer auth | `apps/electron/src/renderer/src/lib/auth-context.tsx` |
 | Spec | `specs/freestyle-cloud-auth.md` |
 
-### 1.3 What breaks without Freestyle sign-in
+### 1.3 What breaks without Freestyle sign-in (legacy cohort only — **not** beta.3)
 
-| Surface | Without session |
+> **Scope:** describes the **pre–beta.3 Freestyle-branded builds** of §1.1/§1.2. It is **not** the behaviour of `v0.9.0-beta.3` installers in the wild (§1.0) and **not** the behaviour after PR #11 (§1.0b).
+
+| Surface (legacy builds) | Without Freestyle session |
 |---------|-----------------|
 | Panel UI | Hard `SignInGate` — no settings, no companion |
 | Dictation / search-voice | `cloud_auth_required` — no STT token |
-| LLM cleanup | Default `freestyle-cloud/post-process` — also gated |
+| LLM cleanup | Legacy default `freestyle-cloud/post-process` — also gated |
 | Cloud prefs / billing / org | Freestyle Cloud–coupled (out of STT scope) |
+
+**beta.3 does not behave this way:** beta.3 seeds **`llm_cleanup=false`** (§9.1) and has **no dependency on Freestyle cleanup** — its voice path is AGICY hosted → Deepgram EU (§1.0), and cleanup is simply off. The `freestyle-cloud/post-process` default above applies only to the legacy cohort.
 
 Schema migrations **v22–v23** removed all non–Freestyle Cloud STT providers and dropped `api_keys` table.
 
@@ -160,121 +207,100 @@ Freestyle's Better Auth device flow (`POST /auth/device/code` → poll `/auth/de
 | Can desktop reuse web Supabase cookies? | **No** — HttpOnly cookies stay in browser; Electron cannot read them |
 | Can desktop store Supabase refresh token in `safeStorage`? | Possible but **not recommended** — broad account scope; prefer scoped STT token |
 
-### 3.2 Integrated model by phase
+### 3.2 Integrated model (combined release + deferred gateway)
 
 ```mermaid
 flowchart TB
-  subgraph phase1 [Phase 1 — BYOK]
-    P1K[User enters Deepgram EU API key]
-    P1S[safeStorage via stt-keychain.ts]
-    P1T[Per-request key to embedded server]
-    P1K --> P1S --> P1T --> DGEU[api.eu.deepgram.com]
+  subgraph ship [Combined Phase 1+2 — SHIP]
+    LOC[Local whisper.cpp — DEFAULT zero-key]
+    BYOK[Deepgram EU BYOK — opt-in safeStorage]
+    LOC --> APP[Dictation / Search]
+    BYOK --> APP
   end
 
-  subgraph phase2 [Phase 2 — Local]
-    P2W[whisper.cpp binary + model download]
-    P2L[localhost whisper-server]
-    P2W --> P2L
-  end
-
-  subgraph phase3 [Phase 3 — AGICY gateway]
+  subgraph later [Phase 3 — DEFERRED]
     P3B[Desktop opens browser agicy.ai/updated/connect]
-    P3G[User signs in — Supabase Google or email]
-    P3C[Browser approves device — one-time code]
-    P3X[Desktop exchanges code at agicy.ai/api/updated/desktop/token]
-    P3J[Short-lived STT JWT — 15 min scoped]
-    P3GW[stt.agicy.ai EU gateway]
-    P3B --> P3G --> P3C --> P3X --> P3J --> P3GW
+    P3G[User signs in — Supabase]
+    P3J[Short-lived STT JWT]
+    P3GW[stt.agicy.ai]
+    P3B --> P3G --> P3J --> P3GW
   end
 ```
 
-| Phase | Freestyle OAuth | AGICY account | Credential |
+| Slice | Freestyle OAuth | AGICY account | Credential |
 |-------|-----------------|---------------|------------|
-| **1 BYOK** | **Removed** (not required for voice) | Not required | User's Deepgram/OpenAI/Groq API key in `safeStorage` |
-| **2 Local** | **Removed** | Not required | None (on-device) |
-| **3 Gateway** | **Removed** | Optional sign-in at `agicy.ai` | Short-lived STT JWT from AGICY API |
+| Local whisper (default) | Not required | Not required | None |
+| Deepgram EU BYOK | Not required | Not required | User API key in `safeStorage` |
+| Phase 3 (deferred) | Not used | Optional | Scoped STT JWT |
 
 ---
 
 ## 4. Phase detail
 
-### Phase 1 — BYOK cloud STT (ship first)
+### Combined Phase 1+2 — Local default + Deepgram EU BYOK opt-in (SHIP THIS)
 
-**STT:** Restore provider registry from pre-v23 upstream; default suggest Deepgram EU.
+**STT default:** Restore whisper-local provider + model download UX. First dictation works offline with **0 keys**.
 
-**Auth:** None. Mirror existing Brave search keychain pattern.
+**STT opt-in:** Deepgram EU BYOK via keychain (mirror Brave search pattern). Settings → Dictation provider picker.
 
-> **Auth audit (8cfdce5a):** Phase 1 requires **no `agicy-platform` changes** — Supabase at `auth.agicy.ai` has no desktop OAuth, and Freestyle JWTs are not swappable. All Phase 1 work stays in this repo.
+**Auth:** None for voice. No Freestyle / AGICY gate on first dictation.
 
-- New `apps/electron/src/main/stt-keychain.ts`
+> **Auth audit (8cfdce5a):** Combined release requires **no `agicy-platform` changes**. All work stays in this repo until Phase 3 resumes.
+
+- `apps/electron/src/main/stt-keychain.ts` — Deepgram key only (opt-in)
 - IPC: `stt:set-key`, `stt:clear-key`, `stt:key-status`
-- Server receives key per-request via main IPC — **never** stored in SQLite
+- Server receives BYOK key per-request via main IPC — **never** in SQLite
+- Local whisper: no key; binary + model under userData
 
-**UI changes:**
+**UI / routing:**
 
-- Remove mandatory `SignInGate` when STT provider configured
-- Settings → Voice: provider picker + encrypted API key field
-- Default cleanup **off** (raw transcript OK for search mode)
-- Stop `applyFreestyleCloudDefaults()` on launch
+- Settings → Dictation: **Local (on-device)** selected by default; **Deepgram EU (BYOK)** optional
+- Remove mandatory `SignInGate` for dictation/search voice
+- **LLM cleanup:** search always **off**; dictation **on only if** `llm_cleanup=true` **and** a cleanup LLM is configured (otherwise raw transcript — zero-key path has no cleanup model)
+- Stop forcing Freestyle / AGICY hosted as voice default on login (sessions may remain)
+- **Local transport:** batch inference; UI shows **Transcribing…** (not fake partials)
 
-**Files to change (UPDATED core):**
+**Files (UPDATED core):**
 
 | Area | Files |
 |------|-------|
-| Providers | `streaming/registry.ts`, `streaming-stt.ts`, new `providers/{deepgram,openai,groq}.ts` |
+| Providers | `streaming/registry.ts`, `streaming-stt.ts`, `providers/whisper-local.ts`, `providers/deepgram.ts` |
+| Whisper runtime | `lib/whisper/*` (binary ensure, model download, server) |
 | Routes | `routes/stream.ts`, `routes/transcribe.ts` |
 | Keychain | `electron/src/main/stt-keychain.ts`, preload + main IPC |
 | Auth gate | `panel.tsx`, `auth-context.tsx`, `onboarding-core.ts` |
-| Schema | `schema.ts` v27 (optional — prefer keychain-only) |
-| Docs | `README.md`, `NOTICE`, `docs/SEARCH-ARCHITECTURE.md` |
+| Schema | `schema.ts` v27+ — seed local-whisper default; preserve existing sessions |
+| Docs | `README.md`, `NOTICE`, `VOICE-DATA-FLOW.md`, this plan |
 
-**Effort:** ~2 engineers × 2–3 weeks + Win/macOS/Linux QA.
+**Packaging:** ~5–15 MB binary per platform; models on first use. Shipping default is **`base-q5_1`** (`ggml-base-q5_1.bin`) at **~57 MB** (59,707,625 bytes / 56.9 MiB measured on disk), with **sub-2 s cold start**. Optional `small-q5_1` is ~181 MiB (not the default). Do not cite “~145 MB” for the default — that figure was the non-quantized legacy `ggml-base.bin` (~142 MB), which is catalog-legacy only.
 
-### Phase 2 — Local whisper.cpp
+**Effort:** included in the **6–8 calendar week** combined target above.
 
-**STT:** Restore upstream whisper-local provider + model download UX.
+### Phase 3 — AGICY-hosted EU gateway (**DEFERRED**)
 
-**Auth:** Still none.
+Do not start until after the combined local+BYOK release ships.
 
-**Packaging:** ~5–15 MB binary per platform; models on first use (~145 MB default `base-q5_1`).
+**STT (future):** Deploy gateway (Deepgram EU or Speechmatics on Copperway) at `stt.agicy.ai`.
 
-**Effort:** +3–5 weeks.
+**Auth (future work on agicy-platform):** device code → scoped STT JWT (`scope: "stt:stream"`, short TTL). Do **not** pass full Supabase JWTs into the desktop STT path.
 
-### Phase 3 — AGICY-hosted EU gateway
-
-**STT:** Deploy gateway (Deepgram EU or Speechmatics on Copperway) at `stt.agicy.ai`.
-
-**Auth (new work on agicy-platform):**
-
-1. **`GET /updated/connect`** — device authorization page (logged-in via Supabase, or redirect to `/login?redirect=/updated/connect`)
-2. **`POST /api/updated/desktop/device/code`** — returns `{ user_code, verification_uri, device_code, interval, expires_in }`
-3. **`POST /api/updated/desktop/device/token`** — poll with `device_code`; on success issue **scoped STT JWT**
-4. **STT JWT claims:** `{ sub: userId, scope: "stt:stream", aud: "stt.agicy.ai", exp: 15m }` — signed with `STT_GATEWAY_JWT_SECRET`
-5. Desktop stores STT JWT in embedded server SQLite (same slot as Freestyle session today) or `safeStorage`; refresh by re-polling or silent re-exchange
-
-**Why not pass Supabase JWT to desktop?**
-
-- Supabase JWT grants full account access — too broad for a dictation client
-- Refresh token in Electron increases breach blast radius
-- Scoped STT JWT allows rate limits, metering, and instant revocation per device
-
-**UPDATED provider:** new `agicy-cloud` in registry; `getApiKeyForProvider` returns STT JWT when Phase 3 provider selected.
-
-**Effort:** +6–10 weeks (gateway infra + both repos).
+**Effort (when resumed):** +6–10 eng-weeks (gateway infra + both repos).
 
 ---
 
 ## 5. Option matrix (STT)
 
-| Criterion | Local Whisper | BYOK APIs | AGICY gateway | **Hybrid (recommended)** |
-|-----------|---------------|-----------|---------------|--------------------------|
-| Removes Freestyle sign-in | ✅ | ✅ | ✅ | ✅ |
-| Time to ship | 3–5 wk | **1.5–3 wk** | 6–10 wk | Staged |
-| EU privacy | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ (EU endpoint) | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| Offline | ✅ | ❌ | ❌ | ✅ (Phase 2) |
-| AGICY account required | ❌ | ❌ | Optional | Phase 3 only |
-| Streaming partials | Optional | ✅ Deepgram | ✅ | ✅ |
-| Ops burden | Low | None | High | Phased |
+| Criterion | **Local Whisper (default)** | Deepgram EU BYOK | AGICY gateway (deferred) |
+|-----------|----------------------------|------------------|--------------------------|
+| Removes Freestyle sign-in | ✅ | ✅ | ✅ |
+| **Installs → first successful dictation** | ⭐ **Best** (0 keys) | ❌ needs key before voice | ❌ needs account / infra |
+| Time to ship (combined) | **In 6–8 cal wk release** | Same release (opt-in) | Later |
+| EU privacy | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ (EU endpoint) | ⭐⭐⭐⭐ if hosted EU |
+| Offline | ✅ | ❌ | ❌ |
+| AGICY account required | ❌ | ❌ | Optional |
+| Streaming partials | ❌ Batch for v1 (Transcribing…) | ✅ Deepgram (later) | ✅ |
+| Ops burden | Low | None (user key) | High |
+| Onboarding + privacy thesis | ⭐ Wins both | Accuracy upgrade | Convenience later |
 
 ---
 
@@ -282,56 +308,85 @@ flowchart TB
 
 | Path | Cost (indicative) | Audio leaves device? | EU-friendly | Sign-in |
 |------|-------------------|----------------------|-------------|---------|
-| Freestyle Cloud (today) | Free tier + Pro | ✅ Always | ❌ US service | ✅ freestylevoice.com |
-| Deepgram EU BYOK | ~$0.29/hr streaming | ✅ To EU endpoint | ✅ Strong | ❌ API key only |
-| Local whisper | Electricity | ❌ | ⭐ Best | ❌ |
-| AGICY gateway | AGICY absorbs or freemium | ✅ To AGICY EU | ✅ If hosted EU | Optional AGICY account |
+| **Local whisper (default)** | Electricity | ❌ | ⭐ Best | ❌ |
+| Deepgram EU BYOK (opt-in) | ~$0.29/hr **streaming** — **verify vs batch** | ✅ To EU endpoint | ✅ Strong | ❌ API key only |
+| Freestyle Cloud (legacy) | Free tier + Pro | ✅ Always | ❌ US service | ✅ freestylevoice.com |
+| AGICY gateway (deferred) | AGICY absorbs or freemium | ✅ To AGICY EU | ✅ If hosted EU | Optional AGICY account |
 
-*Assumes ~5 min dictation/day ≈ 2.5 hr/month.*
+*Assumes ~5 min dictation/day ≈ 2.5 hr/month. Confirm Deepgram EU list prices before quoting in marketing.*
+
+**Counsel note (BYOK roles — future path only):** With user-supplied Deepgram keys, the **user (or their org) is more likely the controller** for that audio processing, and **Deepgram their processor** — a lighter AGICY subprocessor footprint than hosted STT (where AGICY is controller and Deepgram AGICY’s sub-processor). **Confirm with counsel**; treat as argument for BYOK-as-opt-in, not as legal advice. **This does not describe today's shipping product:** on the live beta.3 hosted path (§1.0) **AGICY is the controller** — see §11.
+
+**Lawyer-track (parallel, does not block eng — but already overdue):** the Art. 28 Deepgram DPA is **not** a future gate. It attached when beta.3 shipped audio to Deepgram EU under AGICY as controller (§1.0), so it is **remediation on a live clock** (§11), alongside obtaining Deepgram's **audio retention** answer in writing. Counsel work runs **in parallel** with whisper runtime work: eng must keep shipping local-default + BYOK opt-in UX, because the combined release **reduces** exposure by keeping most audio on-device.
 
 ---
 
-## 7. Deprecation list (Freestyle Cloud)
+## 7. Migration for existing beta users
+
+**Which cohorts exist in the wild today?**
+
+| Cohort | Exists now? | How they got there |
+|--------|-------------|-------------------|
+| **AGICY-signed-in `v0.9.0-beta.3`** | **Yes — primary shipping cohort** | GitHub / agicy.ai installers; hosted Deepgram EU voice (§1.0) |
+| Freestyle-signed-in (beta.1/beta.2 era) | Possible leftover upgrades | Older installers / Freestyle device OAuth still in SQLite |
+| Fresh install after **PR #11 release** | Not yet (until merge + cut) | Will get local-whisper default |
+
+| Cohort | Behavior on upgrade **to the combined local-whisper release** |
+|--------|---------------------|
+| **AGICY-signed-in beta.3 (hosted STT)** — primary | **No silent logout.** Keep AGICY device session for account/billing; **do not** keep hosted STT as voice default. Flip default voice to **local-whisper**; hosted/gateway stays deferred/opt-in later. |
+| Freestyle-signed-in (legacy) | **No silent logout.** Keep Freestyle session in SQLite; stop using it as default voice. Offer Local default + optional Deepgram BYOK. Legacy Freestyle path may remain behind flag until hard-remove. |
+| **Brave Search key already saved** (`search-keychain.ts` / Electron `safeStorage`) | **Preserve the Brave key.** Schema / STT migrations must **not** clear search keychain entries. Silent fall-back to mock while a valid Brave key remains stored is a **bug**. Live search must keep working after upgrade without re-paste. |
+| Fresh install (post–#11 release) | Local whisper default; **0 keys** for voice; cleanup **off** until a cleanup provider is configured; search cleanup always off. |
+
+Schema / keychain invariant: voice default flip and whisper restore must touch **STT / model_configs / voice settings only** — never wipe `search-keychain` or Brave `safeStorage` slots.
+
+---
+
+## 7b. Deprecation list (Freestyle Cloud)
 
 | Item | When |
 |------|------|
-| Mandatory `SignInGate` in `panel.tsx` | Phase 1 |
-| Device OAuth for STT | Phase 1 |
-| `applyFreestyleCloudDefaults()` | Phase 1 |
-| `freestyle-cloud` as default voice model | Phase 1 |
-| `freestylevoice.com/device` onboarding copy | Phase 1 |
-| `freestyle-cloud.ts` streaming provider | Phase 3 or flag-gated |
-| README "requires Freestyle Cloud sign-in" | Phase 1 |
+| Mandatory `SignInGate` for voice | Combined release |
+| Device OAuth **required** for STT | Combined release |
+| `applyFreestyleCloudDefaults()` / `applyAgicySttDefaults()` forcing cloud voice | Combined release |
+| Cloud as default voice model | Combined release |
+| `freestylevoice.com/device` as onboarding for voice | Combined release |
+| `freestyle-cloud.ts` provider binary | Later hard-remove or flag |
+| README claiming Freestyle / AGICY hosted as default mic path | Combined release |
 
 ---
 
-## 8. Decisions requiring approval before build
+## 8. Decisions — APPROVED
 
-These three block implementation. Product must choose explicitly:
+### Decision 1 — Default STT — **modified A (APPROVED)**
 
-### Decision 1 — Phase 1 default STT provider
+Ship Phase 1+2 as **one release**. **Local whisper = zero-key default.** **Deepgram EU BYOK = opt-in upgrade.** Do **not** ship BYOK alone; do **not** gate first dictation on cloud keys or Freestyle.
 
-**Options:**
+### Decision 2 — LLM cleanup — **split + provider-gated (APPROVED)**
 
-- **A (recommended):** Deepgram EU BYOK — fastest restore; specs + `vocabulary-bias.ts` already exist; EU endpoint aligns with brand
-- **B:** Local whisper first — strongest privacy; slower (packaging + model UX); higher eng cost before first ship
-- **C:** Multi-provider picker with no default — user must configure before first dictation
+| Mode | Cleanup |
+|------|---------|
+| **Search** | Always **off** (raw query text) |
+| **Dictation** | **On only when** a cleanup LLM provider is configured (BYOK / leftover legacy Freestyle session / future Copperway). Otherwise **off** — raw local transcript. |
 
-### Decision 2 — LLM cleanup scope for off-cloud beta
+**Zero-key honesty:** Combined release does **not** ship a packaged local cleanup LLM. Do not invent one in estimates or UI. Settings copy for the cleanup toggle: **“Requires a cleanup provider.”** Prefer leaving `llm_cleanup` default **false** on fresh installs until the user configures an LLM.
 
-**Options:**
+### Decision 2b — Local STT transport — **batch for v1 (APPROVED)**
 
-- **A (recommended):** Raw STT default (`llm_cleanup=false`) — search mode needs query text, not polished prose; decouples from Freestyle Cloud post-process immediately
-- **B:** BYOK cleanup LLM (Groq/OpenAI key in settings) — closer to upstream UX; extra settings surface
-- **C:** Ship without cleanup permanently for UPDATED search-first positioning
+Freestyle Cloud streamed partials; local whisper.cpp default is **batch** (record → WAV → whisper-server `/inference` → paste).
 
-### Decision 3 — Phase 3 gateway + account model
+| Choice | Status |
+|--------|--------|
+| **Accept batch latency** for first local ship | **Chosen** |
+| Clear **“Transcribing…”** (or equivalent) after hotkey release | **Required** — not an indefinite spinner |
+| Cold-start note | Shipping default **`base-q5_1` (~57 MB / 56.9 MiB): 1.0–1.9 s cold, 0.85–1.5 s warm** — **warming UX is not needed**. Optional `small-q5_1` (~181 MiB) is 3.6–4.2 s cold. The ≥ ~10 s warming gate remains only for unmeasured larger models (`large`). Legacy `ggml-base.bin` (~142 MB) is not the default. |
+| Chunked / pseudo-streaming partials | **Follow-up** — not blocking combined Phase 1+2 |
 
-**Options:**
+QA must not treat missing live partials as a local-STT regression.
 
-- **A (recommended):** Defer Phase 3 to post-beta; Phase 1–2 BYOK/local only; revisit gateway when Copperway STT infra ready
-- **B:** Include Phase 3 in beta — AGICY account via new desktop device flow on `agicy.ai`; included STT quota for signed-in users
-- **C:** Gateway without account — anonymous rate-limited STT JWT (higher abuse risk; needs strong device attestation or IP limits)
+### Decision 3 — Phase 3 gateway — **defer (APPROVED)**
+
+Post combined release. Revisit when Copperway / `stt.agicy.ai` infra is ready.
 
 ---
 
@@ -339,127 +394,182 @@ These three block implementation. Product must choose explicitly:
 
 Key strategy across phases. **Search mode does not call an LLM today** — citation cards format Brave/mock results only; no claim extraction.
 
-### 9.1 Today (0.9.0-beta.x — Freestyle Cloud)
+### 9.1 Today — `v0.9.0-beta.3` in the wild (AGICY hosted)
 
 | Capability | Required? | Key / credential | Notes |
 |------------|-----------|------------------|-------|
-| STT + cleanup | **Yes** | Freestyle Cloud session (device OAuth) | Single sign-in covers STT and default `freestyle-cloud/post-process` cleanup |
+| **STT** | **Yes** | **AGICY device session** | Hosted path → Deepgram EU via `agicy.ai/api/stt/transcribe` (metered credits). **Not** Freestyle Cloud default. |
+| LLM cleanup | Off by default | — | beta.3 seeds `llm_cleanup=false` |
 | Search | No | Brave Search API key (optional) | Mock providers without key; CONTESTED UI still works |
 | LLM (search) | No | — | Not used in search path |
 | TTS | No | — | Not in UPDATED beta |
+| Local whisper | ❌ | — | Not in beta.3 installers — arrives with PR #11 release |
 
-### 9.2 After Phase 1 (BYOK Deepgram EU, no Freestyle sign-in)
+### 9.2 After combined Phase 1+2 (local default + BYOK opt-in)
 
-| Capability | Required? | Provider / key | Phase |
+| Capability | Required? | Provider / key | Notes |
 |------------|-----------|----------------|-------|
-| **STT** | **Yes** (for voice) | **Deepgram EU** API key — user BYOK in `safeStorage` | 1 |
-| Search | No | Brave key (optional) | 1+ |
-| **LLM cleanup** | No (default off) | None if `llm_cleanup=false` | 1 |
-| LLM cleanup (optional) | No | Groq / OpenAI BYOK, or **Copperway workspace key** | 1 (Decision 2B) |
-| Local STT | No | None — whisper.cpp on device | 2 |
+| **STT (default)** | **Yes** for voice | **Local whisper** — **0 keys** | First successful dictation |
+| **STT (opt-in)** | No | **Deepgram EU** BYOK in `safeStorage` | Accuracy upgrade (batch or stream later) |
+| Search | No | Brave key (optional) | Mock without key; **preserve existing Brave keys on upgrade** |
+| **LLM cleanup** | No for zero-key | Only if user configures an LLM | Search always off; dictation gated on provider |
 
-**Minimal beta setup (Phase 1):** **1 key** — Deepgram EU. Voice dictation and voice search both work; search uses mock citations until Brave key added.
+**Minimal install:** **0 keys** for default voice (local whisper). Optional Brave for live search; optional Deepgram for cloud STT; optional cleanup LLM.
 
-**Power user (Phase 1–2):** Deepgram EU + optional Brave + optional cleanup LLM key (direct provider or Copperway).
+### 9.3 Copperway role (pointer — Phase 3 deferred)
 
-### 9.3 Copperway role (agicy-platform gateway)
+Copperway (`proxy.agicy.ai`) is AGICY’s **LLM-only** OpenAI-compatible gateway. It does **not** proxy STT in Phase 1–2.
 
-**Copperway** is AGICY's OpenAI-compatible LLM gateway (`proxy.agicy.ai`). It routes chat/completions to configured upstream models using **AGICY workspace API secrets** — not user OpenAI keys on the wire.
+- **STT:** local whisper (default) or Deepgram EU BYOK direct — **never** Copperway.
+- **Cleanup LLM via Copperway:** optional later when a user has a workspace secret; not part of zero-key first dictation.
+- Full credential-layer detail for gateway engineers: see agicy-platform gateway docs / dashboard API keys. **Do not** block this combined release on Copperway work — **Phase 3 deferred**.
 
-| Question | Answer |
-|----------|--------|
-| OpenAI-compatible? | **Yes** — `/v1/chat/completions` style proxy |
-| Proxy STT? | **No** in Phase 1–2 — STT is Deepgram EU direct or local whisper |
-| Proxy LLM cleanup? | **Optional** — if Decision 2B, desktop can target Copperway base URL + workspace key instead of raw OpenAI/Groq |
-| User keys vs AGICY keys | BYOK path: user brings Deepgram (+ optional Brave + optional cleanup key). Copperway path for cleanup: **one AGICY workspace API key**, AGICY holds upstream provider keys |
-| Replace Deepgram? | **No** — Copperway is LLM-only today; do not point STT at Copperway |
+### 9.4 Phase 3 — AGICY account (deferred — do not scan as current default)
 
-Phase 3 may host STT at `stt.agicy.ai` (Deepgram EU or Speechmatics **behind** AGICY infra — not user-facing Copperway BYOK for STT).
+When resumed (post combined release): optional AGICY sign-in → scoped STT JWT → `stt.agicy.ai`. Optional Brave for search. **Not** the first-use path today.
 
-### 9.4 Phase 3 — AGICY account (optional hosted path)
+### 9.5 Summary matrix (APPROVED — eng scan this)
 
-| Capability | User brings | AGICY provides |
-|------------|-------------|----------------|
-| STT | Nothing (if signed in) | Short-lived scoped STT JWT via Supabase sign-in + desktop device flow |
-| Search | Optional Brave key | — |
-| LLM cleanup | Nothing if bundled | Gateway quota or included cleanup |
-| Auth | **AGICY account** (Google or email at `agicy.ai`) | Supabase session → STT token exchange — **not** a long-lived API key |
+| Capability | Required for first dictation? | Default / options | Keys |
+|------------|------------------------------|-------------------|------|
+| **Voice STT** | **Yes** | **Local whisper (default)**; Deepgram EU BYOK opt-in; Phase 3 gateway **deferred** | **0 keys** on local default; Deepgram key only if opted in |
+| Search | No | Mock without key; Brave optional | Brave BYOK optional — **preserve on upgrade** |
+| LLM cleanup | No | Off until cleanup provider configured; search always off | Cleanup LLM BYOK / Freestyle / Copperway later — optional |
+| Voice TTS | No | — | — |
 
-**AGICY-hosted setup:** Sign in once → voice works with **zero BYOK keys**. Optional Brave still improves search quality.
+**Default key strategy:** **0 keys for default voice (local whisper).** Deepgram EU BYOK = optional accuracy upgrade. Phase 3 hosted STT = deferred. Search works with 0 keys on mock.
 
-### 9.5 Summary matrix
+### 9.6 Copperway deep-dive — deferred
 
-| Capability | Required? | Provider options | Key type | Phase |
-|------------|-----------|------------------|----------|-------|
-| Search | No | Mock, Brave | Brave API key (BYOK) | 1+ |
-| STT | Yes for cloud voice | Deepgram EU, local whisper, AGICY gateway | Deepgram BYOK / none / STT JWT | 1 / 2 / 3 |
-| LLM cleanup | No (recommended off) | Off, Groq, OpenAI, Copperway | Provider BYOK or workspace key | 1 |
-| Voice TTS | No | — | — | — |
-
-**Default key strategy (recommended):** Search works with **0 keys** on mock; voice needs **1 STT key** (Deepgram EU); cleanup **optional**; Phase 3 replaces BYOK with AGICY account for users who prefer hosted STT.
-
-### 9.6 Copperway — two credential layers (agicy-platform)
-
-Copperway (`proxy.agicy.com/v1`, marketed at `agicy.ai/gateway`) is **LLM-only**. Supported first-class routes today: `/v1/chat/completions`, `/v1/images`. No `/v1/audio/transcriptions`, Deepgram WebSocket, or embeddings handler — **UPDATED cannot use Copperway for STT** until Phase 3 `stt.agicy.ai` (or a future gateway STT route).
-
-| Layer | What the client sends | Where it lives | Used for |
-|-------|----------------------|----------------|----------|
-| **Gateway workspace secret** | `Authorization: Bearer <workspace_api_secret>` | Dashboard → API keys (`/dashboard/api`); hashed in `proxy_configurations` | Authenticates calls to Copperway |
-| **Upstream BYOK** (optional) | Never sent by desktop — server-side only | Dashboard → Connections → BYOK vault (`/api/byok`, encrypted with `PROXY_VAULT_KEY`) | Which LLM upstream Copperway bills against |
-
-**BYOK providers in Copperway vault** (`src/lib/byokProviders.ts`): OpenAI, Anthropic, Google Gemini, Moonshot, Cerebras, **Groq** (voice/cleanup stack), Mistral, DeepSeek. **Deepgram is not a BYOK provider** — STT stays a separate key path in UPDATED.
-
-**Upstream key resolution** (`resolveUpstreamKey.ts`): signed-in user's BYOK → workspace OpenAI vault → server env (`GROQ_API_KEY`, `OPENAI_API_KEY`, …).
-
-**Playground voice STT** (`/api/playground/speech/stt`) uses **AGICY server `GROQ_API_KEY`**, not user BYOK — web-only, playground session cookie required. This is unrelated to UPDATED desktop keys.
-
-**Can UPDATED point at Copperway instead of OpenAI/Deepgram directly?**
-
-| Path | Phase 1–2 | Notes |
-|------|-----------|-------|
-| STT → Copperway | **No** | No audio/STT proxy route |
-| STT → Deepgram EU direct | **Yes** (Phase 1 plan) | User BYOK in Electron `safeStorage` |
-| Cleanup LLM → Copperway | **Possible** (Decision 2B) | OpenAI-compatible `chat/completions`; workspace secret as `apiKey`, not user's OpenAI key |
-| Cleanup LLM → Groq/OpenAI direct | **Possible** (Decision 2B) | Restore upstream BYOK keychain in UPDATED |
-| Search → Brave | **Yes** | Independent of Copperway |
+Skip for combined Phase 1+2 eng. Copperway cannot carry STT today; gateway credential layers and playground Groq STT are **web/gateway concerns**, not UPDATED desktop first-dictation. Revisit when Phase 3 resumes — see agicy-platform gateway docs.
 
 ### 9.7 Setup scenarios (UPDATED desktop)
 
 | Profile | Keys / accounts | Voice search | Live web search |
 |---------|-----------------|--------------|-----------------|
-| **Minimal beta (Phase 1)** | 1× Deepgram EU | ✅ | Mock citations only |
-| **Minimal + live search** | Deepgram EU + Brave | ✅ | ✅ |
-| **Power user BYOK** | Deepgram EU + Brave + optional Groq/OpenAI cleanup | ✅ | ✅ |
-| **Power user Copperway cleanup** | Deepgram EU + Brave + Copperway workspace secret (cleanup only) | ✅ | ✅ |
-| **Privacy max (Phase 2)** | 0 cloud keys (local whisper) + optional Brave | ✅ offline STT | Optional |
-| **AGICY-hosted (Phase 3)** | AGICY account (STT JWT) + optional Brave | ✅ | Optional |
+| **Minimal (default)** | **0 keys** — local whisper | ✅ offline | Mock citations only |
+| **Minimal + live search** | Local + Brave | ✅ | ✅ |
+| **Cloud STT upgrade** | Local + Deepgram EU BYOK (+ optional Brave) | ✅ cloud when selected | Optional |
+| **Power user** | Deepgram BYOK + Brave + optional cleanup LLM / Copperway | ✅ | ✅ |
+| **AGICY-hosted (Phase 3 — deferred)** | AGICY account (STT JWT) + optional Brave | ✅ | Optional |
 
-**Today (0.9.0-beta.x):** Freestyle device OAuth replaces all of the above for STT — one browser sign-in at `freestylevoice.com/device` covers STT + default cleanup; Brave remains the only separate BYOK field in Settings → Search.
+**NOW (`v0.9.0-beta.3` installers / `main`):** default voice = **AGICY hosted Deepgram EU** (sign-in + credits). Freestyle is not the advertised mic path.  
+**AFTER PR #11 merges + release:** default voice = **local whisper (0 keys)**; Deepgram EU **BYOK** opt-in; no Freestyle / AGICY gate for first dictation.
 
 ---
 
 ## 10. Open questions (non-blocking)
 
-1. Subprocessor disclosures for Deepgram EU / Groq / OpenAI on `agicy.ai/updated` security page  
-2. Freestyle Cloud hard remove vs optional legacy provider flag  
-3. 8-language QA acceptance criteria per marketing language  
-4. Mobile keyboard (`apps/mobile/`) — same gateway later?  
-5. Token refresh: extend STT JWT silently vs re-prompt on expiry  
-6. Deep link protocol name: `agicy-updated://` vs HTTPS loopback  
-7. Telemetry: confirm PostHog events never include audio/transcript  
+1. Freestyle Cloud hard remove vs optional legacy provider flag  
+2. 8-language QA acceptance criteria per marketing language  
+3. Mobile keyboard (`apps/mobile/`) — same local/BYOK model later?  
+4. Deep link protocol name: `agicy-updated://` vs HTTPS loopback  
+5. ~~Telemetry: confirm PostHog events never include audio/transcript~~ — **resolved**, moved to §11 (audit 9d90ad5a: no voice content leaves via PostHog; separate PostHog transfer/consent issues on the `fix/telemetry-privacy` PR)  
+6. Confirm Deepgram EU **streaming vs batch** list prices before cost copy — **batch this with the §11 audio-retention ask**; same vendor conversation, one email  
 
 ---
 
-## 11. Approval checklist
+## 11. Approval & blocking checklist
 
-Before any implementation PR:
+### Decisions (done)
 
-- [ ] **Decision 1** — Phase 1 default provider (§8)
-- [ ] **Decision 2** — Cleanup scope (§8)
-- [ ] **Decision 3** — Phase 3 gateway scope (§8)
-- [ ] Legal review — `NOTICE` + README third-party subprocessors
-- [ ] 2-week spike — restore Deepgram provider from upstream git; prove hotkey path without Freestyle sign-in
-- [ ] Security review — `safeStorage` key handling + Phase 3 STT JWT scope
+- [x] **Decision 1** — Local default + Deepgram BYOK opt-in; combined Phase 1+2 (§8)
+- [x] **Decision 2** — Cleanup provider-gated: off in search; on in dictation only with cleanup LLM; zero-key = raw (§8)
+- [x] **Decision 2b** — Local batch STT for v1; Transcribing… UI; pseudo-streaming follow-up (§8)
+- [x] **Decision 3** — Phase 3 deferred (§8)
+
+### ⚠️ Already due — remediation in progress (**not** a future gate)
+
+> **The Art. 28 obligation attached the day `v0.9.0-beta.3` shipped**, not at the combined release. Per §1.0, beta.3 installers **already** route mic audio app → `https://agicy.ai/api/stt/transcribe` → **Deepgram EU**, with **AGICY as controller and Deepgram as sub-processor**. That is live production processing of personal data (voice) by a sub-processor **today**. Treat the items below as **overdue remediation on a real-world clock**, not as pre-release checkboxes.
+
+| Clock | Value |
+|-------|-------|
+| Obligation attached | **2026-08-23 20:40:32 UTC** — `v0.9.0-beta.3` pre-release published (`gh release list --repo AGiOS-Ai-EU/UPDATED`) |
+| Exposure window | 2026-08-23 20:40 UTC → **present, still open** |
+| Elapsed | **Hours/days, not weeks** — this is why it is remediable rather than a standing breach |
+| Status | **Remediation in progress** |
+
+The short window is the good news and the reason to move now: the sooner the DPA is executed and PR #11 ships, the smaller the period in which AGICY was a controller sending EU voice to a sub-processor without Art. 28 cover.
+
+- [ ] **Art. 28 DPA with Deepgram — OVERDUE, execute now.** AGICY = controller, Deepgram = sub-processor for the **live hosted beta.3 path**. Not conditional on BYOK or on the combined release. Also covers any cleanup LLM processors.
+- [ ] **Deepgram audio retention answer — obtain in writing.** How long is submitted audio held server-side (and is zero-retention / no-model-training available on the EU endpoint)? **Required now** if beta.3 has EU users — feeds Art. 30 records, the retention table in `PRIVACY.md`, and any breach/erasure response. Ask the non-blocking **EU streaming vs batch pricing** question (§10.6) in the same email — one vendor conversation.
+- [ ] **Sub-processor disclosure** — list Deepgram EU on `agicy.ai` + `NOTICE` / README as a **current** sub-processor for hosted STT, not a future one.
+- [ ] **`PRIVACY.md` discloses the live hosted path** — hosted beta.3 flow described as primary/current; BYOK as forthcoming/optional. (Done — keep in sync.)
+- [ ] **Art. 30 record of processing** — must include the hosted beta.3 STT activity that is running today.
+- [x] **Telemetry is not a second voice-processing activity** — static audit (agent 9d90ad5a) confirms **no** transcript, audio, search query, LLM input/output, window title, URL, clipboard, evidence or divergence content leaves via PostHog. The hosted STT path above is the only voice egress. **Adjacent PostHog issues (US transfer, default-on, opt-out) are real but separate** and tracked on the `fix/telemetry-privacy` PR — do not edit telemetry code from this branch.
+
+**Counter-framing for counsel (useful, and true):** the combined local-default release **reduces** exposure rather than creating it — after PR #11 ships, most users' audio **stops leaving the device** entirely, and the remaining cloud path is user-keyed BYOK. Shipping #11 is **mitigation**, so DPA remediation must **not** be used as a reason to delay it. Conversely, shipping #11 does **not** retroactively cure the beta.3 period; the DPA still has to be executed and the exposure window documented.
+
+**Counsel note (BYOK roles — do not over-read):** with user-supplied Deepgram keys the **user** may be the controller and Deepgram **their** processor (lighter Art. 28 footprint) — see §6. This framing applies **only to the future BYOK path**. It does **not** apply to today's hosted beta.3 path, where **AGICY is the controller** and the Art. 28 duty is AGICY's alone.
+
+### Blocking before public combined release
+
+- [ ] Legal review — `NOTICE` + README third-party rows match local-default + BYOK-opt-in
+- [ ] Security review — `safeStorage` Deepgram key handling
+- [ ] **E2E acceptance (hold release against):**
+  1. **Fresh profile, no cached model** (empty `~/.cache/updated/whisper-*` or equivalent)
+  2. Default download is **`base-q5_1`** (`ggml-base-q5_1.bin`, **59,707,625 bytes / ~57 MB** — not ~145 MB). Completes with **visible progress**; interrupt mid-download → **resume** continues (not restart-from-zero only). **Throttled bandwidth still matters** at ~57 MB — prove Range resume, do not assume a fast pipe
+  3. **Network off after download** → hold hotkey → text still appears (**offline claim**)
+  4. Simulate **download failure** → UI offers **Deepgram EU BYOK**, not a dead-end
+  5. Note **cold-start hotkey→text latency**. Shipping default measured **1.0–1.9 s cold / 0.85–1.5 s warm** — **warming UX not required**. The ≥ ~10 s warming gate remains only for unmeasured larger models
+  6. Batch local path: after release, UI shows **Transcribing…** (no expectation of Freestyle-style live partials)
+  7. **Brave key preserved** — upgrade with an existing Brave key still uses live search (no silent mock)
+  8. Cross-check Win / macOS / Linux for (1)–(3)
+  9. **Insufficient disk** → clear error that names **space required** (model + buffer); **no** `.downloading` / corrupt `.bin` left for next launch
+  10. **Checksum** after download + verify before first model load; corrupt/truncated file → explicit `whisper_checksum_failed` / `whisper_model_corrupt` (never ambiguous “not ready”)
+- [ ] Beta migration: Freestyle / AGICY sessions preserved (no silent logout); Brave keychain preserved
+
+#### E2E smoke status (updated 2026-08-24)
+
+Automated coverage lives in `apps/server/tests/`:
+
+| Suite | Runs in CI? | Covers |
+|-------|-------------|--------|
+| `whisper-download-resume.test.ts` | Yes | Stubbed Range-capable origin: monotonic progress, interrupt → `bytes=<partial>-` resume, byte-identical stitched file, checksum mismatch leaves no artifacts |
+| `whisper-model-integrity.test.ts` | Yes | Sidecar write on legacy caches, `whisper_model_corrupt` on mismatch, artifact cleanup |
+| `whisper-local-e2e.test.ts` | **No** — opt-in via `WHISPER_E2E=1` | Real 57 MB Hugging Face download, real interrupt/resume, real whisper-server, real transcript |
+
+| # | Criterion | win32 x64 | macOS / Linux |
+|---|-----------|-----------|---------------|
+| 1 | Fresh profile, no cached model | ✅ | ⬜ **not run** (no macOS/Linux agent host) |
+| 2 | Visible progress; interrupt at 60% → **resume** (not restart) | ✅ resumed from 35,553,792 / 59,707,625 B via HTTP Range | ⬜ **not run** |
+| 3 | Offline dictation after download | ✅ all non-loopback fetch blocked; transcript still returned | ⬜ **not run** |
+| 4 | Download failure → offers Deepgram EU BYOK | ✅ **working path** (not message-only) — see below | ⬜ |
+| 5 | Cold-start hotkey→text latency | ✅ **~1.0–1.9 s** cold on shipping default — see below | ⬜ **not run** |
+| 6 | Batch path shows **Transcribing…** | ✅ fixed + unit-tested — see below | ⬜ |
+| 7 | Brave key preserved on upgrade | ⚠️ code PASS; **live beta.3-key check BLOCKED** — see below | ⬜ |
+| 9 | Insufficient disk → named space, no corrupt leftover | ✅ unit-level (`disk.test.ts`, wipe-on-ENOSPC) | ⬜ |
+| 10 | Checksum after download + before load | ✅ unit + E2E (`.sha256` sidecar) | ⬜ |
+
+**Item 5 — measured cold start by model size** (win32 x64, `jfk.wav`, cold process each time):
+
+| Model | On disk | Cold hotkey→text | Warm |
+|-------|---------|------------------|------|
+| **`base-q5_1` — the shipping default** | 59,707,625 B (**56.9 MiB**) | **1.0–1.9 s** (re-measured 2026-08-24: spawn→text **1.0 s**; earlier E2E **1.9 s**) | **0.85–1.5 s** |
+| `small-q5_1` — Whisper Balanced (optional, **not the default**) | 190,085,487 B (**181.3 MiB**) | **3.6–4.2 s** (re-measured **3.6 s**) | **2.6–3.0 s** |
+| Legacy `base` / `ggml-base.bin` (**not shipped**) | ~142 MB | **not the default** — catalog legacy only | — |
+| `large` — Whisper Pro | ~1.6 GB | **not measured** | — |
+
+> **Size clarification (do not re-open):** do not document the shipping default as “~145 MB”. That figure was the **non-quantized legacy `ggml-base.bin` (~142 MB)**. Shipping default is **`base-q5_1` / `ggml-base-q5_1.bin` at 56.9 MiB** (`WHISPER_MODELS` + on-disk measurement). Optional next tier is `small-q5_1` at **181 MiB**, not a 145 MB class.
+
+**No warming UX is needed for the default.** Re-measure and the 181 MiB tier both stay **≪ 10 s**, so Decision 2b’s warming threshold is not in play for `base-q5_1` or `small-q5_1`.
+
+> **⚠️ Open risk — `large` (Whisper Pro) vs the 15 s transcribe watchdog.** `TRANSCRIBE_TIMEOUT_MS = 15_000` in `apps/electron/src/renderer/src/lib/dictation.ts` re-submits the whole WAV over REST if no final arrives in time. Extrapolating the measured curve, a 1.6 GB cold load plausibly exceeds 15 s, which would fire the watchdog **while the first inference is still running** — a duplicate request queued behind the same busy whisper-server, not a recovery. Before shipping Whisper Pro as a selectable option, either scale the watchdog with model size, have the server signal "still warming", or gate the model behind a first-use warning. Not a blocker for the default path.
+
+**Item 4 — PASS (working path to key field, not message-only).** On `status: "error"` the Dictation settings pane auto-reveals a **“Fallback — Deepgram EU”** section with the **key `<input>`**, plus a **“Use Deepgram EU instead”** button that calls `selectVoiceStt("deepgram", …)` (`settings-view.tsx`). The same CTA also appears for `not_downloaded` / non-ready states. **Live check (2026-08-24, Electron preview + API):** parking the model → `not_downloaded`, then exercising the CTA via `POST /api/models/configured` switched the default voice provider to `deepgram` (201) — the condition that shows the key field. **Nuance:** pasting a key while the provider is still `local-whisper` saves the key but does **not** switch providers — the user must press the button. Full pixel-click GUI on the error chrome still nice-to-have; the path is not prose-only.
+
+**Item 6 — PASS (was broken; fixed).** Both bubbles fell through to a bare `"…"` between hotkey release and insertion, because the batch path streams no partials. Now `"Transcribing…"`, with label logic in `renderer/src/lib/dictation-bubble.ts` and a regression test (`dictation-bubble.test.ts` — 5/5 pass). Live hotkey→bubble was not re-exercised in preview (native `windows-key-listener` binary missing → hotkey registration failed); unit coverage is the gate.
+
+**Item 7 — BLOCKED on this machine (not a silent-unread finding).** Write/read use `{userData}/keychain/brave-search.key` via `safeStorage`; migrations v22–v27 touch SQLite only and never the keychain. **However** v23 `DROP TABLE api_keys`, and `getBraveSearchApiKey()` returns `null` on decrypt failure → silent mock fallback — the failure shape this item exists to catch. **Local `%APPDATA%\UPDATED` profile:** schema reached **v27** under this branch, **`keychain/` directory absent**, no `brave-search.key`. Cannot prove survival of a **pre-existing beta.3 Brave key** here. Still owed: upgrade a real beta.3 profile that already had a Brave key (do not paste post-upgrade).
+
+**Platform matrix:** win32 x64 proven for items 1–6, 9–10 (above). **macOS / Linux: not run** — no agent host available this session; leave ⬜ until a darwin/linux runner executes 1–3 and 5.
+
+Remaining before merge/RC: **item 7 live Brave-key upgrade**, **macOS/Linux 1–3+5**, optional pixel-click of item 4 error chrome.
+
+### Non-blocking / later
+
+- [ ] Phase 3 STT JWT scope (when gateway resumes)
+- [ ] Divergence-log Save As export (ROADMAP P1 day-of-work)
 
 ---
 
@@ -480,10 +590,11 @@ Before any implementation PR:
 
 | Finding | Detail |
 |---------|--------|
-| Current path | Streaming WSS → Freestyle Cloud → Soniox + Groq cleanup |
-| v23 migration | Dropped `api_keys`, all non–freestyle-cloud providers |
-| Upstream | Also cloud-only today; restore from pre-removal commits |
-| Recommended | Phase 1 BYOK Deepgram EU → Phase 2 local whisper → Phase 3 AGICY gateway |
+| **beta.3 / main path (NOW)** | AGICY hosted → Deepgram EU (`agicy.ai/api/stt/transcribe`) |
+| Legacy Freestyle path | Streaming WSS → Freestyle Cloud → Soniox + Groq (code still present; not beta.3 default) |
+| v23 migration | Dropped `api_keys`, all non–freestyle-cloud providers (local restore = PR #11) |
+| Upstream | Cloud-oriented; local restore from pre-removal + this PR |
+| Recommended | Combined Phase 1+2: local whisper default + Deepgram EU BYOK opt-in; Phase 3 deferred |
 | Key precedent | `search-keychain.ts` for BYOK; `specs/transcription-audit.md` for provider port |
 
 ---

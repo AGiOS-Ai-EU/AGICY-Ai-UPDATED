@@ -74,8 +74,8 @@ describe("Settings", () => {
     const res = await req("/api/settings");
     expect(res.status).toBe(200);
     const data = await res.json();
-    // Nothing is seeded; plugins are installed explicitly via the catalog.
-    expect(data).toEqual({});
+    // Schema seeds llm_cleanup=false (zero-key: no cleanup provider yet).
+    expect(data).toEqual({ llm_cleanup: "false" });
   });
 
   it("PUT then GET a setting", async () => {

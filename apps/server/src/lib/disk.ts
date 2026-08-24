@@ -38,9 +38,9 @@ export class InsufficientDiskSpaceError extends Error {
 
   constructor(requiredBytes: number, freeBytes: number) {
     super(
-      `Not enough disk space: need ~${formatGiB(requiredBytes)}, only ${formatGiB(
+      `Not enough disk space: need ~${formatGiB(requiredBytes)} free (model size + safety buffer), only ${formatGiB(
         freeBytes,
-      )} free.`,
+      )} available.`,
     );
     this.name = "InsufficientDiskSpaceError";
     this.requiredBytes = requiredBytes;
@@ -77,7 +77,7 @@ export function describeDownloadError(err: unknown): string {
   if (err instanceof InsufficientDiskSpaceError) {
     return `Not enough disk space — free up about ${formatGiB(
       err.requiredBytes,
-    )} and try again.`;
+    )} (model + buffer) and try again.`;
   }
 
   // A detected proxy/coaching page already carries actionable guidance.

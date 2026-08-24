@@ -1,8 +1,8 @@
 # Freestyle Voice
 
 The plugin SDK for [UPDATED](../../README.md) / upstream Freestyle.
-UPDATED’s default voice path is **AGICY hosted STT (Deepgram EU)** — not Freestyle Cloud
-and not on-device whisper (removed in fork migration v23; restore planned). See root
+UPDATED’s default voice path is **on-device whisper.cpp** (zero keys) with
+optional **Deepgram EU BYOK**. AGICY hosted gateway is deferred. See root
 [README](../../README.md) and [docs/VOICE-DATA-FLOW.md](../../docs/VOICE-DATA-FLOW.md).
 This package is the **public contract** for writing plugins that extend the dictation
 pipeline: rewrite transcripts, inject cleanup prompts, transform final text, and

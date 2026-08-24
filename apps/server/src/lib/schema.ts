@@ -7,7 +7,7 @@ import { countFixes } from "./fixes.js";
 // and would otherwise perturb test module-mock ordering.
 const DEFAULT_CLOUD_URL = "https://service.freestylevoice.com";
 
-const SCHEMA_VERSION = 26;
+const SCHEMA_VERSION = 27;
 
 // Legacy default format-rule patterns (used only by pre-v12 migrations below):
 // domain/phrase entries match as substrings of url+title+app; bare words match
@@ -734,6 +734,36 @@ function applyMigrations(db: DatabaseSync, currentVersion: number): void {
 
   if (currentVersion < 26) {
     db.exec("DROP TABLE IF EXISTS agent_threads");
+  }
+
+  if (currentVersion < 27) {
+    // Combined Phase 1+2: local whisper = default voice. Do not clear
+    // Freestyle / AGICY sessions (no silent logout). Hosted/Freestyle rows
+    // may remain; only the default flag moves to local-whisper.
+    try {
+      db.exec("UPDATE model_configs SET is_default = 0 WHERE type = 'voice'");
+      db.exec(
+        `INSERT INTO model_configs (provider, model_id, model_name, type, is_default)
+         VALUES ('local-whisper', 'local-whisper/base-q5_1', 'Local Whisper (on-device)', 'voice', 1)
+         ON CONFLICT(provider, model_id, type) DO UPDATE SET
+           is_default = 1,
+           model_name = excluded.model_name`,
+      );
+      db.exec(
+        `INSERT INTO model_configs (provider, model_id, model_name, type, is_default)
+         VALUES ('deepgram', 'deepgram/nova-3', 'Deepgram EU (BYOK)', 'voice', 0)
+         ON CONFLICT(provider, model_id, type) DO NOTHING`,
+      );
+      // Seed cleanup off on fresh installs — zero-key path has no cleanup LLM.
+      // Users enable after configuring a provider (Settings: requires cleanup provider).
+      db.exec(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES ('llm_cleanup', 'false', datetime('now'))
+         ON CONFLICT(key) DO NOTHING`,
+      );
+    } catch {
+      // Older partial DBs — best-effort seed.
+    }
   }
 
   // Upsert schema version

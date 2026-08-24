@@ -50,6 +50,7 @@ import {
   captureException,
   closeDb,
   disposeServerPlugins,
+  setDeepgramByokKey,
   shutdownPosthog,
   startServer as startFreestyleServer,
 } from "@freestyle-voice/server";
@@ -194,6 +195,12 @@ import {
   resolveSpriteImpact,
   resolveSpritePerformDone,
 } from "./sprite-travel";
+import {
+  clearDeepgramSttApiKey,
+  getDeepgramSttApiKey,
+  getSttKeyStatus,
+  setDeepgramSttApiKey,
+} from "./stt-keychain";
 
 // Test isolation: E2E/probe runs in the unpackaged dev binary would otherwise
 // share the real "Electron" userData (settings.json included) with a running
@@ -1948,6 +1955,9 @@ app.whenReady().then(async () => {
   // (including autocaptured exceptions) carry the release they came from.
   process.env.FREESTYLE_APP_VERSION = app.getVersion();
 
+  // Hydrate Deepgram BYOK into the in-process server (opt-in; never required).
+  setDeepgramByokKey(getDeepgramSttApiKey());
+
   // Start the Hono HTTP server with WebSocket support (or reuse an existing one)
   const startServer = (port: number): void => {
     startFreestyleServer({ port, host: "127.0.0.1" })
@@ -3210,6 +3220,19 @@ ipcMain.handle("search:set-brave-key", (_event, apiKey: unknown) => {
 });
 
 ipcMain.handle("search:clear-brave-key", () => clearBraveSearchApiKey());
+
+ipcMain.handle("stt:key-status", () => getSttKeyStatus());
+ipcMain.handle("stt:set-deepgram-key", (_event, apiKey: unknown) => {
+  if (typeof apiKey !== "string") return false;
+  const ok = setDeepgramSttApiKey(apiKey);
+  if (ok) setDeepgramByokKey(apiKey);
+  return ok;
+});
+ipcMain.handle("stt:clear-deepgram-key", () => {
+  const ok = clearDeepgramSttApiKey();
+  if (ok) setDeepgramByokKey(null);
+  return ok;
+});
 
 function divergenceLogPath(): string {
   const override = process.env.UPDATED_SEARCH_DIVERGENCE_LOG?.trim();
