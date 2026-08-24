@@ -19,8 +19,6 @@ This document describes personal-data processing for the **UPDATED desktop beta*
 | **Processor (auth)** | Supabase Auth (`auth.agicy.ai`) — account identity for device pairing |
 | **Optional processor (search)** | Brave Search — only if you paste a Brave API key |
 
-UPDATED does **not** use Freestyle Cloud for voice in beta.3+. Legacy Freestyle Cloud code may remain in the repository for compatibility; the default shipped path does not send microphone audio to Freestyle.
-
 ---
 
 ## 2. Voice / STT data flow (canonical)
@@ -86,13 +84,19 @@ Desktop local files (settings, divergence log, Brave key) are under your control
 
 ---
 
-## 6. International transfers
+## 6. Analytics in 0.9.0-beta.3 (shipped)
 
-STT is routed to **Deepgram’s EU API**. Auth uses AGICY’s Supabase project on `auth.agicy.ai`. If any US or other transfer applies, SCCs / appropriate safeguards must be listed on agicy.ai.
+The Windows installer currently bundles PostHog at **`https://us.i.posthog.com`**. Packaged builds treat telemetry as **on** unless the local setting `telemetry_enabled` is `"false"`. That is not EU hosting, not default-off, and not a post-dictation consent prompt.
+
+A forthcoming change (not in this installer) moves analytics to EU PostHog, default-off / opt-in, and strips user-typed content from events.
+
+## 7. International transfers
+
+STT is routed to **Deepgram’s EU API**. Auth uses AGICY’s Supabase project on `auth.agicy.ai`. Analytics in this beta go to **PostHog US** unless you opt out (see §6). If any US or other transfer applies, SCCs / appropriate safeguards must be listed on agicy.ai.
 
 ---
 
-## 7. Open compliance work (before 1.0)
+## 8. Open compliance work (before 1.0)
 
 - [ ] Publish full privacy notice at `agicy.ai/legal/privacy`  
 - [ ] Execute DPA with Deepgram (EU)  
@@ -103,7 +107,7 @@ STT is routed to **Deepgram’s EU API**. Auth uses AGICY’s Supabase project o
 
 ---
 
-## 8. Related docs
+## 9. Related docs
 
 - [README.md](../README.md) — user-facing install + data-flow summary  
 - [NOTICE](../NOTICE) — third-party notices  
