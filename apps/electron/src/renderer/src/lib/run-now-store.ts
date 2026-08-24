@@ -41,7 +41,7 @@ export function startRunNow(
   if (states.get(task.id)?.status === "running") return;
   states.set(task.id, { status: "running", startedAt: Date.now() });
   emit();
-  capture("scheduled_task_run_now", { task: task.name });
+  capture("scheduled_task_run_now", { name_length: task.name.length });
   void runScheduledTaskNow(task.id)
     .then((result) => {
       states.set(task.id, {

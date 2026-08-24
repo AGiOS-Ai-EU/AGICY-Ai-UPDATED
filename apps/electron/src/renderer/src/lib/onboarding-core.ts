@@ -98,6 +98,20 @@ export const TRADE_CHIPS = [
   "Between things",
 ] as const;
 
+/**
+ * Reduce the trade box to something safe to put in an analytics event.
+ *
+ * The box is free text with chips as shortcuts, so whatever the user typed
+ * about their own job is personal data. Anything that isn't one of the preset
+ * chips collapses to `"other"`, which still lets the onboarding funnel segment
+ * by role without shipping the wording.
+ */
+export function tradeBucket(trade: string): string | null {
+  const value = trade.trim();
+  if (!value) return null;
+  return (TRADE_CHIPS as readonly string[]).includes(value) ? value : "other";
+}
+
 /** The Job's placeholder examples, tuned to the trade they just picked. */
 const JOB_EXAMPLES: Record<string, [string, string, string]> = {
   Engineer: ["Fix the login bug", "Review Sam's PR", "Write the deploy script"],

@@ -1,11 +1,28 @@
 import crypto from "node:crypto";
 import { PostHog } from "posthog-node";
 import { getDb } from "./db.js";
+import { resolveErrorCode, safeErrorProperties } from "./error-telemetry.js";
+
+export { resolveErrorCode } from "./error-telemetry.js";
 
 let _client: PostHog | null = null;
 
-const POSTHOG_API_KEY = "phc_mDhFafyLK3Safsrrehi7rnH2X9jVMMGNAwKWuJsEN54w";
-const POSTHOG_HOST = "https://us.i.posthog.com";
+/**
+ * Prefer an explicit EU project key; never fall back to a baked-in US key.
+ *
+ * Read lazily: Electron copies the CI-baked key onto `process.env` at startup
+ * (after this module is imported), and dev loads `apps/electron/.env.local`
+ * the same way. Capturing at module eval would leave packaged builds inert.
+ */
+function posthogApiKey(): string {
+  return (
+    process.env.POSTHOG_API_KEY?.trim() || process.env.POSTHOG_KEY?.trim() || ""
+  );
+}
+
+function posthogHost(): string {
+  return process.env.POSTHOG_HOST?.trim() || "https://eu.i.posthog.com";
+}
 
 function getEnvironment(): string {
   return process.env.FREESTYLE_ENV === "production"
@@ -13,32 +30,52 @@ function getEnvironment(): string {
     : "development";
 }
 
-// Cached `telemetry_enabled` setting. `isEnabled()` is called on every
-// `capture()`/`captureException()` — multiple times per dictation — so we read
-// the DB once and reuse the value. Invalidated via `invalidateTelemetrySetting`
-// whenever the setting is written or deleted.
+// Cached `telemetry_enabled` setting. `isTelemetryOptedOut()` is called on
+// every `capture()`/`captureException()` — multiple times per dictation — so we
+// read the DB once and reuse the value. Invalidated via
+// `invalidateTelemetrySetting` whenever the setting is written or deleted.
 let _telemetryOptedOut: boolean | null = null;
 
+/**
+ * Analytics is opt-in: absent or anything other than `"true"` means no.
+ *
+ * A default-on analytics client is consent-by-silence, which does not hold up
+ * for the EU users this build ships to, so a fresh install sends nothing until
+ * someone turns on "Share anonymous usage data" in Settings › Data.
+ */
 function isTelemetryOptedOut(): boolean {
   if (_telemetryOptedOut !== null) return _telemetryOptedOut;
   try {
     const row = getDb()
       .prepare("SELECT value FROM settings WHERE key = 'telemetry_enabled'")
       .get() as { value: string } | undefined;
-    _telemetryOptedOut = row?.value === "false";
+    _telemetryOptedOut = row?.value !== "true";
   } catch {
-    // DB not ready yet — treat as opted-in and re-read next time.
-    return false;
+    // DB not ready yet — stay opted out and re-read next time.
+    return true;
   }
   return _telemetryOptedOut;
 }
 
-/** Drop the cached `telemetry_enabled` value so the next check re-reads it. */
+/**
+ * Drop the cached `telemetry_enabled` value so the next check re-reads it.
+ *
+ * Turning the setting off also tears down the client. It is a lazy singleton
+ * that owns a background flush timer, so re-reading a flag is not enough on its
+ * own: `disable()` puts the client into opt-out and dropping the reference
+ * means a later opt-in builds a fresh one. The toggle therefore takes effect
+ * immediately rather than at the next launch.
+ */
 export function invalidateTelemetrySetting(): void {
   _telemetryOptedOut = null;
+  if (!isTelemetryOptedOut()) return;
+  const client = _client;
+  _client = null;
+  void client?.disable().catch(() => {});
 }
 
 function isEnabled(): boolean {
+  if (!posthogApiKey()) return false;
   if (process.env.DO_NOT_TRACK === "1") return false;
   const devOptIn = process.env.FREESTYLE_ANALYTICS_DEV === "1";
   if (getEnvironment() !== "production" && !devOptIn) return false;
@@ -46,15 +83,16 @@ function isEnabled(): boolean {
   return !isTelemetryOptedOut();
 }
 
-function getClient(): PostHog {
+function getClient(): PostHog | null {
+  const apiKey = posthogApiKey();
+  if (!apiKey) return null;
   if (_client) return _client;
 
-  _client = new PostHog(POSTHOG_API_KEY, {
-    host: POSTHOG_HOST,
-    enableExceptionAutocapture: true,
+  _client = new PostHog(apiKey, {
+    host: posthogHost(),
+    enableExceptionAutocapture: false,
   });
-  // Super properties: attached to every event for the client's lifetime
-  // (manual capture, captureException, and autocaptured exceptions), so each
+  // Super properties: attached to every event for the client's lifetime, so each
   // event records the release and environment it came from. Event-level
   // properties still override these.
   _client.register({
@@ -141,10 +179,13 @@ function activeDistinctId(): string {
   return _userDistinctId ?? getDeviceId();
 }
 
+/**
+ * Deliberately narrower than `CloudUser`: the account id is the only field
+ * analytics is allowed to see. Widening this type is how email or display name
+ * would find their way back to PostHog.
+ */
 export interface CloudIdentity {
   id: string;
-  email: string;
-  name?: string | null;
 }
 
 /**
@@ -170,7 +211,9 @@ export function identifyCloudUser(user: CloudIdentity): void {
     if (linked !== user.id) writeSetting(LINKED_USER_KEY, user.id);
 
     if (!isEnabled()) return;
-    getClient().identify({
+    const client = getClient();
+    if (!client) return;
+    client.identify({
       distinctId: user.id,
       // $anon_distinct_id is the supported replacement for alias(): it merges
       // the pre-sign-in device person into this user, once.
@@ -178,10 +221,11 @@ export function identifyCloudUser(user: CloudIdentity): void {
         ? { properties: { $anon_distinct_id: getDeviceId() } }
         : {}),
     });
-    setPersonProperties({
-      email: user.email,
-      ...(user.name ? { name: user.name } : {}),
-    });
+    // The account id is enough to join a PostHog person to the AGICY account
+    // record, and it is the only identifier this build sends. Email and display
+    // name used to ride along as person properties, which put directly
+    // identifying account data on a processor for no analytical gain — look
+    // the user up in AGICY's own systems by id instead.
   } catch {
     // Never let analytics errors affect the app
   }
@@ -194,7 +238,9 @@ export function identifyCloudUser(user: CloudIdentity): void {
 export function setPersonProperties(properties: Record<string, unknown>): void {
   try {
     if (!isEnabled()) return;
-    getClient().capture({
+    const client = getClient();
+    if (!client) return;
+    client.capture({
       distinctId: activeDistinctId(),
       event: "$set",
       properties: { $set: properties },
@@ -210,7 +256,7 @@ export function registerSuperProperties(
 ): void {
   try {
     if (!isEnabled()) return;
-    getClient().register(properties);
+    getClient()?.register(properties);
   } catch {
     // Never let analytics errors affect the app
   }
@@ -226,7 +272,9 @@ export function capture(
 ): void {
   try {
     if (!isEnabled()) return;
-    getClient().capture({
+    const client = getClient();
+    if (!client) return;
+    client.capture({
       distinctId: activeDistinctId(),
       event,
       properties,
@@ -236,17 +284,32 @@ export function capture(
   }
 }
 
+/**
+ * Report a crash/error as a structured product event — never as PostHog
+ * exception autocapture, and never with free-text message or stack.
+ *
+ * Full message/stack belong in the local diagnostic log only.
+ */
 export function captureException(
   error: unknown,
   additionalProperties?: Record<string, unknown>,
 ): void {
   try {
     if (!isEnabled()) return;
-    getClient().captureException(
-      error,
-      activeDistinctId(),
-      additionalProperties,
-    );
+    const client = getClient();
+    if (!client) return;
+    client.capture({
+      distinctId: activeDistinctId(),
+      event: "app_error",
+      properties: {
+        error_code: resolveErrorCode(error, additionalProperties),
+        source:
+          typeof additionalProperties?.source === "string"
+            ? additionalProperties.source.slice(0, 64)
+            : "server",
+        ...safeErrorProperties(additionalProperties),
+      },
+    });
   } catch {
     // Never let analytics errors affect the app
   }

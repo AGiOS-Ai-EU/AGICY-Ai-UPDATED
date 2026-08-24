@@ -174,7 +174,12 @@ const settings = new Hono()
     }
 
     // Don't capture internal/system keys
-    const skipKeys = new Set(["posthog_device_id", "telemetry_enabled"]);
+    const skipKeys = new Set([
+      "posthog_device_id",
+      "telemetry_enabled",
+      "telemetry_consent_asked",
+      "first_dictation_completed",
+    ]);
     if (key === "telemetry_enabled") {
       invalidateTelemetrySetting();
     }

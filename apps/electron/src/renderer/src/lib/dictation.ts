@@ -20,6 +20,8 @@ export interface DictationCallbacks {
   onComposerText: (text: string) => void;
   onError: (message: string, code?: string) => void;
   onLevel?: (level: number) => void;
+  /** Fired once text was delivered (cursor / composer / search). */
+  onSuccessfulDictation?: () => void;
 }
 
 export interface DictationOptions {
@@ -264,6 +266,7 @@ export class DictationController {
 
     if (this.options.destination() === "composer") {
       this.callbacks.onComposerText(finalText);
+      if (finalText.trim()) this.callbacks.onSuccessfulDictation?.();
       return;
     }
 
@@ -298,6 +301,7 @@ export class DictationController {
         await (mode === "clipboard"
           ? window.api.copyText(text, this.appContext)
           : window.api.pasteText(text, this.appContext));
+        this.callbacks.onSuccessfulDictation?.();
       } catch (err) {
         this.callbacks.onError(
           err instanceof Error ? err.message : "Could not deliver text",
@@ -311,6 +315,7 @@ export class DictationController {
   private async deliverSearch(finalText: string): Promise<void> {
     try {
       await window.api.panelOpenForSearch(finalText);
+      if (finalText.trim()) this.callbacks.onSuccessfulDictation?.();
     } catch (err) {
       this.callbacks.onError(
         err instanceof Error ? err.message : "Could not open search",

@@ -6,12 +6,14 @@ export const telemetrySchema = z.object({
   properties: z.record(z.unknown()).optional(),
 });
 
-// Crash/error reports from the renderer. Only message/stack/source/context are
-// accepted — callers must never include transcript or clipboard text.
+// Crash/error reports from the renderer. Message/stack are kept for the local
+// diagnostic log only; PostHog receives structured error_code + safe enums.
+// Callers must never include transcript or clipboard text.
 export const clientErrorSchema = z.object({
   message: z.string().min(1, "message required"),
   stack: z.string().optional(),
   source: z.string().optional(),
+  error_code: z.string().max(64).optional(),
   context: z.record(z.unknown()).optional(),
 });
 

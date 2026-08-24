@@ -175,6 +175,7 @@ import {
   relayEvent,
 } from "./plugins/index";
 import { invalidatePluginViews } from "./plugins/ui-host";
+import { applyPackagedTelemetryEnv } from "./release-telemetry";
 import { isRemixTargetAllowed } from "./remix-target";
 import { rendererUrl } from "./renderer-url";
 import {
@@ -1947,6 +1948,9 @@ app.whenReady().then(async () => {
   // Expose the app version to the in-process server so PostHog events
   // (including autocaptured exceptions) carry the release they came from.
   process.env.FREESTYLE_APP_VERSION = app.getVersion();
+  // Packaged builds: copy the CI-baked PostHog project key onto process.env
+  // before the in-process server starts. Dev already loaded `.env.local` above.
+  applyPackagedTelemetryEnv();
 
   // Start the Hono HTTP server with WebSocket support (or reuse an existing one)
   const startServer = (port: number): void => {
@@ -3622,6 +3626,13 @@ function forwardDictation(
 ipcMain.on("panel:open-for-dictation", (event) => {
   if (event.sender !== companionWindow?.webContents) return;
   openPanel({ focusComposer: true, trigger: "dictation" });
+});
+
+ipcMain.on("panel:show-telemetry-consent", (event) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  // showInactive — don't steal focus from the app they just dictated into.
+  openPanel({ focusComposer: false, trigger: "other" });
+  panelWindow?.webContents.send("panel:telemetry-consent");
 });
 
 ipcMain.on("panel:open-for-search", (event, query: unknown) => {

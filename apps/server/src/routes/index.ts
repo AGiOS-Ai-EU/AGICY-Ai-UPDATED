@@ -12,6 +12,7 @@ import {
   getDeviceId,
   setPersonProperties,
 } from "../lib/posthog.js";
+import { guardTelemetryProperties } from "../lib/telemetry-guard.js";
 import agentRoute from "./agent.js";
 import agentOsRoute from "./agent-os.js";
 import agentThreadsRoute from "./agent-threads.js";
@@ -42,6 +43,25 @@ import usage from "./usage.js";
 import vocabulary from "./vocabulary.js";
 
 const clientLog = createAppLogger("renderer");
+const telemetryLog = createAppLogger("telemetry");
+
+/**
+ * Strip anything that looks like user content before it reaches PostHog, and
+ * make the drop loud in the logs so the call site gets fixed rather than
+ * silently under-reporting.
+ */
+function safeTelemetryProperties(
+  event: string,
+  properties: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  const guarded = guardTelemetryProperties(properties);
+  if (guarded.dropped.length > 0) {
+    telemetryLog.warn(
+      `Dropped free-text propert${guarded.dropped.length === 1 ? "y" : "ies"} ${guarded.dropped.join(", ")} from "${event}". Telemetry carries counts, ids, and enums only — never user content.`,
+    );
+  }
+  return guarded.properties;
+}
 
 const apiRouter = new Hono()
   .get("/health", (c) => c.json({ status: "ok", name: "freestyle" }))
@@ -51,11 +71,11 @@ const apiRouter = new Hono()
   // telemetry opt-out, DO_NOT_TRACK, and device-id attribution in one place.
   .post("/telemetry", zValidator("json", telemetrySchema), (c) => {
     const { event, properties } = c.req.valid("json");
-    capture(event, properties);
+    capture(event, safeTelemetryProperties(event, properties));
     return c.json({ ok: true });
   })
-  // Durable traits on the person rather than the event: the sprite in use, the
-  // trade picked at onboarding. Same opt-out gate as above.
+  // Durable traits on the person rather than the event: the sprite in use,
+  // launch-at-login. Same opt-out gate and content guard as above.
   .post(
     "/telemetry/person",
     zValidator(
@@ -63,27 +83,36 @@ const apiRouter = new Hono()
       z.object({ properties: z.record(z.string(), z.unknown()) }),
     ),
     (c) => {
-      setPersonProperties(c.req.valid("json").properties);
+      const guarded = safeTelemetryProperties(
+        "$set",
+        c.req.valid("json").properties,
+      );
+      if (guarded) setPersonProperties(guarded);
       return c.json({ ok: true });
     },
   )
   // Crash/error reports from the renderer (window.onerror, unhandled
   // rejections, React error boundary). Always persisted to the local log file
-  // for diagnostics; PostHog reporting is gated by the telemetry opt-out inside
-  // captureException. Only message/stack/source/context are accepted — callers
-  // must never include transcript or clipboard text.
+  // for diagnostics; PostHog gets only structured error_code / source / safe
+  // enums — never free-text message or stack. Callers must never include
+  // transcript or clipboard text.
   .post("/client-error", zValidator("json", clientErrorSchema), (c) => {
     const {
       message,
       stack,
       context,
+      error_code,
       source = "renderer",
     } = c.req.valid("json");
     clientLog.error(`[${source}] ${message}${stack ? `\n${stack}` : ""}`);
 
     const err = new Error(message);
     if (stack) err.stack = stack;
-    captureException(err, { source, ...context });
+    captureException(err, {
+      source,
+      ...(error_code ? { error_code } : {}),
+      ...context,
+    });
 
     return c.json({ ok: true });
   })
