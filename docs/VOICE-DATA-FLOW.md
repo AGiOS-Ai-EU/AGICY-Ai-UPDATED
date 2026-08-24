@@ -7,6 +7,8 @@ If README, NOTICE, or UI copy disagree with this file, this file wins until upda
 **Opt-in upgrade:** Deepgram EU **BYOK** (user API key in Electron `safeStorage`).  
 **Deferred:** AGICY-hosted STT gateway (Phase 3).
 
+> **Shipping today is different.** `v0.9.0-beta.3` installers in the wild default to **AGICY hosted STT**: mic → `agicy.ai/api/stt/transcribe` → **Deepgram EU**, with AGICY as controller and Deepgram as sub-processor. Audio **does** leave the device on that path. Everything below describes the **next** release. For the currently-released behaviour and its compliance status see [PRIVACY.md](../PRIVACY.md) §2.1 and [STT-MIGRATION-PLAN.md](STT-MIGRATION-PLAN.md) §1.0 / §11.
+
 ## Default path — local (on-device)
 
 ```
@@ -44,6 +46,8 @@ Microphone → UPDATED → api.eu.deepgram.com (user’s Deepgram key) → trans
 6. Search mode: cleanup stays off. Dictation: cleanup stays off until a cleanup LLM is configured (“requires a cleanup provider”).
 7. Force a download failure (bad network before Ready) → UI offers **Deepgram EU BYOK**, not a dead-end.
 8. Upgrade path: Brave key in `search-keychain` still powers live search (no silent mock).
+9. **Insufficient disk** → clear error naming space required; no corrupt/partial model left for next launch.
+10. **Checksum** after download + verify before first load; corrupt file → explicit integrity error (not a vague “not ready”).
 
 Search citations / divergence JSONL stay on-device. Optional Brave Search sends **query text** only when you configure a key.
 

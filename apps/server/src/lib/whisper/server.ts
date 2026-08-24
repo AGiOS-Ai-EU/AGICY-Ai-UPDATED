@@ -9,7 +9,7 @@ import {
   whisperSpawnEnv,
 } from "./binary.js";
 import { WHISPER_SERVER_PORT } from "./constants.js";
-import { getDownloadedModelPath } from "./models.js";
+import { assertModelIntegrityForLoad } from "./models.js";
 
 const log = createAppLogger("whisper");
 const serverLog = createAppLogger("whisper-server");
@@ -192,10 +192,7 @@ async function doStart(modelId: string): Promise<void> {
     throw new Error("whisper-server binary not found");
   }
 
-  const modelPath = getDownloadedModelPath(modelId);
-  if (!modelPath) {
-    throw new Error(`Whisper model "${modelId}" not downloaded`);
-  }
+  const modelPath = await assertModelIntegrityForLoad(modelId);
 
   currentModelId = modelId;
   serverReady = false;

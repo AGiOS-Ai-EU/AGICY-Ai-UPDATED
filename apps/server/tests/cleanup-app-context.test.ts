@@ -1,10 +1,25 @@
 import { areAllCleanupTonesOff } from "@freestyle-voice/validations";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { writeSetting } from "../src/lib/db.js";
-import {
-  needsAppContextForCleanup,
-  resolveAppContextForCleanup,
-} from "../src/lib/post-process.js";
+
+vi.mock("../src/lib/providers.js", () => ({
+  getDefaultModels: () => ({
+    voice: {
+      provider: "local-whisper",
+      model_id: "local-whisper/base-q5_1",
+      model_name: "Local Whisper",
+    },
+    llm: {
+      provider: "freestyle-cloud",
+      model_id: "freestyle-cloud/post-process",
+      model_name: "Cleanup",
+    },
+  }),
+}));
+
+const { needsAppContextForCleanup, resolveAppContextForCleanup } = await import(
+  "../src/lib/post-process.js"
+);
 
 const SAMPLE_CONTEXT = "safari|https://mail.google.com|Gmail";
 
@@ -42,6 +57,7 @@ describe("areAllCleanupTonesOff", () => {
 describe("needsAppContextForCleanup", () => {
   beforeEach(() => {
     writeSetting("llm_cleanup", "true");
+    writeSetting("input_mode", "dictation");
     setAllTonesOff();
   });
 
@@ -54,7 +70,7 @@ describe("needsAppContextForCleanup", () => {
     expect(needsAppContextForCleanup()).toBe(false);
   });
 
-  it("returns true when cleanup is on and a sector tone is active", () => {
+  it("returns true when cleanup is on, a provider exists, and a sector tone is active", () => {
     writeSetting("cleanup_personal_tone", "casual");
     expect(needsAppContextForCleanup()).toBe(true);
   });
@@ -63,6 +79,7 @@ describe("needsAppContextForCleanup", () => {
 describe("resolveAppContextForCleanup", () => {
   beforeEach(() => {
     writeSetting("llm_cleanup", "true");
+    writeSetting("input_mode", "dictation");
     setAllTonesOff();
   });
 

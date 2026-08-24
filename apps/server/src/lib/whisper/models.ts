@@ -4,17 +4,20 @@ import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
+  createReadStream,
   createWriteStream,
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   statSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { Readable, Transform } from "node:stream";
+import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { createAppLogger } from "@freestyle-voice/utils";
@@ -22,6 +25,7 @@ import {
   assertEnoughDiskSpace,
   DOWNLOAD_FREE_BUFFER_BYTES,
   describeDownloadError,
+  InsufficientDiskSpaceError,
 } from "../disk.js";
 import {
   assertNotProxyPage,
@@ -45,6 +49,27 @@ import {
 
 const log = createAppLogger("whisper");
 const execFile = promisify(execFileCallback);
+
+/** Explicit codes — never surface corrupt/partial models as a vague "not ready". */
+export const WHISPER_CHECKSUM_FAILED = "whisper_checksum_failed";
+export const WHISPER_MODEL_CORRUPT = "whisper_model_corrupt";
+export const WHISPER_INSUFFICIENT_DISK = "whisper_insufficient_disk";
+
+export class WhisperChecksumError extends Error {
+  readonly code = WHISPER_CHECKSUM_FAILED;
+  constructor(message = "Model download failed checksum verification.") {
+    super(message);
+    this.name = "WhisperChecksumError";
+  }
+}
+
+export class WhisperModelCorruptError extends Error {
+  readonly code = WHISPER_MODEL_CORRUPT;
+  constructor(message = "Local whisper model file is corrupt.") {
+    super(message);
+    this.name = "WhisperModelCorruptError";
+  }
+}
 
 export type DownloadStatus =
   | "not_downloaded"
@@ -95,11 +120,113 @@ function ensureModelsDir(): void {
   }
 }
 
+function checksumSidecarPath(modelPath: string): string {
+  return `${modelPath}.sha256`;
+}
+
+function downloadTempPath(modelPath: string): string {
+  return `${modelPath}.downloading`;
+}
+
+function readSidecarChecksum(modelPath: string): string | null {
+  const side = checksumSidecarPath(modelPath);
+  if (!existsSync(side)) return null;
+  try {
+    const raw = readFileSync(side, "utf8").trim().split(/\s+/)[0];
+    return /^[a-f0-9]{64}$/i.test(raw) ? raw.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSidecarChecksum(modelPath: string, sha256: string): void {
+  writeFileSync(checksumSidecarPath(modelPath), `${sha256}\n`, "utf8");
+}
+
+function removeModelArtifacts(modelPath: string): void {
+  for (const p of [
+    modelPath,
+    downloadTempPath(modelPath),
+    checksumSidecarPath(modelPath),
+  ]) {
+    try {
+      if (existsSync(p)) unlinkSync(p);
+    } catch {}
+  }
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk: Buffer) => {
+      hash.update(chunk);
+    });
+    stream.on("error", reject);
+    stream.on("end", () => resolve());
+  });
+  return hash.digest("hex");
+}
+
+function isDiskFailure(err: unknown): boolean {
+  if (err instanceof InsufficientDiskSpaceError) return true;
+  if (!err || typeof err !== "object") return false;
+  const e = err as NodeJS.ErrnoException;
+  if (e.code === "ENOSPC") return true;
+  const msg = e.message ?? "";
+  return /ENOSPC/i.test(msg) || /no space left on device/i.test(msg);
+}
+
 function isModelDownloaded(model: WhisperModelDef): boolean {
   const path = getModelPath(model);
   if (!existsSync(path)) return false;
-  const stat = statSync(path);
-  return stat.size >= model.sizeBytes * 0.95;
+  // A sibling `.downloading` means a prior attempt left a partial — do not
+  // treat the final name as ready if we somehow have both (should not happen).
+  if (existsSync(downloadTempPath(path))) return false;
+  try {
+    const stat = statSync(path);
+    if (stat.size < model.sizeBytes * 0.95) return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Verify on-disk model before first whisper-server load.
+ * Prefer the `.sha256` sidecar written after a successful download; when absent
+ * (legacy cache), hash once and write the sidecar. On mismatch, delete artifacts
+ * and throw {@link WhisperModelCorruptError} (`whisper_model_corrupt`).
+ */
+export async function assertModelIntegrityForLoad(
+  modelId: string,
+): Promise<string> {
+  const model = getWhisperModel(modelId);
+  if (!model) {
+    throw new Error(`Unknown whisper model: ${modelId}`);
+  }
+  const path = getModelPath(model);
+  if (!isModelDownloaded(model)) {
+    throw new Error(
+      `Local whisper model "${modelId}" is not downloaded yet. Open Settings → Dictation to download it.`,
+    );
+  }
+
+  const stored = readSidecarChecksum(path);
+  const actual = await sha256File(path);
+  if (stored) {
+    if (stored !== actual) {
+      removeModelArtifacts(path);
+      throw new WhisperModelCorruptError(
+        `Local whisper model failed integrity check (${WHISPER_MODEL_CORRUPT}). Re-download from Settings → Dictation.`,
+      );
+    }
+    return path;
+  }
+
+  // Legacy install without sidecar — record hash for future launches.
+  writeSidecarChecksum(path, actual);
+  return path;
 }
 
 function baseModelState(
@@ -218,7 +345,7 @@ export async function downloadModel(modelId: string): Promise<void> {
   ensureModelsDir();
 
   const destPath = getModelPath(model);
-  const tempPath = `${destPath}.downloading`;
+  const tempPath = downloadTempPath(destPath);
   // Hoisted so the catch can point the user at the model source when a proxy
   // or captive portal blocks the download.
   const url = `https://huggingface.co/${WHISPER_REPO}/resolve/${WHISPER_REPO_REVISION}/${model.fileName}`;
@@ -281,38 +408,60 @@ export async function downloadModel(modelId: string): Promise<void> {
         : Number(res.headers.get("content-length")));
     if (total > 0) active.bytesTotal = total;
 
-    // When resuming we cannot verify sha256 of the whole file cheaply without
-    // re-reading the partial — skip checksum on resume; full downloads verify.
-    const hash = resumeFrom > 0 ? null : createHash("sha256");
-    const hashThrough = new Transform({
-      transform(chunk, _enc, cb) {
-        hash?.update(chunk);
-        cb(null, chunk);
-      },
-    });
+    // Stream bytes; full-file checksum runs after the write (including resume)
+    // so a resumed download is never promoted without integrity verification.
     await pipeline(
       webBodyToReadable(res.body),
-      hashThrough,
       createWriteStream(tempPath, { flags: resumeFrom > 0 ? "a" : "w" }),
     );
-    if (hash && expectedSha && hash.digest("hex") !== expectedSha) {
-      throw new Error(
-        "Model download failed a checksum verification (corrupted transfer). Please try again.",
+
+    active.phase = "downloading_model";
+    const actualSha = await sha256File(tempPath);
+    if (expectedSha && actualSha !== expectedSha) {
+      try {
+        unlinkSync(tempPath);
+      } catch {}
+      throw new WhisperChecksumError(
+        `Model download failed checksum verification (${WHISPER_CHECKSUM_FAILED}). The partial file was removed — please try again.`,
       );
     }
+    writeSidecarChecksum(destPath, actualSha);
     renameSync(tempPath, destPath);
     activeDownloads.delete(modelId);
   } catch (err) {
-    try {
-      if (existsSync(tempPath)) unlinkSync(tempPath);
-    } catch {}
+    const aborted = controller.signal.aborted;
+    const wipePartial =
+      isDiskFailure(err) || err instanceof WhisperChecksumError;
 
-    if (controller.signal.aborted) {
+    // Disk / checksum failures must not leave a corrupt or half-written model
+    // for the next launch. Network interrupts and user cancel keep `.downloading`
+    // so Range resume can continue.
+    if (wipePartial) {
+      try {
+        if (existsSync(tempPath)) unlinkSync(tempPath);
+      } catch {}
+      try {
+        if (existsSync(checksumSidecarPath(destPath))) {
+          unlinkSync(checksumSidecarPath(destPath));
+        }
+      } catch {}
+    }
+
+    if (aborted) {
       activeDownloads.delete(modelId);
       return;
     }
 
-    active.error = describeDownloadError(err);
+    active.error =
+      err instanceof WhisperChecksumError
+        ? err.message
+        : describeDownloadError(err);
+    if (
+      isDiskFailure(err) &&
+      !active.error.includes(WHISPER_INSUFFICIENT_DISK)
+    ) {
+      active.error = `${active.error} (${WHISPER_INSUFFICIENT_DISK})`;
+    }
     active.errorSourceUrl = downloadErrorSourceUrl(err, url);
     throw err;
   }
@@ -342,8 +491,12 @@ export async function deleteModel(modelId: string): Promise<boolean> {
   try {
     if (existsSync(path)) {
       unlinkSync(path);
-      return true;
     }
+    const side = checksumSidecarPath(path);
+    if (existsSync(side)) unlinkSync(side);
+    const temp = downloadTempPath(path);
+    if (existsSync(temp)) unlinkSync(temp);
+    return true;
   } catch {}
   return false;
 }

@@ -3,6 +3,7 @@ import { createAppLogger } from "@freestyle-voice/utils";
 import { isServerBinaryAvailable } from "../../whisper/binary.js";
 import { WHISPER_PROVIDER_ID } from "../../whisper/constants.js";
 import {
+  assertModelIntegrityForLoad,
   downloadModel,
   ensureBinariesDownloaded,
   getDownloadedModelPath,
@@ -68,6 +69,7 @@ export class WhisperLocalTranscriptionProvider
     }
 
     return withServerUse(async () => {
+      await assertModelIntegrityForLoad(modelId);
       await ensureServerRunning(modelId);
 
       const t0 = Date.now();

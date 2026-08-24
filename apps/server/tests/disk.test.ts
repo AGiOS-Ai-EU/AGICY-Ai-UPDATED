@@ -12,6 +12,7 @@ describe("describeDownloadError", () => {
     const msg = describeDownloadError(err);
     expect(msg).toMatch(/not enough disk space/i);
     expect(msg).toMatch(/3\.0 GB/);
+    expect(msg).toMatch(/model \+ buffer|safety buffer|available/i);
     expect(msg).not.toContain("\n");
   });
 
