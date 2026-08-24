@@ -379,7 +379,7 @@ Freestyle Cloud streamed partials; local whisper.cpp default is **batch** (recor
 |--------|--------|
 | **Accept batch latency** for first local ship | **Chosen** |
 | Clear **“Transcribing…”** (or equivalent) after hotkey release | **Required** — not an indefinite spinner |
-| Cold-start note | First utterance may include model load; if hotkey→text is **≥ ~10s**, show an explicit warming / loading state, not a silent hang. **Measured (§11): 1.9 s cold on the default `base-q5_1`, 4.2 s on `small-q5_1` — threshold not reached; `large` unmeasured** |
+| Cold-start note | First utterance may include model load; if hotkey→text is **≥ ~10s**, show an explicit warming / loading state, not a silent hang. **Measured (§11): 1.0–1.9 s cold on shipping `base-q5_1` (56.9 MiB), 3.6–4.2 s on `small-q5_1` (181 MiB) — threshold not reached; legacy ~142 MB `ggml-base.bin` is not the default; `large` unmeasured** |
 | Chunked / pseudo-streaming partials | **Follow-up** — not blocking combined Phase 1+2 |
 
 QA must not treat missing live partials as a local-STT regression.
@@ -531,13 +531,13 @@ Automated coverage lives in `apps/server/tests/`:
 
 | # | Criterion | win32 x64 | macOS / Linux |
 |---|-----------|-----------|---------------|
-| 1 | Fresh profile, no cached model | ✅ | ⬜ |
-| 2 | Visible progress; interrupt at 60% → **resume** (not restart) | ✅ resumed from 35,553,792 / 59,707,625 B via HTTP Range | ⬜ |
-| 3 | Offline dictation after download | ✅ all non-loopback fetch blocked; transcript still returned | ⬜ |
-| 4 | Download failure → offers Deepgram EU BYOK | ✅ code-audited — see below | ⬜ |
-| 5 | Cold-start hotkey→text latency | ✅ **1.9 s** cold / 1.5 s warm on the shipping default | ⬜ |
-| 6 | Batch path shows **Transcribing…** | ✅ **was failing**, fixed — see below | ⬜ |
-| 7 | Brave key preserved on upgrade | ⚠️ code-audited PASS; **needs a real beta.3 profile** | ⬜ |
+| 1 | Fresh profile, no cached model | ✅ | ⬜ **not run** (no macOS/Linux agent host) |
+| 2 | Visible progress; interrupt at 60% → **resume** (not restart) | ✅ resumed from 35,553,792 / 59,707,625 B via HTTP Range | ⬜ **not run** |
+| 3 | Offline dictation after download | ✅ all non-loopback fetch blocked; transcript still returned | ⬜ **not run** |
+| 4 | Download failure → offers Deepgram EU BYOK | ✅ **working path** (not message-only) — see below | ⬜ |
+| 5 | Cold-start hotkey→text latency | ✅ **~1.0–1.9 s** cold on shipping default — see below | ⬜ **not run** |
+| 6 | Batch path shows **Transcribing…** | ✅ fixed + unit-tested — see below | ⬜ |
+| 7 | Brave key preserved on upgrade | ⚠️ code PASS; **live beta.3-key check BLOCKED** — see below | ⬜ |
 | 9 | Insufficient disk → named space, no corrupt leftover | ✅ unit-level (`disk.test.ts`, wipe-on-ENOSPC) | ⬜ |
 | 10 | Checksum after download + before load | ✅ unit + E2E (`.sha256` sidecar) | ⬜ |
 
@@ -545,21 +545,26 @@ Automated coverage lives in `apps/server/tests/`:
 
 | Model | On disk | Cold hotkey→text | Warm |
 |-------|---------|------------------|------|
-| **`base-q5_1` — the shipping default** | 59,707,625 B (**56.9 MiB**) | **1.9 s** | 1.5 s |
-| `small-q5_1` — Whisper Balanced | 190,085,487 B (181.3 MiB) | 4.2 s | 3.0 s |
+| **`base-q5_1` — the shipping default** | 59,707,625 B (**56.9 MiB**) | **1.0–1.9 s** (re-measured 2026-08-24: spawn→text **1.0 s**; earlier E2E **1.9 s**) | **0.85–1.5 s** |
+| `small-q5_1` — Whisper Balanced (~145 MB class / larger) | 190,085,487 B (**181.3 MiB**) | **3.6–4.2 s** (re-measured **3.6 s**) | **2.6–3.0 s** |
+| Legacy `base` / `ggml-base.bin` (**not shipped**) | ~142 MB | **not the default** — catalog legacy only | — |
 | `large` — Whisper Pro | ~1.6 GB | **not measured** | — |
 
-**No warming UX is needed for the default.** 3.2× the model size cost 2.2× the cold start, so the ~10 s threshold in Decision 2b is not in play for `base-q5_1` or `small-q5_1`.
+> **Size clarification (do not re-open):** the “~145 MB default” figure was the **non-quantized legacy `ggml-base.bin` (~142 MB)**. Shipping default is **`base-q5_1` / `ggml-base-q5_1.bin` at 56.9 MiB** (`WHISPER_MODELS` + on-disk measurement). Even the next tier (`small-q5_1` at 181 MiB) stays well under the 10 s warming threshold.
+
+**No warming UX is needed for the default.** Re-measure and the 181 MiB tier both stay **≪ 10 s**, so Decision 2b’s warming threshold is not in play for `base-q5_1` or `small-q5_1`.
 
 > **⚠️ Open risk — `large` (Whisper Pro) vs the 15 s transcribe watchdog.** `TRANSCRIBE_TIMEOUT_MS = 15_000` in `apps/electron/src/renderer/src/lib/dictation.ts` re-submits the whole WAV over REST if no final arrives in time. Extrapolating the measured curve, a 1.6 GB cold load plausibly exceeds 15 s, which would fire the watchdog **while the first inference is still running** — a duplicate request queued behind the same busy whisper-server, not a recovery. Before shipping Whisper Pro as a selectable option, either scale the watchdog with model size, have the server signal "still warming", or gate the model behind a first-use warning. Not a blocker for the default path.
 
-**Item 4 — verified by code audit.** On `status: "error"` the Dictation settings pane auto-reveals a **“Fallback — Deepgram EU”** section with the key input, plus a **“Use Deepgram EU instead”** button that calls `selectVoiceStt("deepgram", …)` (`settings-view.tsx`). It is a real click-path, not just prose. **Nuance:** pasting a key while the provider is still `local-whisper` saves the key but does **not** switch providers — the user must press the button. Worth a GUI pass to confirm the section is visible without scrolling.
+**Item 4 — PASS (working path to key field, not message-only).** On `status: "error"` the Dictation settings pane auto-reveals a **“Fallback — Deepgram EU”** section with the **key `<input>`**, plus a **“Use Deepgram EU instead”** button that calls `selectVoiceStt("deepgram", …)` (`settings-view.tsx`). The same CTA also appears for `not_downloaded` / non-ready states. **Live check (2026-08-24, Electron preview + API):** parking the model → `not_downloaded`, then exercising the CTA via `POST /api/models/configured` switched the default voice provider to `deepgram` (201) — the condition that shows the key field. **Nuance:** pasting a key while the provider is still `local-whisper` saves the key but does **not** switch providers — the user must press the button. Full pixel-click GUI on the error chrome still nice-to-have; the path is not prose-only.
 
-**Item 6 — was genuinely broken; fixed on this branch.** Both bubbles fell through to a bare `"…"` between hotkey release and insertion, because the batch path streams no partials. Indistinguishable from a hang. Now `"Transcribing…"`, with the label logic in `renderer/src/lib/dictation-bubble.ts` and a regression test.
+**Item 6 — PASS (was broken; fixed).** Both bubbles fell through to a bare `"…"` between hotkey release and insertion, because the batch path streams no partials. Now `"Transcribing…"`, with label logic in `renderer/src/lib/dictation-bubble.ts` and a regression test (`dictation-bubble.test.ts` — 5/5 pass). Live hotkey→bubble was not re-exercised in preview (native `windows-key-listener` binary missing → hotkey registration failed); unit coverage is the gate.
 
-**Item 7 — audit passes, but the real check is still owed.** Write and read both use `{userData}/keychain/brave-search.key` via `safeStorage` (`search-keychain.ts`); migrations v22–v27 touch SQLite only and never the keychain. **However** v23 does `DROP TABLE api_keys`, and `getBraveSearchApiKey()` returns `null` on any decrypt failure, after which search silently falls back to mock — the exact silent-failure shape this item exists to catch. Must be verified by upgrading **a real beta.3 profile that already had a Brave key**, not by pasting a key post-upgrade; those are different code paths.
+**Item 7 — BLOCKED on this machine (not a silent-unread finding).** Write/read use `{userData}/keychain/brave-search.key` via `safeStorage`; migrations v22–v27 touch SQLite only and never the keychain. **However** v23 `DROP TABLE api_keys`, and `getBraveSearchApiKey()` returns `null` on decrypt failure → silent mock fallback — the failure shape this item exists to catch. **Local `%APPDATA%\UPDATED` profile:** schema reached **v27** under this branch, **`keychain/` directory absent**, no `brave-search.key`. Cannot prove survival of a **pre-existing beta.3 Brave key** here. Still owed: upgrade a real beta.3 profile that already had a Brave key (do not paste post-upgrade).
 
-Remaining before release: a GUI pass on items 4 and 6, the beta.3-profile check for item 7, and macOS/Linux runs of 1–3, 5.
+**Platform matrix:** win32 x64 proven for items 1–6, 9–10 (above). **macOS / Linux: not run** — no agent host available this session; leave ⬜ until a darwin/linux runner executes 1–3 and 5.
+
+Remaining before merge/RC: **item 7 live Brave-key upgrade**, **macOS/Linux 1–3+5**, optional pixel-click of item 4 error chrome.
 
 ### Non-blocking / later
 
