@@ -115,6 +115,13 @@ const api = {
     ipcRenderer.send("panel:open-for-dictation"),
   panelOpenForSearch: (query: string): void =>
     ipcRenderer.send("panel:open-for-search", query),
+  panelShowTelemetryConsent: (): void =>
+    ipcRenderer.send("panel:show-telemetry-consent"),
+  onPanelTelemetryConsent: (callback: () => void): (() => void) => {
+    const handler = (): void => callback();
+    ipcRenderer.on("panel:telemetry-consent", handler);
+    return () => ipcRenderer.removeListener("panel:telemetry-consent", handler);
+  },
   panelDictationPartial: (text: string): void =>
     ipcRenderer.send("panel:dictation-partial", text),
   panelDictationFinal: (text: string): void =>

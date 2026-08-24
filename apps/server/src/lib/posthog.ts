@@ -1,11 +1,17 @@
 import crypto from "node:crypto";
 import { PostHog } from "posthog-node";
 import { getDb } from "./db.js";
+import { resolveErrorCode, safeErrorProperties } from "./error-telemetry.js";
+
+export { resolveErrorCode } from "./error-telemetry.js";
 
 let _client: PostHog | null = null;
 
-const POSTHOG_API_KEY = "phc_mDhFafyLK3Safsrrehi7rnH2X9jVMMGNAwKWuJsEN54w";
-const POSTHOG_HOST = "https://us.i.posthog.com";
+/** Prefer an explicit EU project key; never fall back to a baked-in US key. */
+const POSTHOG_API_KEY =
+  process.env.POSTHOG_API_KEY?.trim() || process.env.POSTHOG_KEY?.trim() || "";
+const POSTHOG_HOST =
+  process.env.POSTHOG_HOST?.trim() || "https://eu.i.posthog.com";
 
 function getEnvironment(): string {
   return process.env.FREESTYLE_ENV === "production"
@@ -44,9 +50,8 @@ function isTelemetryOptedOut(): boolean {
  * Drop the cached `telemetry_enabled` value so the next check re-reads it.
  *
  * Turning the setting off also tears down the client. It is a lazy singleton
- * that owns a background flush timer and the exception-autocapture hooks, so
- * re-reading a flag is not enough on its own: `disable()` puts the client into
- * opt-out (autocapture checks `isDisabled` too) and dropping the reference
+ * that owns a background flush timer, so re-reading a flag is not enough on its
+ * own: `disable()` puts the client into opt-out and dropping the reference
  * means a later opt-in builds a fresh one. The toggle therefore takes effect
  * immediately rather than at the next launch.
  */
@@ -59,6 +64,7 @@ export function invalidateTelemetrySetting(): void {
 }
 
 function isEnabled(): boolean {
+  if (!POSTHOG_API_KEY) return false;
   if (process.env.DO_NOT_TRACK === "1") return false;
   const devOptIn = process.env.FREESTYLE_ANALYTICS_DEV === "1";
   if (getEnvironment() !== "production" && !devOptIn) return false;
@@ -66,15 +72,15 @@ function isEnabled(): boolean {
   return !isTelemetryOptedOut();
 }
 
-function getClient(): PostHog {
+function getClient(): PostHog | null {
+  if (!POSTHOG_API_KEY) return null;
   if (_client) return _client;
 
   _client = new PostHog(POSTHOG_API_KEY, {
     host: POSTHOG_HOST,
-    enableExceptionAutocapture: true,
+    enableExceptionAutocapture: false,
   });
-  // Super properties: attached to every event for the client's lifetime
-  // (manual capture, captureException, and autocaptured exceptions), so each
+  // Super properties: attached to every event for the client's lifetime, so each
   // event records the release and environment it came from. Event-level
   // properties still override these.
   _client.register({
@@ -193,7 +199,9 @@ export function identifyCloudUser(user: CloudIdentity): void {
     if (linked !== user.id) writeSetting(LINKED_USER_KEY, user.id);
 
     if (!isEnabled()) return;
-    getClient().identify({
+    const client = getClient();
+    if (!client) return;
+    client.identify({
       distinctId: user.id,
       // $anon_distinct_id is the supported replacement for alias(): it merges
       // the pre-sign-in device person into this user, once.
@@ -204,7 +212,7 @@ export function identifyCloudUser(user: CloudIdentity): void {
     // The account id is enough to join a PostHog person to the AGICY account
     // record, and it is the only identifier this build sends. Email and display
     // name used to ride along as person properties, which put directly
-    // identifying account data on a US processor for no analytical gain — look
+    // identifying account data on a processor for no analytical gain — look
     // the user up in AGICY's own systems by id instead.
   } catch {
     // Never let analytics errors affect the app
@@ -218,7 +226,9 @@ export function identifyCloudUser(user: CloudIdentity): void {
 export function setPersonProperties(properties: Record<string, unknown>): void {
   try {
     if (!isEnabled()) return;
-    getClient().capture({
+    const client = getClient();
+    if (!client) return;
+    client.capture({
       distinctId: activeDistinctId(),
       event: "$set",
       properties: { $set: properties },
@@ -234,7 +244,7 @@ export function registerSuperProperties(
 ): void {
   try {
     if (!isEnabled()) return;
-    getClient().register(properties);
+    getClient()?.register(properties);
   } catch {
     // Never let analytics errors affect the app
   }
@@ -250,7 +260,9 @@ export function capture(
 ): void {
   try {
     if (!isEnabled()) return;
-    getClient().capture({
+    const client = getClient();
+    if (!client) return;
+    client.capture({
       distinctId: activeDistinctId(),
       event,
       properties,
@@ -260,17 +272,32 @@ export function capture(
   }
 }
 
+/**
+ * Report a crash/error as a structured product event — never as PostHog
+ * exception autocapture, and never with free-text message or stack.
+ *
+ * Full message/stack belong in the local diagnostic log only.
+ */
 export function captureException(
   error: unknown,
   additionalProperties?: Record<string, unknown>,
 ): void {
   try {
     if (!isEnabled()) return;
-    getClient().captureException(
-      error,
-      activeDistinctId(),
-      additionalProperties,
-    );
+    const client = getClient();
+    if (!client) return;
+    client.capture({
+      distinctId: activeDistinctId(),
+      event: "app_error",
+      properties: {
+        error_code: resolveErrorCode(error, additionalProperties),
+        source:
+          typeof additionalProperties?.source === "string"
+            ? additionalProperties.source.slice(0, 64)
+            : "server",
+        ...safeErrorProperties(additionalProperties),
+      },
+    });
   } catch {
     // Never let analytics errors affect the app
   }

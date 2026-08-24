@@ -12,12 +12,19 @@
 | | |
 |---|---|
 | **Sub-processor** | PostHog |
-| **Endpoint** | `https://us.i.posthog.com` — **United States** |
-| **Purpose** | Product analytics and crash reporting |
+| **Endpoint** | `https://eu.i.posthog.com` — **European Union** (default; override with `POSTHOG_HOST`) |
+| **API key** | From env: `POSTHOG_API_KEY` or `POSTHOG_KEY`. No key is baked into source. Without a key, analytics is inert. |
+| **Purpose** | Product analytics and structured crash visibility |
 | **Default** | **Off.** Nothing is sent until the user turns it on. |
-| **Lawful basis** | Consent (Art. 6(1)(a)), given by the toggle and withdrawn by the same toggle |
+| **Lawful basis** | Consent (Art. 6(1)(a)), given by the post-dictation prompt or the Settings toggle, and withdrawn by the same toggle |
 
-Because the project is addressed on PostHog's **US** endpoint, enabling this setting transfers the data below **outside the EEA**. That transfer needs SCCs or another appropriate safeguard listed on agicy.ai before 1.0. Switching the host to PostHog's EU region (`https://eu.i.posthog.com`) is a one-line change in `apps/server/src/lib/posthog.ts` and removes the transfer question entirely — recommended.
+### EU cutover (2026-08-24 UTC)
+
+On **2026-08-24** the project endpoint switched from PostHog US (`https://us.i.posthog.com`) to PostHog EU (`https://eu.i.posthog.com`).
+
+- The **US project is archived / not migrated**. Historical events stay there on purpose.
+- Those historical events contained task names, free-text trade, and account emails that this branch no longer sends. A **continuity gap is intentional** — do not attempt to migrate US PostHog data into the EU project.
+- Create a **new EU PostHog project**, then set `POSTHOG_API_KEY` (or `POSTHOG_KEY`) in the environment that runs the embedded server (dev: `apps/electron/.env.local`; packaged builds: inject the same env var at runtime or build time). There is **no existing GitHub Actions secret** for PostHog in this repo — do not invent one until release packaging is wired; the env var name to use when that happens is `POSTHOG_API_KEY`.
 
 PostHog must also be named as a sub-processor in the published agicy.ai privacy notice and in the `PRIVACY.md` roles table.
 
@@ -25,12 +32,24 @@ PostHog must also be named as a sub-processor in the published agicy.ai privacy 
 
 ## 2. Opting in and out
 
+### Post-dictation consent (primary)
+
+Consent is **not** asked during first-launch onboarding (mic permission, model download, first dictation). After the **first successful dictation** — once text has appeared at the cursor, in the composer, or in search — UPDATED shows a one-beat, non-blocking card:
+
+- **Share anonymous usage data** → sets `telemetry_enabled=true` and `telemetry_consent_asked=true` (takes effect immediately via `invalidateTelemetrySetting`).
+- **Not now** / dismiss → leaves `telemetry_enabled` off (default) and sets `telemetry_consent_asked=true` so the prompt never returns.
+
+Settings keys: `first_dictation_completed`, `telemetry_consent_asked`, `telemetry_enabled`.
+
+### Settings toggle (anytime)
+
 Settings → **Data** → **Share anonymous usage data**.
 
 - The toggle is **off on a fresh install**; a build that has never been touched sends nothing.
-- Turning it off takes effect **immediately, without a restart**: the setting write tears down the live PostHog client, which also silences exception autocapture.
+- Turning it off takes effect **immediately, without a restart**: the setting write tears down the live PostHog client.
 - `DO_NOT_TRACK=1` in the environment disables telemetry unconditionally, regardless of the toggle.
 - Non-production builds send nothing unless `FREESTYLE_ANALYTICS_DEV=1` is set.
+- If telemetry is already enabled via Settings before the first dictation, the post-dictation card is skipped.
 
 Under the hood the toggle is the SQLite setting `telemetry_enabled`; only the literal string `"true"` enables telemetry.
 
@@ -45,15 +64,15 @@ Under the hood the toggle is the SQLite setting `telemetry_enabled`; only the li
 | Configuration ids | STT/LLM provider and model id, sprite id, connector slug (e.g. `gmail`), UI tab id, permission kind, onboarding trade **bucketed to a preset chip or `other`**, setting **key** (never its value) |
 | Anonymous identity | a random device UUID generated on this machine; after sign-in, the AGICY **account id** |
 | Super properties (attached to every event) | `app_version`, `environment` (`production` / `development`), `os` (platform string), `plan` (`free` / `pro`) |
-| Crash reports | error **message and stack trace**, plus a source label. `enableExceptionAutocapture: true` is set, so unhandled exceptions in the server process are reported automatically in addition to those reported explicitly. Stack traces name file paths and function names from the app bundle, and an error message can quote whatever the throwing code put in it. |
+| Crash / error visibility | structured `app_error` events with enumerated `error_code` (e.g. `whisper_checksum_failed`, `whisper_model_corrupt`) plus safe enums such as `source`, `kind`, `provider`, `model`, `plugin`, `hook`. **No free-text exception messages or stack traces** go to PostHog. `enableExceptionAutocapture` is **off**. |
 
-Crash reports are always written to the local log file for diagnostics. Only the upload to PostHog is gated by the toggle.
+Full error messages and stacks are always written to the **local log file** for diagnostics. Only the structured upload to PostHog is gated by the toggle.
 
 ---
 
 ## 4. What is never collected
 
-This is a product commitment, and it is enforced in code: the telemetry relay runs every renderer-supplied property through a content guard (`apps/server/src/lib/telemetry-guard.ts`) that drops any property carrying free text, so a future call site cannot leak content by accident.
+This is a product commitment, and it is enforced in code: the telemetry relay runs every renderer-supplied property through a content guard (`apps/server/src/lib/telemetry-guard.ts`) that drops any property carrying free text, so a future call site cannot leak content by accident. Crash reporting deliberately does **not** bypass that spirit — `captureException` emits `app_error` with codes only.
 
 - **No transcripts** — no dictated text, no cleaned text.
 - **No audio** — no recordings, no buffers.
@@ -65,12 +84,12 @@ This is a product commitment, and it is enforced in code: the telemetry relay ru
 - **No email address or display name.** Sign-in identifies the person to PostHog by **account id only**; account details stay in AGICY's own systems.
 - **No setting values** — only which key changed.
 - **No user-written names** — scheduled tasks report a character count, not the task name.
+- **No free-text exception messages or stacks** on the wire to PostHog.
 
 ---
 
 ## 5. Open items
 
 - [ ] Name PostHog as a sub-processor on agicy.ai and in the `PRIVACY.md` roles table.
-- [ ] Move analytics to PostHog's EU endpoint, or document the US transfer safeguard.
-- [ ] Consider a first-run consent prompt so the opt-in is offered rather than buried in Settings.
-- [ ] Review whether `enableExceptionAutocapture` should stay on, given error messages are free text that the guard does not police (crash reporting deliberately bypasses it — a stack trace is the point).
+- [ ] Create the EU PostHog project and set `POSTHOG_API_KEY` for packaged releases (env var documented above; no GitHub secret exists yet).
+- [ ] Fold this doc into `PRIVACY.md` once the local-STT branch lands.

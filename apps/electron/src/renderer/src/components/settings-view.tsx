@@ -1768,12 +1768,12 @@ function DataPage({
         }
       />
       <p className="tavern-set-hint">
-        Off by default. When on, UPDATED sends product analytics and crash
-        reports to PostHog in the United States: which features you used, how
-        often, model ids, app version, and error messages with stack traces.
-        Never your recordings, transcripts, searches, prompts, window titles,
-        clipboard, or brain files. Turning it off takes effect immediately. Full
-        list in docs/TELEMETRY.md.
+        Off by default. When on, UPDATED sends product analytics to PostHog in
+        the EU: which features you used, how often, model ids, app version, and
+        structured error codes. Never your recordings, transcripts, searches,
+        prompts, window titles, clipboard, brain files, or free-text exception
+        messages. Turning it off takes effect immediately. Full list in
+        docs/TELEMETRY.md.
       </p>
     </>
   );

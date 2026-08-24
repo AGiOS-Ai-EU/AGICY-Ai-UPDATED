@@ -2,11 +2,12 @@ import { apiFetch } from "@renderer/lib/api";
 
 /**
  * Report a renderer-side error to the server, which always persists it to the
- * local diagnostic log file and (if telemetry is enabled) forwards it to
- * PostHog. Fire-and-forget — reporting must never interrupt the UI.
+ * local diagnostic log file and (if telemetry is enabled) forwards a structured
+ * `app_error` to PostHog — never free-text message/stack. Fire-and-forget —
+ * reporting must never interrupt the UI.
  *
- * Only the message, stack, and a small structured `context` are sent. Never
- * pass transcript text, clipboard content, or other PII as context.
+ * Prefer passing `error_code` (or other safe enums) in `context`. Never pass
+ * transcript text, clipboard content, or other PII.
  */
 export function reportError(
   error: unknown,
@@ -14,6 +15,12 @@ export function reportError(
 ): void {
   try {
     const err = error instanceof Error ? error : new Error(String(error));
+    const errorCode =
+      typeof context?.error_code === "string"
+        ? context.error_code
+        : typeof context?.kind === "string"
+          ? context.kind
+          : undefined;
     apiFetch("/api/client-error", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21,6 +28,7 @@ export function reportError(
         message: err.message || "Unknown error",
         stack: err.stack,
         source: "renderer",
+        ...(errorCode ? { error_code: errorCode } : {}),
         context,
       }),
       // Survive the window navigating/closing right after a crash.

@@ -4122,3 +4122,53 @@
 .tavern-opener {
   padding: 7px 10px;
 }
+
+/* Post-dictation telemetry consent — one beat, non-blocking. */
+.tavern-telemetry-consent {
+  margin: 10px 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--tavern-rule);
+  border-radius: 12px;
+  background: var(--tavern-card);
+  color: var(--tavern-ink);
+}
+
+.tavern-telemetry-consent-copy {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tavern-telemetry-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tavern-telemetry-consent-accept,
+.tavern-telemetry-consent-decline {
+  border: 1px solid var(--tavern-rule);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tavern-telemetry-consent-accept {
+  background: var(--tavern-lantern);
+  border-color: transparent;
+  color: #1a140c;
+  font-weight: 600;
+}
+
+.tavern-telemetry-consent-decline {
+  background: transparent;
+  color: var(--tavern-ink);
+}
+
+.tavern-telemetry-consent-accept:hover,
+.tavern-telemetry-consent-decline:hover {
+  filter: brightness(0.97);
+}
+

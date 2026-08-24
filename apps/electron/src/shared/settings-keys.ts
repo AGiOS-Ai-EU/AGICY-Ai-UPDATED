@@ -42,6 +42,10 @@ export const SETTINGS_KEYS = {
   reduceMotion: "reduce_motion",
   /** Opt-in product analytics. Absent or anything but "true" means off. */
   telemetryEnabled: "telemetry_enabled",
+  /** One-shot post-dictation consent prompt has been shown (accept or decline). */
+  telemetryConsentAsked: "telemetry_consent_asked",
+  /** First successful dictation delivered text (cursor / composer / search). */
+  firstDictationCompleted: "first_dictation_completed",
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];

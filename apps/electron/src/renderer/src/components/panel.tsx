@@ -17,6 +17,7 @@ import { PanelRail } from "@renderer/components/panel-rail";
 import { SearchTab } from "@renderer/components/search-tab";
 import { SettingsView } from "@renderer/components/settings-view";
 import { Spark } from "@renderer/components/spark";
+import { TelemetryConsentCard } from "@renderer/components/telemetry-consent-card";
 import { ThreadHistory } from "@renderer/components/thread-history";
 import { TodosTab } from "@renderer/components/todos-tab";
 import {
@@ -44,6 +45,10 @@ import {
 } from "@renderer/lib/query";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
 import { useSpriteEmitter } from "@renderer/lib/sprite-emitter";
+import {
+  acceptTelemetryConsent,
+  declineTelemetryConsent,
+} from "@renderer/lib/telemetry-consent";
 import { getThread, type ThreadState } from "@renderer/lib/threads";
 import { highlightToolJson, toolJson } from "@renderer/lib/tool-json";
 import {
@@ -729,6 +734,14 @@ function PanelInner({
   const [spriteForm, setSpriteForm] = useState<CompanionForm>(
     DEFAULT_COMPANION_FORM,
   );
+  const [telemetryConsentOpen, setTelemetryConsentOpen] = useState(false);
+
+  useEffect(() => {
+    const off = window.api.onPanelTelemetryConsent(() => {
+      setTelemetryConsentOpen(true);
+    });
+    return () => off?.();
+  }, []);
 
   useEffect(() => {
     void window.api
@@ -1399,6 +1412,27 @@ function PanelInner({
               ×
             </button>
           </div>
+
+          {telemetryConsentOpen ? (
+            <TelemetryConsentCard
+              onAccept={() => {
+                setTelemetryConsentOpen(false);
+                void acceptTelemetryConsent().then(() => {
+                  void queryClient.invalidateQueries({
+                    queryKey: queryKeys.settings,
+                  });
+                });
+              }}
+              onDecline={() => {
+                setTelemetryConsentOpen(false);
+                void declineTelemetryConsent().then(() => {
+                  void queryClient.invalidateQueries({
+                    queryKey: queryKeys.settings,
+                  });
+                });
+              }}
+            />
+          ) : null}
 
           <div
             className="tavern-body updated-certificate-body"

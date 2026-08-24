@@ -93,21 +93,26 @@ const apiRouter = new Hono()
   )
   // Crash/error reports from the renderer (window.onerror, unhandled
   // rejections, React error boundary). Always persisted to the local log file
-  // for diagnostics; PostHog reporting is gated by the telemetry opt-out inside
-  // captureException. Only message/stack/source/context are accepted — callers
-  // must never include transcript or clipboard text.
+  // for diagnostics; PostHog gets only structured error_code / source / safe
+  // enums — never free-text message or stack. Callers must never include
+  // transcript or clipboard text.
   .post("/client-error", zValidator("json", clientErrorSchema), (c) => {
     const {
       message,
       stack,
       context,
+      error_code,
       source = "renderer",
     } = c.req.valid("json");
     clientLog.error(`[${source}] ${message}${stack ? `\n${stack}` : ""}`);
 
     const err = new Error(message);
     if (stack) err.stack = stack;
-    captureException(err, { source, ...context });
+    captureException(err, {
+      source,
+      ...(error_code ? { error_code } : {}),
+      ...context,
+    });
 
     return c.json({ ok: true });
   })

@@ -3624,6 +3624,13 @@ ipcMain.on("panel:open-for-dictation", (event) => {
   openPanel({ focusComposer: true, trigger: "dictation" });
 });
 
+ipcMain.on("panel:show-telemetry-consent", (event) => {
+  if (event.sender !== companionWindow?.webContents) return;
+  // showInactive — don't steal focus from the app they just dictated into.
+  openPanel({ focusComposer: false, trigger: "other" });
+  panelWindow?.webContents.send("panel:telemetry-consent");
+});
+
 ipcMain.on("panel:open-for-search", (event, query: unknown) => {
   if (event.sender !== companionWindow?.webContents) return;
   openPanel({ trigger: "search" });

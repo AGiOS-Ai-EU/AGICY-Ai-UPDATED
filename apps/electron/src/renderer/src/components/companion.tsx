@@ -6,6 +6,7 @@ import { Spark, sparkScaleFor } from "@renderer/components/spark";
 import { initApiBase } from "@renderer/lib/api";
 import { DictationController } from "@renderer/lib/dictation";
 import { installGlobalErrorHandlers } from "@renderer/lib/report-error";
+import { onFirstSuccessfulDictation } from "@renderer/lib/telemetry-consent";
 import { SPRITES } from "@renderer/sprites/registry";
 import { SpriteStage } from "@renderer/sprites/stage";
 import {
@@ -97,6 +98,11 @@ function useDictation(
           talkSession = false;
           showError(message);
           window.api.panelDictationError(message);
+        },
+        onSuccessfulDictation: () => {
+          void onFirstSuccessfulDictation().then((show) => {
+            if (show) window.api.panelShowTelemetryConsent();
+          });
         },
       },
       {
