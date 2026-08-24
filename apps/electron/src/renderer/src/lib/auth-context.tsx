@@ -12,6 +12,22 @@ import { getClient } from "./api";
 import { resetBrainCache } from "./brain-fs";
 import { queryKeys } from "./query";
 
+const AGICY_DEVICE_PAGE = "https://agicy.ai/updated/my_device";
+
+/** Never open Vercel Deployment Protection / SSO instead of the AGICY device page. */
+function agicyDevicePageUrl(userCode: string, raw?: string): string {
+  const fallback = `${AGICY_DEVICE_PAGE}?user_code=${encodeURIComponent(userCode)}`;
+  if (!raw?.trim()) return fallback;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    if (host === "agicy.ai" || host === "www.agicy.ai") return raw;
+    if (host === "localhost" || host === "127.0.0.1") return raw;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function resetAccountCaches(queryClient: QueryClient): void {
   resetBrainCache();
   queryClient.clear();
@@ -140,9 +156,17 @@ function useCloudAuthState(): UseCloudAuth {
         throw new Error(`Could not start sign-in (${codeRes.status})`);
       const code = await codeRes.json();
       setUserCode(code.user_code);
-      await window.api.openExternal(
-        code.verification_uri_complete || code.verification_uri,
+      const opened = await window.api.openExternal(
+        agicyDevicePageUrl(
+          code.user_code,
+          code.verification_uri_complete || code.verification_uri,
+        ),
       );
+      if (!opened) {
+        throw new Error(
+          `Could not open the sign-in page. Open https://agicy.ai/updated/my_device and enter ${code.user_code}.`,
+        );
+      }
 
       const deadline = Date.now() + code.expires_in * 1000;
       let intervalMs = Math.max(1, code.interval) * 1000;
