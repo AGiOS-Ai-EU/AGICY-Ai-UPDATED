@@ -333,6 +333,9 @@ jobs:
       - name: Build electron (Linux)
         working-directory: apps/electron
         run: pnpm run build:linux
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
 
       - name: Verify native binaries in package
         working-directory: apps/electron
@@ -377,6 +380,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
 
       - name: Run macOS permission flow E2E tests
         working-directory: apps/electron
@@ -424,6 +429,9 @@ jobs:
       - name: Build electron (Windows)
         working-directory: apps/electron
         run: pnpm run build:win
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
 
       - name: Verify native binaries in package
         working-directory: apps/electron

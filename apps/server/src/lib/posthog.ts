@@ -7,11 +7,22 @@ export { resolveErrorCode } from "./error-telemetry.js";
 
 let _client: PostHog | null = null;
 
-/** Prefer an explicit EU project key; never fall back to a baked-in US key. */
-const POSTHOG_API_KEY =
-  process.env.POSTHOG_API_KEY?.trim() || process.env.POSTHOG_KEY?.trim() || "";
-const POSTHOG_HOST =
-  process.env.POSTHOG_HOST?.trim() || "https://eu.i.posthog.com";
+/**
+ * Prefer an explicit EU project key; never fall back to a baked-in US key.
+ *
+ * Read lazily: Electron copies the CI-baked key onto `process.env` at startup
+ * (after this module is imported), and dev loads `apps/electron/.env.local`
+ * the same way. Capturing at module eval would leave packaged builds inert.
+ */
+function posthogApiKey(): string {
+  return (
+    process.env.POSTHOG_API_KEY?.trim() || process.env.POSTHOG_KEY?.trim() || ""
+  );
+}
+
+function posthogHost(): string {
+  return process.env.POSTHOG_HOST?.trim() || "https://eu.i.posthog.com";
+}
 
 function getEnvironment(): string {
   return process.env.FREESTYLE_ENV === "production"
@@ -64,7 +75,7 @@ export function invalidateTelemetrySetting(): void {
 }
 
 function isEnabled(): boolean {
-  if (!POSTHOG_API_KEY) return false;
+  if (!posthogApiKey()) return false;
   if (process.env.DO_NOT_TRACK === "1") return false;
   const devOptIn = process.env.FREESTYLE_ANALYTICS_DEV === "1";
   if (getEnvironment() !== "production" && !devOptIn) return false;
@@ -73,11 +84,12 @@ function isEnabled(): boolean {
 }
 
 function getClient(): PostHog | null {
-  if (!POSTHOG_API_KEY) return null;
+  const apiKey = posthogApiKey();
+  if (!apiKey) return null;
   if (_client) return _client;
 
-  _client = new PostHog(POSTHOG_API_KEY, {
-    host: POSTHOG_HOST,
+  _client = new PostHog(apiKey, {
+    host: posthogHost(),
     enableExceptionAutocapture: false,
   });
   // Super properties: attached to every event for the client's lifetime, so each

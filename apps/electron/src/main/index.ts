@@ -175,6 +175,7 @@ import {
   relayEvent,
 } from "./plugins/index";
 import { invalidatePluginViews } from "./plugins/ui-host";
+import { applyPackagedTelemetryEnv } from "./release-telemetry";
 import { isRemixTargetAllowed } from "./remix-target";
 import { rendererUrl } from "./renderer-url";
 import {
@@ -1947,6 +1948,9 @@ app.whenReady().then(async () => {
   // Expose the app version to the in-process server so PostHog events
   // (including autocaptured exceptions) carry the release they came from.
   process.env.FREESTYLE_APP_VERSION = app.getVersion();
+  // Packaged builds: copy the CI-baked PostHog project key onto process.env
+  // before the in-process server starts. Dev already loaded `.env.local` above.
+  applyPackagedTelemetryEnv();
 
   // Start the Hono HTTP server with WebSocket support (or reuse an existing one)
   const startServer = (port: number): void => {

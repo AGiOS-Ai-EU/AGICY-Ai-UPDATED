@@ -13,7 +13,7 @@
 |---|---|
 | **Sub-processor** | PostHog |
 | **Endpoint** | `https://eu.i.posthog.com` — **European Union** (default; override with `POSTHOG_HOST`) |
-| **API key** | From env: `POSTHOG_API_KEY` or `POSTHOG_KEY`. No key is baked into source. Without a key, analytics is inert. |
+| **API key** | From env: `POSTHOG_API_KEY` or `POSTHOG_KEY`. Nothing is committed in git. Packaged installers receive the **project** key (`phc_…`) at electron-vite build time from GitHub Actions secret `POSTHOG_API_KEY`. Without a key, analytics is inert. **Never use a personal API key (`phx_…`).** |
 | **Purpose** | Product analytics and structured crash visibility |
 | **Default** | **Off.** Nothing is sent until the user turns it on. |
 | **Lawful basis** | Consent (Art. 6(1)(a)), given by the post-dictation prompt or the Settings toggle, and withdrawn by the same toggle |
@@ -24,9 +24,40 @@ On **2026-08-24** the project endpoint switched from PostHog US (`https://us.i.p
 
 - The **US project is archived / not migrated**. Historical events stay there on purpose.
 - Those historical events contained task names, free-text trade, and account emails that this branch no longer sends. A **continuity gap is intentional** — do not attempt to migrate US PostHog data into the EU project.
-- Create a **new EU PostHog project**, then set `POSTHOG_API_KEY` (or `POSTHOG_KEY`) in the environment that runs the embedded server (dev: `apps/electron/.env.local`; packaged builds: inject the same env var at runtime or build time). There is **no existing GitHub Actions secret** for PostHog in this repo — do not invent one until release packaging is wired; the env var name to use when that happens is `POSTHOG_API_KEY`.
+- PostHog must also be named as a sub-processor in the published agicy.ai privacy notice and in the `PRIVACY.md` roles table.
 
-PostHog must also be named as a sub-processor in the published agicy.ai privacy notice and in the `PRIVACY.md` roles table.
+### Human cutover steps (one-time)
+
+Do this before the next beta that should actually emit EU analytics. The plumbing is in CI; the secret value is not.
+
+1. In [PostHog EU](https://eu.posthog.com), create a **new project** (EU cloud, not US).
+2. Open **Project settings** and copy the **project API key**. It starts with `phc_`.
+   - **Never use a personal API key** (`phx_…`). Personal keys authenticate a human against the PostHog API and must not be shipped in the desktop app or stored as this secret.
+3. In GitHub: repo **Settings → Secrets and variables → Actions → New repository secret**.
+   - Name: `POSTHOG_API_KEY`
+   - Value: the `phc_…` project key from step 2.
+   - Optional: secret `POSTHOG_HOST` if you ever need to override the code default `https://eu.i.posthog.com`. Leave unset for EU.
+4. In PostHog US, **archive the old project**. Do not migrate events.
+5. Re-run **Publish desktop beta** (`.github/workflows/beta-release.yml`). Installers built before the secret existed stay inert even if the user opts in.
+
+### How the key reaches the packaged server
+
+The embedded server is **in-process** in Electron main (`startFreestyleServer` from `@freestyle-voice/server`). It is not a child process with its own env file.
+
+| Path | How `POSTHOG_API_KEY` is set |
+|---|---|
+| **Dev** | Copy `apps/electron/.env.example` → `apps/electron/.env.local` (gitignored). Main loads it via `process.loadEnvFile('.env.local')` when `NODE_ENV !== 'production'`. The in-process server inherits `process.env`. |
+| **Packaged release** | `.env.local` is **not** loaded (that block is dead-code-eliminated) and electron-builder **excludes** `.env*`. GitHub Actions secret `POSTHOG_API_KEY` is passed as env to `electron-vite build` (same pattern as `CSC_LINK` / Apple notarization env). Vite inlines it as `__UPDATED_POSTHOG_API_KEY__`; `applyPackagedTelemetryEnv()` copies it onto `process.env` before the server starts. |
+| **Missing secret** | Analytics stays inert. The beta-release validate job warns; it only **fails** if the secret looks like a personal key (`phx_`). |
+
+### Local development
+
+```bash
+cp apps/electron/.env.example apps/electron/.env.local
+# Uncomment POSTHOG_API_KEY=phc_… (EU project key) and set FREESTYLE_ANALYTICS_DEV=1
+```
+
+`.env.local` is gitignored and is **not** packed into installers. A local `pnpm run build:win` (etc.) only bakes a key if `POSTHOG_API_KEY` is already in that shell.
 
 ---
 
@@ -91,5 +122,5 @@ This is a product commitment, and it is enforced in code: the telemetry relay ru
 ## 5. Open items
 
 - [ ] Name PostHog as a sub-processor on agicy.ai and in the `PRIVACY.md` roles table.
-- [ ] Create the EU PostHog project and set `POSTHOG_API_KEY` for packaged releases (env var documented above; no GitHub secret exists yet).
+- [ ] Human: create the EU PostHog project, add GitHub secret `POSTHOG_API_KEY` (`phc_…` project key only), archive the US project — see **Human cutover steps** above. Plumbing is in this branch; the secret value is not.
 - [ ] Fold this doc into `PRIVACY.md` once the local-STT branch lands.

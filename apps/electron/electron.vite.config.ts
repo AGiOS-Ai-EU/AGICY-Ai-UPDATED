@@ -35,6 +35,13 @@ export default defineConfig({
       "process.env.NODE_ENV": JSON.stringify(
         process.env.NODE_ENV || "production",
       ),
+      // Packaged installers have no `.env.local`. beta-release.yml / build.yml
+      // pass GitHub secret POSTHOG_API_KEY (project key, phc_…) into this build.
+      // Copied onto process.env at runtime in src/main/release-telemetry.ts.
+      __UPDATED_POSTHOG_API_KEY__: JSON.stringify(
+        process.env.POSTHOG_API_KEY ?? "",
+      ),
+      __UPDATED_POSTHOG_HOST__: JSON.stringify(process.env.POSTHOG_HOST ?? ""),
     },
     build: {
       externalizeDeps: false,

@@ -50,6 +50,22 @@ jobs:
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Check PostHog project API key
+        shell: bash
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${POSTHOG_API_KEY}" ]]; then
+            echo "POSTHOG_API_KEY secret is empty — packaged analytics will be inert until it is added (project key phc_…, never personal phx_…)."
+          elif [[ "${POSTHOG_API_KEY}" == phx_* ]]; then
+            echo "::error::POSTHOG_API_KEY is a personal API key (phx_). Use the EU project API key (phc_) from Project settings. See docs/TELEMETRY.md."
+            exit 1
+          elif [[ "${POSTHOG_API_KEY}" != phc_* ]]; then
+            echo "::warning::POSTHOG_API_KEY does not start with phc_. Project API keys usually do; personal keys (phx_) must never be used."
+          else
+            echo "PostHog project API key is present and will be baked into the installers."
+          fi
 
   build-linux:
     needs: validate
@@ -68,6 +84,9 @@ jobs:
       - name: Build Linux installers
         working-directory: apps/electron
         run: pnpm run build:linux
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
       - name: Verify packaged native binaries
         working-directory: apps/electron
         run: node scripts/verify-native-binaries.mjs
@@ -107,6 +126,8 @@ jobs:
         run: pnpm run build:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ needs.validate.outputs.windows_signing == 'true' && 'true' || 'false' }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
       - name: Verify packaged native binaries
         working-directory: apps/electron
         run: node scripts/verify-native-binaries.mjs
@@ -155,6 +176,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
       - name: Verify packaged native binaries
         working-directory: apps/electron
         run: node scripts/verify-native-binaries.mjs
