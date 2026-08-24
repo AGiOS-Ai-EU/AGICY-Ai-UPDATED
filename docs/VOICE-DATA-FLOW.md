@@ -49,6 +49,12 @@ Microphone → UPDATED → api.eu.deepgram.com (user’s Deepgram key) → trans
 9. **Insufficient disk** → clear error naming space required; no corrupt/partial model left for next launch.
 10. **Checksum** after download + verify before first load; corrupt file → explicit integrity error (not a vague “not ready”).
 
+Steps 1–5, 9 and 10 are also automated. `apps/server/tests/whisper-download-resume.test.ts` runs in CI against a stubbed Range-capable origin; the full-fat version against real Hugging Face + whisper-server is opt-in:
+
+```bash
+WHISPER_E2E=1 pnpm --filter @freestyle-voice/server test whisper-local-e2e
+```
+
 Search citations / divergence JSONL stay on-device. Optional Brave Search sends **query text** only when you configure a key.
 
 **LLM cleanup:** Search always **off**. Dictation **on only when a cleanup provider is configured**; zero-key local path = **raw transcript**. Settings: cleanup “requires a cleanup provider.”

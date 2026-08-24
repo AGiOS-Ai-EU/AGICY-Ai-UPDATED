@@ -272,7 +272,7 @@ flowchart TB
 | Schema | `schema.ts` v27+ — seed local-whisper default; preserve existing sessions |
 | Docs | `README.md`, `NOTICE`, `VOICE-DATA-FLOW.md`, this plan |
 
-**Packaging:** ~5–15 MB binary per platform; models on first use (~145 MB default `base-q5_1`).
+**Packaging:** ~5–15 MB binary per platform; models on first use. Default `base-q5_1` is **~57 MB** (59,707,625 bytes measured on disk) — the earlier “~145 MB” figure conflated it with the non-quantized legacy `ggml-base.bin` (142 MB).
 
 **Effort:** included in the **6–8 calendar week** combined target above.
 
@@ -464,8 +464,8 @@ Skip for combined Phase 1+2 eng. Copperway cannot carry STT today; gateway crede
 2. 8-language QA acceptance criteria per marketing language  
 3. Mobile keyboard (`apps/mobile/`) — same local/BYOK model later?  
 4. Deep link protocol name: `agicy-updated://` vs HTTPS loopback  
-5. Telemetry: confirm PostHog events never include audio/transcript  
-6. Confirm Deepgram EU **streaming vs batch** list prices before cost copy  
+5. ~~Telemetry: confirm PostHog events never include audio/transcript~~ — **resolved**, moved to §11 (audit 9d90ad5a: no voice content leaves via PostHog; separate PostHog transfer/consent issues on the `fix/telemetry-privacy` PR)  
+6. Confirm Deepgram EU **streaming vs batch** list prices before cost copy — **batch this with the §11 audio-retention ask**; same vendor conversation, one email  
 
 ---
 
@@ -484,15 +484,19 @@ Skip for combined Phase 1+2 eng. Copperway cannot carry STT today; gateway crede
 
 | Clock | Value |
 |-------|-------|
-| Obligation attached | **`v0.9.0-beta.3` release date** — fill in exact date from the GitHub release |
-| Days exposed | Running **since** that date, and still running now |
+| Obligation attached | **2026-08-23 20:40:32 UTC** — `v0.9.0-beta.3` pre-release published (`gh release list --repo AGiOS-Ai-EU/UPDATED`) |
+| Exposure window | 2026-08-23 20:40 UTC → **present, still open** |
+| Elapsed | **Hours/days, not weeks** — this is why it is remediable rather than a standing breach |
 | Status | **Remediation in progress** |
 
+The short window is the good news and the reason to move now: the sooner the DPA is executed and PR #11 ships, the smaller the period in which AGICY was a controller sending EU voice to a sub-processor without Art. 28 cover.
+
 - [ ] **Art. 28 DPA with Deepgram — OVERDUE, execute now.** AGICY = controller, Deepgram = sub-processor for the **live hosted beta.3 path**. Not conditional on BYOK or on the combined release. Also covers any cleanup LLM processors.
-- [ ] **Deepgram audio retention answer — obtain in writing.** How long is submitted audio held server-side (and is zero-retention / no-model-training available on the EU endpoint)? **Required now** if beta.3 has EU users — feeds Art. 30 records, the retention table in `PRIVACY.md`, and any breach/erasure response.
+- [ ] **Deepgram audio retention answer — obtain in writing.** How long is submitted audio held server-side (and is zero-retention / no-model-training available on the EU endpoint)? **Required now** if beta.3 has EU users — feeds Art. 30 records, the retention table in `PRIVACY.md`, and any breach/erasure response. Ask the non-blocking **EU streaming vs batch pricing** question (§10.6) in the same email — one vendor conversation.
 - [ ] **Sub-processor disclosure** — list Deepgram EU on `agicy.ai` + `NOTICE` / README as a **current** sub-processor for hosted STT, not a future one.
 - [ ] **`PRIVACY.md` discloses the live hosted path** — hosted beta.3 flow described as primary/current; BYOK as forthcoming/optional. (Done — keep in sync.)
 - [ ] **Art. 30 record of processing** — must include the hosted beta.3 STT activity that is running today.
+- [x] **Telemetry is not a second voice-processing activity** — static audit (agent 9d90ad5a) confirms **no** transcript, audio, search query, LLM input/output, window title, URL, clipboard, evidence or divergence content leaves via PostHog. The hosted STT path above is the only voice egress. **Adjacent PostHog issues (US transfer, default-on, opt-out) are real but separate** and tracked on the `fix/telemetry-privacy` PR — do not edit telemetry code from this branch.
 
 **Counter-framing for counsel (useful, and true):** the combined local-default release **reduces** exposure rather than creating it — after PR #11 ships, most users' audio **stops leaving the device** entirely, and the remaining cloud path is user-keyed BYOK. Shipping #11 is **mitigation**, so DPA remediation must **not** be used as a reason to delay it. Conversely, shipping #11 does **not** retroactively cure the beta.3 period; the DPA still has to be executed and the exposure window documented.
 
@@ -514,6 +518,30 @@ Skip for combined Phase 1+2 eng. Copperway cannot carry STT today; gateway crede
   9. **Insufficient disk** → clear error that names **space required** (model + buffer); **no** `.downloading` / corrupt `.bin` left for next launch
   10. **Checksum** after download + verify before first model load; corrupt/truncated file → explicit `whisper_checksum_failed` / `whisper_model_corrupt` (never ambiguous “not ready”)
 - [ ] Beta migration: Freestyle / AGICY sessions preserved (no silent logout); Brave keychain preserved
+
+#### E2E smoke status (updated 2026-08-24)
+
+Automated coverage lives in `apps/server/tests/`:
+
+| Suite | Runs in CI? | Covers |
+|-------|-------------|--------|
+| `whisper-download-resume.test.ts` | Yes | Stubbed Range-capable origin: monotonic progress, interrupt → `bytes=<partial>-` resume, byte-identical stitched file, checksum mismatch leaves no artifacts |
+| `whisper-model-integrity.test.ts` | Yes | Sidecar write on legacy caches, `whisper_model_corrupt` on mismatch, artifact cleanup |
+| `whisper-local-e2e.test.ts` | **No** — opt-in via `WHISPER_E2E=1` | Real 57 MB Hugging Face download, real interrupt/resume, real whisper-server, real transcript |
+
+| # | Criterion | win32 x64 | macOS / Linux |
+|---|-----------|-----------|---------------|
+| 1 | Fresh profile, no cached model | ✅ | ⬜ |
+| 2 | Visible progress; interrupt at 60% → **resume** (not restart) | ✅ resumed from 35,553,792 / 59,707,625 B via HTTP Range | ⬜ |
+| 3 | Offline dictation after download | ✅ all non-loopback fetch blocked; transcript still returned | ⬜ |
+| 4 | Download failure → offers Deepgram EU BYOK | ⬜ manual UI check | ⬜ |
+| 5 | Cold-start hotkey→text latency | ✅ **1.8 s** cold / 1.1 s warm — well under the ~10 s warming threshold | ⬜ |
+| 6 | Batch path shows **Transcribing…** | ⬜ manual UI check | ⬜ |
+| 7 | Brave key preserved on upgrade | ⬜ manual upgrade check | ⬜ |
+| 9 | Insufficient disk → named space, no corrupt leftover | ✅ unit-level (`disk.test.ts`, wipe-on-ENOSPC) | ⬜ |
+| 10 | Checksum after download + before load | ✅ unit + E2E (`.sha256` sidecar) | ⬜ |
+
+Remaining before release: items 4, 6, 7 (Electron UI, not server-testable) and cross-platform runs of 1–3, 5.
 
 ### Non-blocking / later
 
