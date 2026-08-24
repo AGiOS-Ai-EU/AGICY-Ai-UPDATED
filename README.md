@@ -59,17 +59,18 @@ An `.msi` (`UPDATED-0.9.0-beta.3.msi`) is attached to the same release. Default 
 
 1. Download `UPDATED-0.9.0-beta.3-setup.exe` from the release asset URL above.
 2. If SmartScreen appears, choose **More info**, then **Run anyway**.
-3. Launch UPDATED and allow microphone access after AGICY sign-in.
+3. Launch UPDATED and allow microphone access.
 
 ### Other OS files on the same tag (not supported)
 
 The GitHub pre-release also attaches macOS `.dmg` / `.zip` and Linux `.AppImage` / `.deb`. Those are **untested CI artifacts**. Do not treat them as a supported or smoke-tested product for this beta.
 
-## First run (Windows beta)
+## First run (0.9.0-beta.3)
 
 1. **SmartScreen** — unsigned setup.exe; **More info → Run anyway** if Windows warns.
-2. **AGICY sign-in** — the app shows a device code and should open `https://agicy.ai/updated/my_device?user_code=…` (not vercel.com). Sign in with your AGICY email, confirm the code, approve the device.
-3. **Microphone** — allow mic access. Hold **Right Alt** and speak.
+2. Launch UPDATED. Allow microphone access. Hold **Right Alt** and speak.
+
+The **next** Windows beta (not this tagged installer) signs in at [agicy.ai/updated/my_device](https://agicy.ai/updated/my_device): the app shows a device code and opens `https://agicy.ai/updated/my_device?user_code=…`. Sign in with your AGICY email, confirm the code, approve the device. The published **0.9.0-beta.3** `setup.exe` does not include that client; install a newer Windows build (or run from source after it lands) to get it.
 
 **Cost (say this before you install):** Voice uses **metered inference credits** on your AGICY account. New accounts receive a free allotment (see [agicy.ai/dashboard/usage](https://agicy.ai/dashboard/usage) after sign-in). Search itself is free; optional Brave Search uses **your** Brave key. The app is not “unlimited free cloud STT.”
 
@@ -95,19 +96,15 @@ Mic → UPDATED app → https://agicy.ai/api/stt/transcribe → Deepgram EU → 
 
 Without a Brave Search API key, mock providers demonstrate the CONTESTED interface locally.
 
-**Not in this installer:** on-device (whisper.cpp) STT. That path is an open PR, not the default in 0.9.0-beta.3. Upstream Freestyle had local STT; this fork removed it in schema migration v23.
-
-**Freestyle Cloud is not the default voice path in beta.3.** Do not treat `freestylevoice.com` or Freestyle STT as where your mic goes. Sign-in is AGICY, not Freestyle.
+**Not in this installer:** on-device (whisper.cpp) STT. That path is an open PR, not the default in 0.9.0-beta.3.
 
 ## Shipping now vs next
 
 | In the **0.9.0-beta.3** Windows installer | Not in this installer (open work) |
 | --- | --- |
-| AGICY device sign-in + hosted Deepgram EU STT + inference credits | Local whisper default / runtime — [UPDATED PR #11](https://github.com/AGiOS-Ai-EU/UPDATED/pull/11) |
-| Unsigned Windows `setup.exe` (SmartScreen may warn) | Telemetry **opt-in**, EU PostHog host, consent UX — [UPDATED PR #12](https://github.com/AGiOS-Ai-EU/UPDATED/pull/12) |
-| Client opens whatever `verification_url` the API returns | Extra client harden so Vercel preview URLs never open — [UPDATED PR #13](https://github.com/AGiOS-Ai-EU/UPDATED/pull/13) |
-
-The device page host is minted by **agicy.ai** (platform fix already merged). Old desktop clients still get `https://agicy.ai/updated/my_device?user_code=…` from the live API.
+| Windows voice-first search instrument; GitHub `setup.exe` | Sign in always opens `https://agicy.ai/updated/my_device?user_code=…` — [UPDATED PR #13](https://github.com/AGiOS-Ai-EU/UPDATED/pull/13) |
+| Unsigned Windows `setup.exe` (SmartScreen may warn) | Local whisper default / runtime — [UPDATED PR #11](https://github.com/AGiOS-Ai-EU/UPDATED/pull/11) |
+| Hosted Deepgram EU STT + inference credits (in the binary) | Telemetry **opt-in**, EU PostHog host, consent UX — [UPDATED PR #12](https://github.com/AGiOS-Ai-EU/UPDATED/pull/12) |
 
 ## Third-party services and privacy
 
@@ -155,6 +152,4 @@ Windows installer locally: `pnpm --filter @freestyle-voice/electron run build:wi
 
 ## License and credits
 
-[MIT](LICENSE) — same license as upstream [freestyle-voice/freestyle](https://github.com/freestyle-voice/freestyle) (MIT since upstream PR #103, May 2026). See [NOTICE](NOTICE) for attribution and third-party service disclosure.
-
-UPDATED is a derivative fork of Freestyle. Upstream `@freestyle-voice/*` package names remain where required for compatibility; the distributed desktop product is **UPDATED**.
+[MIT](LICENSE). See [NOTICE](NOTICE) for attribution and third-party service disclosure.

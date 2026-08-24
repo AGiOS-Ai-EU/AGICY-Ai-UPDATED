@@ -19,8 +19,6 @@ This document describes personal-data processing for the **UPDATED desktop beta*
 | **Processor (auth)** | Supabase Auth (`auth.agicy.ai`) — account identity for device pairing |
 | **Optional processor (search)** | Brave Search — only if you paste a Brave API key |
 
-UPDATED does **not** use Freestyle Cloud for voice in beta.3+. Legacy Freestyle Cloud code may remain in the repository for compatibility; the default shipped path does not send microphone audio to Freestyle.
-
 ---
 
 ## 2. Voice / STT data flow (canonical)
