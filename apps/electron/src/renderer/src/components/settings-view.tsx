@@ -1772,8 +1772,8 @@ function DataPage({
         reports to PostHog in the United States: which features you used, how
         often, model ids, app version, and error messages with stack traces.
         Never your recordings, transcripts, searches, prompts, window titles,
-        clipboard, or brain files. Turning it off takes effect immediately. See
-        PRIVACY.md.
+        clipboard, or brain files. Turning it off takes effect immediately. Full
+        list in docs/TELEMETRY.md.
       </p>
     </>
   );
