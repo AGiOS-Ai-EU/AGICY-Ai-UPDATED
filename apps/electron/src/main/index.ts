@@ -1627,10 +1627,11 @@ function rebuildMenus(): void {
 }
 
 // Prevent multiple instances.  If another instance already holds the lock,
-// quit immediately and let the primary instance handle activation.
+// exit immediately — app.quit() alone can race and leave a second server
+// bound on a random port (blank UI / "Failed to fetch").
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  app.quit();
+  app.exit(0);
 }
 
 app.on("second-instance", () => {

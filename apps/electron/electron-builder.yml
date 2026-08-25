@@ -1,5 +1,8 @@
 appId: ai.agicy.updated
 productName: UPDATED
+# Avoid install dir "@freestyle-voiceelectron" from the scoped package name.
+extraMetadata:
+  name: UPDATED
 directories:
   buildResources: build
 files:

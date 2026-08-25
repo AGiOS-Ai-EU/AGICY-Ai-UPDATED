@@ -69,14 +69,13 @@ function createFocusedBrowserWindow(opts: {
   height: number;
   slot: "auth" | "external";
 }): BrowserWindow {
-  const parent = getPanelWindow?.() ?? null;
-  const parentOk = parent && !parent.isDestroyed() ? parent : undefined;
-
+  // Do NOT parent to the panel. The panel is frameless + transparent +
+  // alwaysOnTop("screen-saver"); a child of that often paints as an empty
+  // white/parchment square on Windows and steals focus without content.
+  void getPanelWindow;
   const win = new BrowserWindow({
     width: opts.width,
     height: opts.height,
-    parent: parentOk,
-    modal: false,
     show: false,
     autoHideMenuBar: true,
     title: opts.title,
@@ -93,6 +92,22 @@ function createFocusedBrowserWindow(opts: {
     endHold();
     if (opts.slot === "auth") authWindow = null;
     else externalWindow = null;
+  });
+
+  win.webContents.on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
+    if (!isMainFrame || win.isDestroyed()) return;
+    const safe = url.replace(/[<>&]/g, "");
+    void win.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(
+        `<!doctype html><html><body style="font-family:system-ui;padding:2rem;background:#f4efe6;color:#1a1a2e">
+        <h1 style="font-size:1.1rem">Couldn’t open page</h1>
+        <p>${desc || "Load failed"} (${code})</p>
+        <p style="word-break:break-all;opacity:.75">${safe}</p>
+        <p>Check your network, then try Sign in again from UPDATED.</p>
+        </body></html>`,
+      )}`,
+    );
+    focusWindow(win);
   });
 
   void win.loadURL(opts.url);
