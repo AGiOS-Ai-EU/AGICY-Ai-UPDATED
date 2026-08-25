@@ -587,89 +587,6 @@ function PanelResizeHandle(): React.JSX.Element {
   );
 }
 
-function AgicySignInGate(): React.JSX.Element {
-  const auth = useCloudAuth();
-  return (
-    <div className="tavern-gate">
-      <button
-        type="button"
-        className="tavern-close tavern-gate-close"
-        aria-label="Close"
-        onClick={() => window.api.panelClose()}
-      >
-        ×
-      </button>
-      <div className="tavern-gate-body">
-        <div className="tavern-gate-lockup">
-          <span className="tavern-gate-spark" />
-          <span className="tavern-gate-wordmark">
-            updated<span className="tavern-gate-accent">.</span>
-          </span>
-        </div>
-        <h1 className="tavern-gate-heading">Voice-first search instrument.</h1>
-        <p className="tavern-gate-sub">Sign in with your AGICY account</p>
-        <p className="tavern-gate-sub is-small">
-          Your browser will open agicy.ai/updated/my_device. Sign in with your
-          email first, confirm the code below, then approve this device.
-        </p>
-        {auth.signingIn ? (
-          <>
-            <div className="tavern-gate-code">{auth.userCode ?? "…"}</div>
-            <p className="tavern-gate-sub is-small">
-              Check that your browser shows this code, then finish signing in
-              there.
-            </p>
-            <button
-              type="button"
-              className="tavern-approve-btn"
-              onClick={() => auth.cancelSignIn()}
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="tavern-gate-btn"
-            onClick={() => void auth.signIn()}
-          >
-            Continue in browser
-          </button>
-        )}
-        {auth.sessionExpired && !auth.signingIn ? (
-          <p className="tavern-gate-sub is-small">
-            Your session expired — sign in again to pick up where you left off.
-          </p>
-        ) : null}
-        {auth.error ? <p className="tavern-notice">{auth.error}</p> : null}
-      </div>
-      <p className="tavern-gate-terms">
-        By continuing, you agree to our{" "}
-        <button
-          type="button"
-          className="tavern-gate-link"
-          onClick={() =>
-            void window.api.openExternal("https://agicy.ai/legal/terms")
-          }
-        >
-          Terms
-        </button>{" "}
-        and{" "}
-        <button
-          type="button"
-          className="tavern-gate-link"
-          onClick={() =>
-            void window.api.openExternal("https://agicy.ai/legal/privacy")
-          }
-        >
-          Privacy Policy
-        </button>
-        .
-      </p>
-    </div>
-  );
-}
-
 function PanelRoot(): React.JSX.Element {
   const [thread, setThread] = useState<ThreadState | null>(null);
   const queryClient = useQueryClient();
@@ -761,6 +678,7 @@ function PanelInner({
     if (auth.loading) return;
     if (!auth.user) {
       window.api.setCompanionProductVisible(false);
+      setTab("search");
       return;
     }
     if (onboarding.status === "loading") return;
@@ -1130,6 +1048,27 @@ function PanelInner({
 
   const panelBody = (
     <>
+      {!auth.loading && !auth.user ? (
+        <div className="tavern-soft-auth">
+          <p className="tavern-soft-auth-text">
+            Search and local dictation work without an account. Sign in for
+            hosted voice credits and cloud features.
+          </p>
+          <button
+            type="button"
+            className="tavern-gate-btn"
+            onClick={() => void auth.signIn()}
+          >
+            Sign in with AGICY
+          </button>
+          {auth.signingIn && auth.userCode ? (
+            <p className="tavern-soft-auth-code">
+              Code: <strong>{auth.userCode}</strong> — finish in the browser
+            </p>
+          ) : null}
+          {auth.error ? <p className="tavern-notice">{auth.error}</p> : null}
+        </div>
+      ) : null}
       {capabilitiesOpen ? (
         <>
           <button
@@ -1283,25 +1222,10 @@ function PanelInner({
     </>
   );
 
-  // Signed out, the gate is the entire panel — no head, no tabs, no way to
-  // reach the agent. While auth status resolves, show nothing rather than
-  // flashing the gate at signed-in users.
-  if (!auth.user) {
-    return (
-      <div className="tavern-shell">
-        <div className="tavern tavern-panel">
-          {auth.loading ? null : <AgicySignInGate />}
-        </div>
-        <PanelTail />
-        <PanelResizeHandle />
-      </div>
-    );
-  }
-
-  // First meeting: Jeb runs his intro as a takeover, same contract as the
-  // sign-in gate. While the flag loads, show nothing rather than flashing
-  // the intro at users who've already been through it.
-  if (onboarding.status !== "done") {
+  // Unsigned users get the instrument (search / local STT) without a hard
+  // gate — Decision 1. Soft CTA lives in panelBody. Onboarding only after
+  // AGICY sign-in.
+  if (auth.user && onboarding.status !== "done") {
     return (
       <div className="tavern-shell">
         <div className="tavern tavern-panel">

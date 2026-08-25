@@ -2,6 +2,8 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
+  AGENT_OS_ENABLED_SETTING,
+  AgentPathDeniedError,
   editAgentFile,
   globAgentFiles,
   grepAgentFiles,
@@ -9,16 +11,36 @@ import {
   runAgentBash,
   writeAgentFile,
 } from "../lib/agent-os.js";
+import { getDb } from "../lib/db.js";
 
 const anyPath = z.string().min(1).max(1_000);
 
+function isAgentOsEnabled(): boolean {
+  const row = getDb()
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get(AGENT_OS_ENABLED_SETTING) as { value: string } | undefined;
+  return row?.value === "true";
+}
+
 function failure(err: unknown): { ok: false; reason: string } {
+  if (err instanceof AgentPathDeniedError) {
+    return { ok: false, reason: "path-outside-workspace" };
+  }
   const code = (err as NodeJS.ErrnoException)?.code;
   if (code === "ENOENT") return { ok: false, reason: "not-found" };
   if (code === "EACCES" || code === "EPERM")
     return { ok: false, reason: "permission-denied" };
   if (code === "EISDIR") return { ok: false, reason: "is-a-directory" };
   return { ok: false, reason: "fs-failed" };
+}
+
+function requireAgentOs(c: {
+  json: (body: { ok: false; reason: string }, status?: 403) => Response;
+}): Response | null {
+  if (!isAgentOsEnabled()) {
+    return c.json({ ok: false, reason: "agent-os-disabled" }, 403);
+  }
+  return null;
 }
 
 const agentOsRoute = new Hono()
@@ -33,6 +55,8 @@ const agentOsRoute = new Hono()
       }),
     ),
     (c) => {
+      const denied = requireAgentOs(c);
+      if (denied) return denied;
       try {
         const { path, offset, limit } = c.req.valid("json");
         return c.json({
@@ -55,6 +79,8 @@ const agentOsRoute = new Hono()
       z.object({ path: anyPath, text: z.string().max(200_000) }),
     ),
     (c) => {
+      const denied = requireAgentOs(c);
+      if (denied) return denied;
       try {
         const { path, text } = c.req.valid("json");
         writeAgentFile(path, text);
@@ -75,6 +101,8 @@ const agentOsRoute = new Hono()
       }),
     ),
     (c) => {
+      const denied = requireAgentOs(c);
+      if (denied) return denied;
       try {
         const body = c.req.valid("json");
         const result = editAgentFile(body.path, body.old, body.new);
@@ -96,6 +124,8 @@ const agentOsRoute = new Hono()
       }),
     ),
     (c) => {
+      const denied = requireAgentOs(c);
+      if (denied) return denied;
       try {
         const { pattern, path } = c.req.valid("json");
         return c.json({ ok: true, files: globAgentFiles(pattern, path) });
@@ -111,6 +141,8 @@ const agentOsRoute = new Hono()
       z.object({ query: z.string().min(1).max(300), path: anyPath.optional() }),
     ),
     (c) => {
+      const denied = requireAgentOs(c);
+      if (denied) return denied;
       try {
         const { query, path } = c.req.valid("json");
         return c.json({ ok: true, matches: grepAgentFiles(query, path) });
@@ -123,6 +155,8 @@ const agentOsRoute = new Hono()
     "/bash",
     zValidator("json", z.object({ command: z.string().min(1).max(4_000) })),
     async (c) => {
+      const denied = requireAgentOs(c);
+      if (denied) return denied;
       try {
         const { command } = c.req.valid("json");
         const result = await runAgentBash(command);

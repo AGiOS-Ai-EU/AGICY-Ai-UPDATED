@@ -9,6 +9,12 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 
+/**
+ * Host-side agent OS is transitional. Long-term sandboxed agency belongs in
+ * AGIBOT/Rakazo (isolated computers). Until then: paths stay under a workspace
+ * root, and Bash/Write/Edit require UI confirmation + an opt-in setting.
+ */
+
 const FILE_MAX_CHARS = 60_000;
 const BASH_TIMEOUT_MS = 30_000;
 const BASH_OUTPUT_CAP = 8_192;
@@ -17,11 +23,55 @@ const GREP_MAX_MATCHES = 60;
 const GREP_FILE_MAX_BYTES = 262_144;
 const SKIP_DIRS = new Set(["node_modules", ".git", ".Trash", "Library"]);
 
-export function resolveAgentPath(input: string): { full: string } {
+export const AGENT_OS_ENABLED_SETTING = "agent_os_enabled";
+
+export function agentWorkspaceRoot(): string {
+  const fromEnv = process.env.UPDATED_AGENT_WORKSPACE?.trim();
+  if (fromEnv) return path.resolve(fromEnv);
+  return path.resolve(homedir(), ".updated", "agent-workspace");
+}
+
+export function ensureAgentWorkspaceRoot(): string {
+  const root = agentWorkspaceRoot();
+  mkdirSync(root, { recursive: true });
+  return root;
+}
+
+/** True when `full` is equal to or inside `root` (after resolve). */
+export function isPathInsideRoot(root: string, full: string): boolean {
+  const resolvedRoot = path.resolve(root);
+  const resolvedFull = path.resolve(full);
+  const rel = path.relative(resolvedRoot, resolvedFull);
+  return (
+    rel === "" ||
+    (!rel.startsWith(`..${path.sep}`) && rel !== ".." && !path.isAbsolute(rel))
+  );
+}
+
+export class AgentPathDeniedError extends Error {
+  readonly code = "AGENT_PATH_DENIED";
+  constructor(message = "path-outside-workspace") {
+    super(message);
+    this.name = "AgentPathDeniedError";
+  }
+}
+
+/**
+ * Resolve a tool path against the agent workspace root.
+ * Absolute paths are allowed only when they still resolve inside the root.
+ */
+export function resolveAgentPath(input: string): {
+  full: string;
+  root: string;
+} {
+  const root = ensureAgentWorkspaceRoot();
   const full = path.isAbsolute(input)
     ? path.resolve(input)
-    : path.resolve(homedir(), input);
-  return { full };
+    : path.resolve(root, input);
+  if (!isPathInsideRoot(root, full)) {
+    throw new AgentPathDeniedError();
+  }
+  return { full, root };
 }
 
 export function readAgentFile(
@@ -183,14 +233,19 @@ export function runAgentBash(command: string): Promise<{
   truncated: boolean;
   timedOut: boolean;
 }> {
+  const cwd = ensureAgentWorkspaceRoot();
+  const shell =
+    process.platform === "win32"
+      ? process.env.ComSpec || "cmd.exe"
+      : process.env.SHELL || "/bin/sh";
   return new Promise((resolve) => {
     exec(
       command,
       {
-        cwd: homedir(),
+        cwd,
         timeout: BASH_TIMEOUT_MS,
         maxBuffer: 4 * 1024 * 1024,
-        shell: process.env.SHELL || "/bin/sh",
+        shell,
       },
       (err, stdout, stderr) => {
         const timedOut =

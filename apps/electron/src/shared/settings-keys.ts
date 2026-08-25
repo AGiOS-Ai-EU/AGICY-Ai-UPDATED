@@ -40,6 +40,11 @@ export const SETTINGS_KEYS = {
   textScale: "text_scale",
   /** Reduce motion / animations for accessibility */
   reduceMotion: "reduce_motion",
+  /**
+   * Host agent-os tools (Bash/files). Default off — transitional until AGIBOT
+   * sandboxes own agency. When on, Bash/Write/Edit still require confirmation.
+   */
+  agentOsEnabled: "agent_os_enabled",
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];

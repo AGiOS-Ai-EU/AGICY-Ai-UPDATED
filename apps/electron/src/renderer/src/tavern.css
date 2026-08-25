@@ -366,6 +366,38 @@
   filter: brightness(1.06);
 }
 
+.tavern-soft-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--updated-accent-strong, #b87333) 35%, transparent);
+  background: color-mix(in srgb, var(--tavern-card, #fff) 88%, var(--updated-accent-strong, #b87333));
+}
+
+.tavern-soft-auth-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--tavern-ink);
+}
+
+.tavern-soft-auth .tavern-gate-btn {
+  max-width: none;
+  height: 40px;
+  font-size: 13px;
+}
+
+.tavern-soft-auth-code {
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tavern-ink);
+}
+
 .tavern-gate-code {
   font-size: 24px;
   font-weight: 700;

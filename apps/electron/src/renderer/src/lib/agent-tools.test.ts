@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@shared/sprite-events", () => ({
   parseSpriteEmotion: vi.fn(),
+}));
+
+const apiFetch = vi.fn();
+vi.mock("@renderer/lib/api", () => ({
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
 }));
 
 import { agentToolTier } from "./agent-tools";
@@ -13,18 +18,35 @@ describe("agent tool approval tiers", () => {
     input: {},
   });
 
-  it("runs read-only local tools without asking", async () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+  });
+
+  it("keeps harmless tools free", async () => {
+    await expect(agentToolTier(call("current_time"))).resolves.toBe("free");
+    await expect(agentToolTier(call("emote"))).resolves.toBe("free");
+  });
+
+  it("refuses host OS tools when agent_os_enabled is off (default)", async () => {
+    apiFetch.mockResolvedValue({ ok: false, status: 404 });
+    await expect(agentToolTier(call("Read"))).resolves.toBeNull();
+    await expect(agentToolTier(call("Bash"))).resolves.toBeNull();
+    await expect(agentToolTier(call("Write"))).resolves.toBeNull();
+  });
+
+  it("requires confirmation for Bash/Write/Edit when OS tools are enabled", async () => {
+    apiFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ value: "true" }),
+    });
     await expect(agentToolTier(call("Read"))).resolves.toBe("free");
     await expect(agentToolTier(call("Glob"))).resolves.toBe("free");
     await expect(agentToolTier(call("Grep"))).resolves.toBe("free");
-  });
-
-  it("runs mutating local tools without asking too", async () => {
-    await expect(agentToolTier(call("Write"))).resolves.toBe("free");
-    await expect(agentToolTier(call("Edit"))).resolves.toBe("free");
+    await expect(agentToolTier(call("Write"))).resolves.toBe("confirmed");
+    await expect(agentToolTier(call("Edit"))).resolves.toBe("confirmed");
     await expect(
       agentToolTier({ ...call("Bash"), input: { command: "rm -rf ./x" } }),
-    ).resolves.toBe("free");
+    ).resolves.toBe("confirmed");
   });
 
   it("does not claim connected-app tools, which run on the server", async () => {

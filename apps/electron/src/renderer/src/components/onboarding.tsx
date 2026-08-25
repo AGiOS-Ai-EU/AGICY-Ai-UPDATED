@@ -92,7 +92,10 @@ export function useOnboarding(enabled: boolean): {
   const decided = useRef<OnboardingSaved | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setStatus("done");
+      return;
+    }
     if (settingsQuery.isPending || threadsQuery.isPending) return;
     const parsed = parseSaved(settingsQuery.data?.[ONBOARDING_KEY]);
     if (decided.current?.done && !parsed?.done) {
