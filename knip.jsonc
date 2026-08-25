@@ -25,7 +25,13 @@
     "templates/**",
     // Mirror contracts kept in sync with packages/search until shared import is wired.
     "apps/server/src/lib/search/index.ts",
-    "apps/server/src/lib/search/types.ts"
+    "apps/server/src/lib/search/types.ts",
+    // AGICY transitional stubs (session keychain + auth/billing aliases). Kept for
+    // upcoming soft-auth polish; not on the Electron entry graph yet.
+    "apps/electron/src/main/agicy-keychain.ts",
+    "apps/electron/src/renderer/src/lib/agicy-auth-context.tsx",
+    "apps/electron/src/renderer/src/lib/use-cloud-usage.ts",
+    "apps/electron/src/renderer/src/lib/use-pricing.ts"
   ],
   "workspaces": {
     "apps/electron": {
