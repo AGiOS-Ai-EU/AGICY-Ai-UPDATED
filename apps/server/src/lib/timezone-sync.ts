@@ -14,7 +14,15 @@ const SETTING_KEY = "cloud_synced_timezone";
  * already synced for this account; safe to fire-and-forget.
  */
 export async function syncTimezoneToCloud(): Promise<void> {
-  const session = getSession();
+  let session;
+  try {
+    session = getSession();
+  } catch (err) {
+    log.debug(
+      `Timezone sync skipped: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return;
+  }
   if (!session) return;
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (!zone) return;

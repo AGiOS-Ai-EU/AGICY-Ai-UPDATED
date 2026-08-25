@@ -1949,7 +1949,7 @@ app.whenReady().then(async () => {
   process.env.FREESTYLE_APP_VERSION = app.getVersion();
 
   // Start the Hono HTTP server with WebSocket support (or reuse an existing one)
-  const startServer = (port: number): void => {
+  const startServer = (port: number, attempt = 0): void => {
     startFreestyleServer({ port, host: "127.0.0.1" })
       .then(({ server, port: boundPort }) => {
         httpServer = server;
@@ -1962,6 +1962,12 @@ app.whenReady().then(async () => {
         if (err.code === "EADDRINUSE" && port === DEFAULT_PORT) {
           log.warn(`Port ${DEFAULT_PORT} in use, falling back to random port`);
           startServer(0);
+        } else if (attempt < 1) {
+          // Disk I/O / stale WAL can clear on a second open after getDb recovery.
+          log.warn(
+            `Server failed to start (${err.message || err}); retrying once`,
+          );
+          setTimeout(() => startServer(port, attempt + 1), 750);
         } else {
           log.error(`Server failed to start: ${err}`);
         }

@@ -10,6 +10,7 @@ import { timeout } from "hono/timeout";
 import { WebSocketServer } from "ws";
 import { recordAppLaunch } from "./lib/app-lifecycle.js";
 import { authMiddleware, setAuthToken } from "./lib/auth.js";
+import { getDb } from "./lib/db.js";
 import { refreshCleanupPromptConfig } from "./lib/editor/prompt-config.js";
 import { formatError } from "./lib/format-error.js";
 import { isTransientCloudError } from "./lib/freestyle-cloud.js";
@@ -234,6 +235,11 @@ export async function startServer(
   // anything issues a fetch, so model downloads and cloud/API calls honor it.
   configureNetwork();
 
+  // Open (or recover) the SQLite DB before any fire-and-forget work touches it.
+  // A disk I/O / stale-WAL failure here used to abort listen() entirely, which
+  // surfaces in the UI as Sign in → "Failed to fetch".
+  getDb();
+
   // Warm the cleanup-prompt config from Freestyle Cloud so the latest presets
   // and tone blocks are in memory before the first dictation. Fire-and-forget:
   // it never throws and falls back to the bundled copy when offline.
@@ -242,14 +248,23 @@ export async function startServer(
   // Push edits queued while offline before pulling the cloud snapshot, so a
   // pending local change is never overwritten by the copy it was meant to
   // update. Both are no-ops when signed out and never throw.
-  void drainOutbox().then(() => pullCloudPreferences());
+  void drainOutbox()
+    .then(() => pullCloudPreferences())
+    .catch(() => {});
 
   // Keep the cloud profile's timezone current so scheduled tasks fire on this
   // machine's clock. No-op when signed out or unchanged; never throws.
-  void syncTimezoneToCloud();
+  void syncTimezoneToCloud().catch(() => {});
 
-  // Install / update / launch, emitted once per process start.
-  recordAppLaunch();
+  // Install / update / launch, emitted once per process start. Must not abort
+  // HTTP listen if analytics bookkeeping hits a transient DB fault.
+  try {
+    recordAppLaunch();
+  } catch (err) {
+    httpLog.warn(
+      `recordAppLaunch skipped: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   // Load plugins (built-in + user) before serving. The app dispatches plugin
   // middleware from the live registry per request, so later runtime reloads

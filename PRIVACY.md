@@ -84,7 +84,7 @@ Desktop local files (settings, divergence log, Brave key) are under your control
 
 ---
 
-## 6. Analytics in 0.9.0-beta.5 (shipped)
+## 6. Analytics in 0.9.0-beta.6 (shipped)
 
 The Windows installer currently bundles PostHog at **`https://us.i.posthog.com`**. Packaged builds treat telemetry as **on** unless the local setting `telemetry_enabled` is `"false"`. That is not EU hosting, not default-off, and not a post-dictation consent prompt.
 

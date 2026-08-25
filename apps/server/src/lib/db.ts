@@ -1,5 +1,9 @@
+import { copyFileSync, existsSync, renameSync, unlinkSync } from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { createAppLogger } from "@freestyle-voice/utils";
 import { initSchema } from "./schema.js";
+
+const log = createAppLogger("db");
 
 let db: DatabaseSync | null = null;
 
@@ -11,6 +15,98 @@ let db: DatabaseSync | null = null;
 // connection is closed.
 const statementCache = new Map<string, StatementSync>();
 
+function tryClose(instance: DatabaseSync | null): void {
+  if (!instance) return;
+  try {
+    instance.close();
+  } catch {
+    // Best-effort — recovery may already have invalidated the handle.
+  }
+}
+
+function tryUnlink(path: string): void {
+  try {
+    if (existsSync(path)) unlinkSync(path);
+  } catch {
+    // Locked or missing — continue with the next recovery step.
+  }
+}
+
+/** Drop stale WAL/SHM sidecars left by a killed upgrade/install process. */
+function clearWalSidecars(dbPath: string): void {
+  tryUnlink(`${dbPath}-wal`);
+  tryUnlink(`${dbPath}-shm`);
+}
+
+/**
+ * Move a broken DB (and sidecars) aside so a fresh file can be created.
+ * Keeps a single `.corrupt` backup for forensics; overwrites any prior backup.
+ */
+function quarantineDbFiles(dbPath: string): void {
+  const stamp = Date.now();
+  for (const suffix of ["", "-wal", "-shm"] as const) {
+    const src = `${dbPath}${suffix}`;
+    if (!existsSync(src)) continue;
+    const dest = `${dbPath}.corrupt-${stamp}${suffix}`;
+    try {
+      renameSync(src, dest);
+    } catch {
+      try {
+        copyFileSync(src, dest);
+        tryUnlink(src);
+      } catch {
+        tryUnlink(src);
+      }
+    }
+  }
+}
+
+function openAndInit(dbPath: string): DatabaseSync {
+  const instance = new DatabaseSync(dbPath);
+  try {
+    // Performance and safety pragmas
+    instance.exec("PRAGMA journal_mode = WAL");
+    instance.exec("PRAGMA busy_timeout = 5000");
+    instance.exec("PRAGMA foreign_keys = ON");
+    instance.exec("PRAGMA synchronous = NORMAL");
+
+    initSchema(instance);
+    return instance;
+  } catch (err) {
+    // Release the handle so quarantine can rename/delete the broken file.
+    tryClose(instance);
+    throw err;
+  }
+}
+
+/**
+ * Open the app DB, recovering from the disk I/O / stale-WAL failures that
+ * otherwise leave the embedded HTTP server dead and Sign in as "Failed to fetch".
+ */
+function openDatabase(dbPath: string): DatabaseSync {
+  try {
+    return openAndInit(dbPath);
+  } catch (firstErr) {
+    const firstMsg =
+      firstErr instanceof Error ? firstErr.message : String(firstErr);
+    log.warn(
+      `DB open failed (${firstMsg}); clearing WAL sidecars and retrying`,
+    );
+    clearWalSidecars(dbPath);
+    try {
+      return openAndInit(dbPath);
+    } catch (secondErr) {
+      const secondMsg =
+        secondErr instanceof Error ? secondErr.message : String(secondErr);
+      log.warn(
+        `DB open still failing (${secondMsg}); quarantining and recreating`,
+      );
+      quarantineDbFiles(dbPath);
+      return openAndInit(dbPath);
+    }
+  }
+}
+
 export function getDb(): DatabaseSync {
   if (db) return db;
 
@@ -21,19 +117,10 @@ export function getDb(): DatabaseSync {
     );
   }
 
-  const instance = new DatabaseSync(dbPath);
+  const instance = openDatabase(dbPath);
 
-  // Performance and safety pragmas
-  instance.exec("PRAGMA journal_mode = WAL");
-  instance.exec("PRAGMA busy_timeout = 5000");
-  instance.exec("PRAGMA foreign_keys = ON");
-  instance.exec("PRAGMA synchronous = NORMAL");
-
-  initSchema(instance);
-
-  // Cache only after schema init succeeds — if initSchema() throws, the next
-  // getDb() call will retry from scratch instead of returning an instance
-  // with missing tables.
+  // Cache only after schema init succeeds — if openDatabase() throws, the next
+  // getDb() call will retry from scratch instead of returning a broken handle.
   db = instance;
 
   return db;
@@ -55,7 +142,7 @@ export function prepareCached(sql: string): StatementSync {
 export function closeDb(): void {
   if (db) {
     statementCache.clear();
-    db.close();
+    tryClose(db);
     db = null;
   }
 }
