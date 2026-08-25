@@ -4,12 +4,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import type { CloudUser } from "../../../shared/cloud-user";
 import { agicyDeviceSignInUrl } from "./agicy-device-url";
-import { getClient } from "./api";
+import { getClient, initApiBase, refreshApiBase } from "./api";
 import { resetBrainCache } from "./brain-fs";
 import { queryKeys } from "./query";
 
@@ -18,16 +19,38 @@ function resetAccountCaches(queryClient: QueryClient): void {
   queryClient.clear();
 }
 
+function formatSignInError(err: unknown): string {
+  const message = err instanceof Error ? err.message : "Sign-in failed";
+  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
+    return "Could not reach the local UPDATED service. Quit UPDATED completely from the tray, reopen it, and try Sign in again.";
+  }
+  return message;
+}
+
+/** Shared sign-in state machine for soft-auth strip + Settings AccountCard. */
+export type AuthPhase =
+  | "idle"
+  | "starting"
+  | "waiting"
+  | "approved"
+  | "signed_in";
+
+const APPROVED_HOLD_MS = 1600;
+
 export interface UseCloudAuth {
   user: CloudUser | null;
   loading: boolean;
+  /** True while starting, waiting, or showing the brief approved celebration. */
   signingIn: boolean;
+  phase: AuthPhase;
   /** Device user code, surfaced while a sign-in is pending. */
   userCode: string | null;
   error: string | null;
   sessionExpired: boolean;
   refresh: () => Promise<CloudUser | null>;
   signIn: () => Promise<CloudUser | null>;
+  /** Re-focus / reopen the auth BrowserWindow with the current code. */
+  continueInBrowser: () => Promise<void>;
   /** Abort an in-flight sign-in (driven from the pending modal). */
   cancelSignIn: () => void;
   signOut: () => Promise<void>;
@@ -41,6 +64,7 @@ function useCloudAuthState(): UseCloudAuth {
   const [user, setUser] = useState<CloudUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
+  const [approved, setApproved] = useState(false);
   const [userCode, setUserCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -132,10 +156,18 @@ function useCloudAuthState(): UseCloudAuth {
     cancelledRef.current = false;
     const attempt = ++signInAttemptRef.current;
     setSigningIn(true);
+    setApproved(false);
     setError(null);
     setUserCode(null);
 
     const run = async (): Promise<CloudUser | null> => {
+      await initApiBase();
+      const healthy = await refreshApiBase();
+      if (!healthy) {
+        throw new Error(
+          "Could not reach the local UPDATED service. Quit UPDATED completely from the tray, reopen it, and try Sign in again.",
+        );
+      }
       const codeRes = await getClient().api.auth.agicy.device.code.$post();
       if (!codeRes.ok)
         throw new Error(`Could not start sign-in (${codeRes.status})`);
@@ -176,6 +208,12 @@ function useCloudAuthState(): UseCloudAuth {
         wasSignedInRef.current = true;
         setSessionExpired(false);
         setUser(data.user);
+        setApproved(true);
+        void window.api.closeAuthWindow();
+        await new Promise((resolve) => setTimeout(resolve, APPROVED_HOLD_MS));
+        if (cancelledRef.current || attempt !== signInAttemptRef.current) {
+          return data.user;
+        }
         return data.user;
       }
       throw new Error("Sign-in timed out. Please try again.");
@@ -184,7 +222,7 @@ function useCloudAuthState(): UseCloudAuth {
     signInPromiseRef.current = run()
       .catch((err) => {
         if (!cancelledRef.current) {
-          setError(err instanceof Error ? err.message : "Sign-in failed");
+          setError(formatSignInError(err));
         }
         return null;
       })
@@ -192,19 +230,28 @@ function useCloudAuthState(): UseCloudAuth {
         if (attempt === signInAttemptRef.current) {
           signInPromiseRef.current = null;
           setSigningIn(false);
+          setApproved(false);
           setUserCode(null);
+          void window.api.closeAuthWindow();
         }
       });
 
     return signInPromiseRef.current;
   }, [queryClient]);
 
+  const continueInBrowser = useCallback(async (): Promise<void> => {
+    if (!userCode) return;
+    await window.api.openExternal(agicyDeviceSignInUrl(userCode));
+  }, [userCode]);
+
   const cancelSignIn = useCallback((): void => {
     cancelledRef.current = true;
     signInAttemptRef.current += 1;
     signInPromiseRef.current = null;
     setSigningIn(false);
+    setApproved(false);
     setUserCode(null);
+    void window.api.closeAuthWindow();
   }, []);
 
   const signOut = useCallback(async (): Promise<void> => {
@@ -217,15 +264,25 @@ function useCloudAuthState(): UseCloudAuth {
     resetAccountCaches(queryClient);
   }, [queryClient]);
 
+  const phase: AuthPhase = useMemo(() => {
+    if (user && !signingIn) return "signed_in";
+    if (approved) return "approved";
+    if (signingIn && userCode) return "waiting";
+    if (signingIn) return "starting";
+    return "idle";
+  }, [user, signingIn, approved, userCode]);
+
   return {
     user,
     loading,
     signingIn,
+    phase,
     userCode,
     error,
     sessionExpired,
     refresh,
     signIn,
+    continueInBrowser,
     cancelSignIn,
     signOut,
   };

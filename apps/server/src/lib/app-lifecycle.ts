@@ -48,9 +48,15 @@ export function recordAppLaunch(): void {
   }
   if (previous !== version) writeSetting(VERSION_KEY, version);
 
+  let signedIn = false;
+  try {
+    signedIn = !!getSession();
+  } catch {
+    // DB may still be recovering — never abort server listen for analytics.
+  }
   capture("app_launched", {
     version,
-    signed_in: !!getSession(),
+    signed_in: signedIn,
     first_launch: previous === null,
   });
 }

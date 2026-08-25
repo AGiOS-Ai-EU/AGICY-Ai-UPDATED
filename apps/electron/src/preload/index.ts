@@ -38,6 +38,8 @@ const api = {
     ipcRenderer.invoke("logs:open-folder"),
   openExternal: (url: string): Promise<boolean> =>
     ipcRenderer.invoke("open:external", url),
+  closeAuthWindow: (): Promise<boolean> =>
+    ipcRenderer.invoke("auth:close-window"),
   onTalkDown: (cb: () => void) => {
     const listener = (): void => cb();
     ipcRenderer.on("talk:down", listener);

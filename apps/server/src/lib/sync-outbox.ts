@@ -109,26 +109,30 @@ export function pendingOutboxFields(): Set<string> {
 export async function drainOutbox(): Promise<void> {
   if (draining) return;
 
-  const token = getSessionToken();
+  let token: string | null;
+  try {
+    token = getSessionToken();
+  } catch {
+    return;
+  }
   if (!token) return;
-
-  const db = getDb();
-  const due = db
-    .prepare(
-      `SELECT cloud_field, payload, attempts, updated_at FROM sync_outbox
-       WHERE next_attempt_at <= datetime('now')
-       ORDER BY updated_at ASC`,
-    )
-    .all() as {
-    cloud_field: string;
-    payload: string;
-    attempts: number;
-    updated_at: string;
-  }[];
-  if (due.length === 0) return;
 
   draining = true;
   try {
+    const db = getDb();
+    const due = db
+      .prepare(
+        `SELECT cloud_field, payload, attempts, updated_at FROM sync_outbox
+       WHERE next_attempt_at <= datetime('now')
+       ORDER BY updated_at ASC`,
+      )
+      .all() as {
+      cloud_field: string;
+      payload: string;
+      attempts: number;
+      updated_at: string;
+    }[];
+    if (due.length === 0) return;
     const orgSlug = await resolveActiveOrgSlug(token);
     if (!orgSlug) return; // no active org yet — keep rows, try again later
 

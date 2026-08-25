@@ -26,6 +26,7 @@ declare global {
       onServerChanged: (callback: () => void) => () => void;
       openLogsFolder: () => Promise<boolean>;
       openExternal: (url: string) => Promise<boolean>;
+      closeAuthWindow: () => Promise<boolean>;
       onTalkDown: (cb: () => void) => () => void;
       onTalkUp: (cb: () => void) => () => void;
       onHotkeyDown: (callback: () => void) => () => void;

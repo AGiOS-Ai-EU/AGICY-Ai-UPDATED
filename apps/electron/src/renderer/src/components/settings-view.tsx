@@ -19,6 +19,7 @@ import {
   UPDATED_LLM_MODELS,
 } from "@renderer/lib/updated-models";
 import "../model-picker.css";
+import { AuthSignInControls } from "@renderer/components/auth-sign-in";
 import { NotificationsHistory } from "@renderer/components/notifications-history";
 import {
   acceleratorsEqual,
@@ -398,7 +399,7 @@ function AccountCard({
 }): React.JSX.Element {
   const auth = useCloudAuth();
 
-  if (auth.user) {
+  if (auth.user && auth.phase === "signed_in") {
     return (
       <button
         type="button"
@@ -433,36 +434,7 @@ function AccountCard({
     );
   }
 
-  return (
-    <div className="tavern-set-card">
-      <div className="tavern-set-card-title">Sign in to UPDATED</div>
-      <div className="tavern-set-card-sub">
-        {auth.signingIn && auth.userCode
-          ? `Your code: ${auth.userCode} — finish in the browser.`
-          : "Optional for search and local dictation. Required for hosted voice credits and cloud features."}
-      </div>
-      <div className="tavern-approve-actions">
-        {auth.signingIn ? (
-          <button
-            type="button"
-            className="tavern-approve-btn"
-            onClick={() => auth.cancelSignIn()}
-          >
-            Cancel
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="tavern-approve-btn tavern-approve-allow"
-            onClick={() => void auth.signIn()}
-          >
-            Sign in
-          </button>
-        )}
-      </div>
-      {auth.error ? <p className="tavern-notice">{auth.error}</p> : null}
-    </div>
-  );
+  return <AuthSignInControls variant="card" />;
 }
 
 function SignedOutHint(): React.JSX.Element {
@@ -1002,6 +974,13 @@ function DictationPage({
         Dictation types for you. Hold the hotkey in any app, speak, and let go —
         your words are cleaned up and typed right where your cursor is.
       </p>
+      <SectionLabel>Speech recognition</SectionLabel>
+      <p className="tavern-set-hint">
+        Hosted voice uses AGICY Deepgram EU and debits your account credits.
+        There is no Deepgram API key field in this beta — bring-your-own
+        Deepgram is not wired yet. Local whisper (when enabled in your build)
+        does not need a cloud key.
+      </p>
       <HotkeyRow
         label="Hotkey"
         accel={value(SETTINGS_KEYS.hotkey) || getDefaultHotkey()}
@@ -1216,7 +1195,12 @@ function SearchPage({
         disables divergence pairing.
       </p>
 
-      <SectionLabel>Brave Search</SectionLabel>
+      <SectionLabel>Brave Search (BYOK)</SectionLabel>
+      <p className="tavern-set-hint">
+        Paste your own Brave Search API key for live web results. Keys stay in
+        encrypted OS storage — never in SQLite. Without a key, search uses the
+        built-in mock provider.
+      </p>
       <InfoRow
         label="Key status"
         value={
@@ -1811,8 +1795,24 @@ function ModelsPage({
         })}
       </ul>
       <p className="tavern-set-hint">
-        Voice STT stays on AGICY hosted Deepgram EU (Settings → Dictation /
-        account credits). This list is for LLM cleanup and chat.
+        Voice STT stays on AGICY hosted Deepgram EU (account credits). This list
+        is for LLM cleanup and chat via AGICY — desktop does not accept OpenAI /
+        Anthropic / etc. API keys yet. Manage connectors and any vault keys on{" "}
+        <button
+          type="button"
+          className="tavern-set-link"
+          onClick={() =>
+            void window.api.openExternal("https://agicy.ai/dashboard")
+          }
+        >
+          agicy.ai/dashboard
+        </button>
+        .
+      </p>
+      <SectionLabel>Bring your own keys</SectionLabel>
+      <p className="tavern-set-hint">
+        In this desktop beta you can BYOK <strong>Brave Search</strong> under
+        Settings → Search. LLM and Deepgram BYOK are not available in-app yet.
       </p>
     </>
   );
