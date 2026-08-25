@@ -398,6 +398,108 @@
   color: var(--tavern-ink);
 }
 
+.tavern-auth-card .tavern-gate-btn {
+  max-width: none;
+  margin-top: 8px;
+}
+
+.tavern-gate-btn.is-pending,
+.tavern-gate-btn:disabled {
+  opacity: 0.75;
+  cursor: wait;
+  filter: none;
+}
+
+.tavern-auth-code-lg {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.tavern-auth-waiting-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.tavern-auth-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--tavern-ink) 25%, transparent);
+  border-top-color: var(--updated-accent-strong, #b87333);
+  border-radius: 50%;
+  display: inline-block;
+  animation: tavern-auth-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.tavern-gate-btn .tavern-auth-spinner {
+  margin-right: 8px;
+  vertical-align: -2px;
+}
+
+@keyframes tavern-auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tavern-soft-auth.is-approved,
+.tavern-auth-card.is-approved {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+
+.tavern-auth-success-mark {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--updated-accent-strong, #b87333);
+  margin-top: 4px;
+}
+
+.tavern-auth-confetti {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.tavern-auth-confetti-bit {
+  position: absolute;
+  top: -8px;
+  width: 6px;
+  height: 8px;
+  border-radius: 1px;
+  opacity: 0.9;
+  animation: tavern-auth-fall 1.35s ease-in forwards;
+}
+
+@keyframes tavern-auth-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110px) rotate(220deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tavern-auth-spinner {
+    animation: none;
+    border-top-color: transparent;
+  }
+  .tavern-auth-confetti-bit {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 .tavern-gate-code {
   font-size: 24px;
   font-weight: 700;

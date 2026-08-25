@@ -154,6 +154,12 @@ import {
   setTravelling,
   showNotifications,
 } from "./notification-window";
+import {
+  closeAuthBrowserWindow,
+  configureOpenExternalFocused,
+  isExternalFocusHeld,
+  openExternalFocused,
+} from "./open-external-focused";
 import { PanelRendererMessageQueue } from "./panel-renderer-message-queue";
 import {
   copySelectionFromFocusedApp,
@@ -1482,7 +1488,7 @@ function buildTrayContextMenu(): Menu {
     },
     {
       label: "Help",
-      click: () => void shell.openExternal("https://agicy.ai/updated"),
+      click: () => void openExternalFocused("https://agicy.ai/updated"),
     },
     buildUpdateMenuItem(),
     ...(is.dev
@@ -1606,7 +1612,7 @@ function rebuildMenus(): void {
       submenu: [
         {
           label: "UPDATED Help",
-          click: () => void shell.openExternal("https://agicy.ai/updated"),
+          click: () => void openExternalFocused("https://agicy.ai/updated"),
         },
       ],
     },
@@ -1654,7 +1660,7 @@ app.whenReady().then(async () => {
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
     window.webContents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:/i.test(url)) void shell.openExternal(url);
+      if (/^https?:/i.test(url)) void openExternalFocused(url);
       return { action: "deny" };
     });
   });
@@ -1777,24 +1783,16 @@ app.whenReady().then(async () => {
     }
   });
 
+  // http(s) opens in a focused BrowserWindow so links are not buried under
+  // the always-on-top panel (shell.openExternal is unreliable on Windows).
   ipcMain.handle("open:external", async (_event, url: unknown) => {
     if (typeof url !== "string") return false;
-    try {
-      const parsed = new URL(url);
-      // mailto: is allowed for support/sales links (e.g. "Contact sales" in
-      // the upgrade modal); everything else must be http(s).
-      if (
-        parsed.protocol !== "https:" &&
-        parsed.protocol !== "http:" &&
-        parsed.protocol !== "mailto:"
-      ) {
-        return false;
-      }
-      await shell.openExternal(parsed.toString());
-      return true;
-    } catch {
-      return false;
-    }
+    return openExternalFocused(url);
+  });
+
+  ipcMain.handle("auth:close-window", () => {
+    closeAuthBrowserWindow();
+    return true;
   });
 
   ipcMain.handle("cloud:prompt-sign-in", async () => {
@@ -3488,7 +3486,7 @@ async function openNotification(id: string): Promise<void> {
   } | null;
   void refreshNotifications();
   if (result?.url) {
-    void shell.openExternal(result.url);
+    void openExternalFocused(result.url);
     return;
   }
   openPanel({ focusComposer: false, trigger: "notification" });
@@ -3847,7 +3845,8 @@ function createPanelWindow(): void {
   // the panel is focused, so re-check on blur. Agent tool calls blur the
   // panel deliberately mid-turn — panelBusy suppresses those.
   panelWindow.on("blur", () => {
-    if (!panelBusy) schedulePanelHide();
+    if (panelBusy || isExternalFocusHeld()) return;
+    schedulePanelHide();
   });
 
   void panelWindow.loadURL(rendererUrl("panel.html"));
@@ -3858,6 +3857,11 @@ function cancelPanelHide(): void {
   clearTimeout(panelHideTimer);
   panelHideTimer = null;
 }
+
+configureOpenExternalFocused({
+  getPanelWindow: () => panelWindow,
+  cancelPanelHide,
+});
 
 type PanelTrigger =
   | "hover"
@@ -3930,7 +3934,7 @@ function schedulePanelHide(): void {
     panelHideTimer = null;
     const win = panelWindow;
     if (!win || win.isDestroyed() || !win.isVisible()) return;
-    if (panelBusy || panelResizing) return;
+    if (panelBusy || panelResizing || isExternalFocusHeld()) return;
     if (win.isFocused()) return;
     // A pointer heading for the companion, or hovering the gap between the two,
     // is not a pointer leaving — only hide when it is clear of both.

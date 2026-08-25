@@ -4,6 +4,7 @@ import "../updated-design.css";
 import "../model-picker.css";
 
 import { useChat } from "@ai-sdk/react";
+import { AuthSignInControls } from "@renderer/components/auth-sign-in";
 import { BrainFiles } from "@renderer/components/brain-files";
 import { Capabilities } from "@renderer/components/capabilities";
 import { ConnectSuggestions } from "@renderer/components/connect-suggestions";
@@ -957,7 +958,8 @@ function PanelInner({
       el.scrollTop = el.scrollHeight;
   }, [messages, approvals, tab, settingsOpen]);
 
-  const pinned = busy || approvals.length > 0;
+  const pinned =
+    busy || approvals.length > 0 || auth.signingIn || auth.phase === "approved";
   useEffect(() => {
     window.api.panelSetBusy(pinned);
     return () => window.api.panelSetBusy(false);
@@ -1048,26 +1050,10 @@ function PanelInner({
 
   const panelBody = (
     <>
-      {!auth.loading && !auth.user ? (
-        <div className="tavern-soft-auth">
-          <p className="tavern-soft-auth-text">
-            Search and local dictation work without an account. Sign in for
-            hosted voice credits and cloud features.
-          </p>
-          <button
-            type="button"
-            className="tavern-gate-btn"
-            onClick={() => void auth.signIn()}
-          >
-            Sign in with AGICY
-          </button>
-          {auth.signingIn && auth.userCode ? (
-            <p className="tavern-soft-auth-code">
-              Code: <strong>{auth.userCode}</strong> — finish in the browser
-            </p>
-          ) : null}
-          {auth.error ? <p className="tavern-notice">{auth.error}</p> : null}
-        </div>
+      {!auth.loading &&
+      (!auth.user || auth.phase === "approved") &&
+      !settingsOpen ? (
+        <AuthSignInControls variant="strip" />
       ) : null}
       {capabilitiesOpen ? (
         <>
