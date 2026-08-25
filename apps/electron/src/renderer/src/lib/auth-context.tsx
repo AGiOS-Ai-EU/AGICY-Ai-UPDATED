@@ -9,13 +9,21 @@ import {
 } from "react";
 import type { CloudUser } from "../../../shared/cloud-user";
 import { agicyDeviceSignInUrl } from "./agicy-device-url";
-import { getClient } from "./api";
+import { getClient, initApiBase, refreshApiBase } from "./api";
 import { resetBrainCache } from "./brain-fs";
 import { queryKeys } from "./query";
 
 function resetAccountCaches(queryClient: QueryClient): void {
   resetBrainCache();
   queryClient.clear();
+}
+
+function formatSignInError(err: unknown): string {
+  const message = err instanceof Error ? err.message : "Sign-in failed";
+  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
+    return "Could not reach the local UPDATED service. Quit UPDATED completely from the tray, reopen it, and try Sign in again.";
+  }
+  return message;
 }
 
 export interface UseCloudAuth {
@@ -136,6 +144,13 @@ function useCloudAuthState(): UseCloudAuth {
     setUserCode(null);
 
     const run = async (): Promise<CloudUser | null> => {
+      await initApiBase();
+      const healthy = await refreshApiBase();
+      if (!healthy) {
+        throw new Error(
+          "Could not reach the local UPDATED service. Quit UPDATED completely from the tray, reopen it, and try Sign in again.",
+        );
+      }
       const codeRes = await getClient().api.auth.agicy.device.code.$post();
       if (!codeRes.ok)
         throw new Error(`Could not start sign-in (${codeRes.status})`);
@@ -184,7 +199,7 @@ function useCloudAuthState(): UseCloudAuth {
     signInPromiseRef.current = run()
       .catch((err) => {
         if (!cancelledRef.current) {
-          setError(err instanceof Error ? err.message : "Sign-in failed");
+          setError(formatSignInError(err));
         }
         return null;
       })

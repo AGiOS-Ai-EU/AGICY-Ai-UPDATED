@@ -29,6 +29,10 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  allowElevation: true
+  deleteAppDataOnUninstall: false
+  # Kill UPDATED.exe before copying so upgrades replace in place (same appId).
+  include: build/installer.nsh
 msi:
   artifactName: ${productName}-${version}.${ext}
 mac:
