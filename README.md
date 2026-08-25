@@ -72,7 +72,7 @@ The GitHub pre-release also attaches macOS `.dmg` / `.zip` and Linux `.AppImage`
 
 Sign in opens [agicy.ai/updated/my_device](https://agicy.ai/updated/my_device): the app shows a device code and opens `https://agicy.ai/updated/my_device?user_code=?`. Sign in with your AGICY email, confirm the code, approve the device.
 
-**Cost (say this before you install):** Voice uses **metered inference credits** on your AGICY account. New accounts receive a free allotment (see [agicy.ai/dashboard/usage](https://agicy.ai/dashboard/usage) after sign-in). Search itself is free; optional Brave Search uses **your** Brave key. The app is not “unlimited free cloud STT.”
+**Cost (say this before you install):** Voice uses **metered inference credits** on your AGICY account. New accounts receive a free allotment (see [agicy.ai/updated/usage](https://agicy.ai/updated/usage) after sign-in). Search itself is free; optional Brave Search uses **your** Brave key. The app is not “unlimited free cloud STT.”
 
 Until sign-in completes, the floating companion stays hidden. After sign-in the companion stays **off by default** (Settings → Widget). Prefer the instrument panel over the sprite for beta.
 

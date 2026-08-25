@@ -25,15 +25,12 @@ import {
   formatAcceleratorKeys,
   useHotkeyRecorder,
 } from "@renderer/hooks/use-hotkey-recorder";
-import { capture } from "@renderer/lib/analytics";
 import { apiFetch } from "@renderer/lib/api";
 import { useCloudAuth } from "@renderer/lib/auth-context";
 import { LANGUAGES } from "@renderer/lib/languages";
 import { queryKeys, settingsQueryOptions } from "@renderer/lib/query";
 import { replaceSetting, settingsForView } from "@renderer/lib/settings";
 import { useCloudConfig } from "@renderer/lib/use-cloud-config";
-import { usagePercent, useCloudUsage } from "@renderer/lib/use-cloud-usage";
-import { usePricing } from "@renderer/lib/use-pricing";
 import {
   type SocialProvider,
   useLinkedAccounts,
@@ -400,7 +397,6 @@ function AccountCard({
   onOpenProfile: () => void;
 }): React.JSX.Element {
   const auth = useCloudAuth();
-  const usage = useCloudUsage(!!auth.user);
 
   if (auth.user) {
     return (
@@ -418,21 +414,17 @@ function AccountCard({
           <div className="tavern-set-profile-text">
             <div className="tavern-set-card-title">
               {auth.user.name || "Signed in"}
-              <span
-                className={`tavern-set-plan${usage.isPro ? " is-pro" : ""}`}
-              >
-                {usage.isPro ? "Pro" : "Free"}
-              </span>
             </div>
             <div className="tavern-set-card-sub">{auth.user.email}</div>
             <button
               type="button"
               className="tavern-set-link"
-              onClick={() =>
-                void window.api.openExternal("https://agicy.ai/dashboard/usage")
-              }
+              onClick={(e) => {
+                e.stopPropagation();
+                void window.api.openExternal("https://agicy.ai/updated/usage");
+              }}
             >
-              View inference credits
+              View UPDATED usage
             </button>
           </div>
           <span className="tavern-set-chevron">›</span>
@@ -447,7 +439,7 @@ function AccountCard({
       <div className="tavern-set-card-sub">
         {auth.signingIn && auth.userCode
           ? `Your code: ${auth.userCode} — finish in the browser.`
-          : "Chat, dictation cleanup, and the brain all need your account."}
+          : "Optional for search and local dictation. Required for hosted voice credits and cloud features."}
       </div>
       <div className="tavern-approve-actions">
         {auth.signingIn ? (
@@ -772,160 +764,35 @@ function ProfilePage(): React.JSX.Element {
 
 function BillingPage(): React.JSX.Element {
   const auth = useCloudAuth();
-  const usage = useCloudUsage(!!auth.user);
-  const pricing = usePricing();
-  const [period, setPeriod] = useState<"monthly" | "annual">("annual");
 
   if (!auth.user) return <SignedOutHint />;
 
-  const balance = usage.balance;
-  const pct = balance ? usagePercent(balance) : 0;
-  const resetsLabel = balance?.resetsAt
-    ? new Date(balance.resetsAt).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      })
-    : null;
-
   return (
     <>
-      <div className="tavern-set-card">
-        <div className="tavern-set-usage-head">
-          <span className="tavern-set-section is-tight">This week</span>
-          <button
-            type="button"
-            className="tavern-set-refresh"
-            onClick={() => usage.refresh()}
-          >
-            {usage.isFetching ? "…" : "↻"}
-          </button>
-        </div>
-        {usage.isPro ? (
-          <div className="tavern-set-card-title">
-            Unlimited
-            <span className="tavern-set-plan is-pro">Pro</span>
-          </div>
-        ) : usage.isTrialing ? (
-          <div className="tavern-set-usage">
-            <div className="tavern-set-card-title">
-              Unlimited
-              <span className="tavern-set-card-sub">
-                {" "}
-                for {usage.trialDaysLeft}{" "}
-                {usage.trialDaysLeft === 1 ? "more day" : "more days"}
-              </span>
-            </div>
-            <span className="tavern-set-card-sub">
-              Your first week is on us. After that it's{" "}
-              {balance ? balance.limit.toLocaleString() : "50"} runs a week on
-              the free plan.
-            </span>
-          </div>
-        ) : balance ? (
-          <div className="tavern-set-usage">
-            <div className="tavern-set-card-title">
-              {balance.remaining.toLocaleString()}
-              <span className="tavern-set-card-sub">
-                {" "}
-                / {balance.limit.toLocaleString()} runs left
-              </span>
-            </div>
-            <div className="tavern-set-usage-bar">
-              <span style={{ width: `${Math.min(100, pct)}%` }} />
-            </div>
-            <span className="tavern-set-card-sub">
-              {pct}% used{resetsLabel ? ` · resets ${resetsLabel}` : ""}
-            </span>
-          </div>
-        ) : (
-          <div className="tavern-set-card-sub">
-            Usage is unavailable right now.
-          </div>
-        )}
-      </div>
-
-      <SectionLabel>Plan</SectionLabel>
-      {usage.isPro ? (
-        <InfoRow label="UPDATED Pro" value="Unlimited runs" />
-      ) : (
-        <>
-          <div className="tavern-plan-picker">
-            {(
-              [
-                {
-                  id: "annual",
-                  name: "Annual",
-                  price: pricing.annual.display,
-                  note: "billed yearly",
-                  badge:
-                    pricing.monthly.amount > pricing.annual.amount
-                      ? `Save ${Math.round((1 - pricing.annual.amount / pricing.monthly.amount) * 100)}%`
-                      : null,
-                },
-                {
-                  id: "monthly",
-                  name: "Monthly",
-                  price: pricing.monthly.display,
-                  note: "billed monthly",
-                  badge: null,
-                },
-              ] as const
-            ).map((plan) => (
-              <button
-                key={plan.id}
-                type="button"
-                className={`tavern-plan${period === plan.id ? " is-on" : ""}`}
-                onClick={() => setPeriod(plan.id)}
-              >
-                <span className="tavern-plan-name">
-                  {plan.name}
-                  {plan.badge ? (
-                    <span className="tavern-plan-badge">{plan.badge}</span>
-                  ) : null}
-                </span>
-                <span className="tavern-plan-price">
-                  {plan.price}
-                  <span className="tavern-plan-per">/mo</span>
-                </span>
-                <span className="tavern-plan-note">{plan.note}</span>
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="tavern-approve-btn tavern-approve-allow"
-            disabled={usage.checkoutStatus === "pending"}
-            onClick={() => {
-              capture("upgrade_clicked", { surface: "settings", period });
-              void usage.startCheckout(period);
-            }}
-          >
-            {usage.checkoutStatus === "pending"
-              ? "Finish in browser…"
-              : "Upgrade to Pro"}
-          </button>
-          {usage.checkoutStatus === "pending" ? (
-            <button
-              type="button"
-              className="tavern-approve-btn"
-              onClick={() => usage.resetCheckout()}
-            >
-              Cancel
-            </button>
-          ) : null}
-        </>
-      )}
-      <button
-        type="button"
-        className="tavern-approve-btn"
-        disabled={usage.portalOpening}
-        onClick={() => void usage.openBillingPortal()}
-      >
-        {usage.portalOpening ? "Opening…" : "Manage billing ↗"}
-      </button>
-      {usage.checkoutError ? (
-        <p className="tavern-notice">{usage.checkoutError}</p>
-      ) : null}
+      <p className="tavern-set-hint is-lead">
+        Plan and inference credits live on your AGICY account — not inside this
+        desktop billing form. Desktop Pro checkout is paused until it uses the
+        same Stripe wallet as agicy.ai.
+      </p>
+      <SectionLabel>UPDATED on agicy.ai</SectionLabel>
+      <ActionRow
+        label="UPDATED usage"
+        action="Open ↗"
+        onClick={() =>
+          void window.api.openExternal("https://agicy.ai/updated/usage")
+        }
+      />
+      <ActionRow
+        label="UPDATED billing"
+        action="Open ↗"
+        onClick={() =>
+          void window.api.openExternal("https://agicy.ai/updated/billing")
+        }
+      />
+      <p className="tavern-set-hint">
+        Hosted STT debits your AGICY wallet (shown on UPDATED usage). Local
+        whisper dictation does not.
+      </p>
     </>
   );
 }
@@ -1407,8 +1274,12 @@ function SearchPage({
 
 function ApplicationPage({
   onReplayIntro,
+  value,
+  setSetting,
 }: {
   onReplayIntro: () => void;
+  value: (key: string, fallback?: string) => string;
+  setSetting: (key: string, value: string) => void;
 }): React.JSX.Element {
   const [launchAtStartup, setLaunchAtStartup] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(true);
@@ -1424,6 +1295,8 @@ function ApplicationPage({
     | { kind: "failed" }
     | { kind: "available"; version: string; downloaded: boolean }
   >({ kind: "idle" });
+  const agentOsEnabled =
+    value(SETTINGS_KEYS.agentOsEnabled, "false") === "true";
 
   useEffect(() => {
     void window.api
@@ -1520,6 +1393,18 @@ function ApplicationPage({
         </>
       ) : null}
       <SectionLabel>App</SectionLabel>
+      <ToggleRow
+        label="Enable host agent tools"
+        on={agentOsEnabled}
+        onChange={(next) =>
+          setSetting(SETTINGS_KEYS.agentOsEnabled, next ? "true" : "false")
+        }
+      />
+      <p className="tavern-set-hint">
+        Off by default. When on, Bash / Write / Edit still ask for confirmation
+        and only touch ~/.updated/agent-workspace. Sandboxed agency belongs in
+        AGIBOT — this host path is transitional.
+      </p>
       <ToggleRow
         label="Launch at login"
         on={launchAtStartup}
@@ -1879,8 +1764,9 @@ function ModelsPage({
   return (
     <>
       <p className="tavern-set-hint is-lead">
-        Same provider marks as the playground composer. AGICY Auto routes via
-        Copperway when available; pick a specific model for cleanup and chat.
+        Same provider marks as the playground composer. AGICY Auto is a routing
+        label for forthcoming model selection; pick a specific model for cleanup
+        and chat today.
       </p>
       <SectionLabel>Active model</SectionLabel>
       <div className="tavern-set-row is-static">
@@ -1969,8 +1855,6 @@ export function SettingsView({
 }): React.JSX.Element {
   const [page, setPage] = useState<SettingsPage>("root");
   const { settings, setSetting } = useServerSettings();
-  const auth = useCloudAuth();
-  const usage = useCloudUsage(!!auth.user);
   const [version, setVersion] = useState("");
 
   useEffect(() => {
@@ -2037,7 +1921,11 @@ export function SettingsView({
         ) : page === "models" ? (
           <ModelsPage value={value} setSetting={setSetting} />
         ) : page === "application" ? (
-          <ApplicationPage onReplayIntro={onReplayIntro} />
+          <ApplicationPage
+            onReplayIntro={onReplayIntro}
+            value={value}
+            setSetting={setSetting}
+          />
         ) : page === "permissions" ? (
           <PermissionsPage />
         ) : (
@@ -2053,11 +1941,7 @@ export function SettingsView({
         ← Settings
       </button>
       <AccountCard onOpenProfile={() => setPage("profile")} />
-      <NavRow
-        label="Billing & Usage"
-        detail={auth.user ? (usage.isPro ? "Pro" : "Free") : undefined}
-        onClick={() => setPage("billing")}
-      />
+      <NavRow label="Billing & Usage" onClick={() => setPage("billing")} />
       <NavRow label="Notifications" onClick={() => setPage("notifications")} />
       <NavRow
         label="Dictation"

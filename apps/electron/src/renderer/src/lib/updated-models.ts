@@ -49,7 +49,7 @@ export const UPDATED_LLM_MODELS: UpdatedModel[] = [
     logoBg: "#c9894a",
     kind: "routing",
     tier: "auto",
-    note: "Routes cleanup/chat via Copperway when connected",
+    note: "Routing label — pick a specific model until Auto is wired",
   },
   {
     apiId: "openai/gpt-4o-mini",
