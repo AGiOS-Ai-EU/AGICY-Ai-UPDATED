@@ -1,7 +1,4 @@
 appId: ai.agicy.updated
-# Controls %LOCALAPPDATA%\Programs\<name> and updater cache dir. Without this,
-# the npm package name (@freestyle-voice/electron) becomes @freestyle-voiceelectron.
-name: UPDATED
 productName: UPDATED
 directories:
   buildResources: build
