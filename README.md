@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748B?style=flat-square" alt="MIT License" /></a>
-  <a href="https://github.com/AGiOS-Ai-EU/UPDATED/releases/tag/v0.9.0-beta.4"><img src="https://img.shields.io/badge/release-0.9.0--beta.4-C9894A?style=flat-square" alt="UPDATED 0.9.0 beta 4" /></a>
+  <a href="https://github.com/AGiOS-Ai-EU/UPDATED/releases/tag/v0.9.0-beta.5"><img src="https://img.shields.io/badge/release-0.9.0--beta.5-C9894A?style=flat-square" alt="UPDATED 0.9.0 beta 5" /></a>
   <img src="https://img.shields.io/badge/supported-Windows%20beta-1A1A2E?style=flat-square" alt="Supported desktop: Windows beta" />
   <img src="https://img.shields.io/badge/shell-Electron-1A1A2E?style=flat-square" alt="Electron" />
 </p>
@@ -44,20 +44,20 @@ UPDATED is a voice-first desktop search instrument by AGICY.Ai. It turns a spoke
 
 ## Install the Windows beta
 
-Current public pre-release: **[UPDATED 0.9.0-beta.4](https://github.com/AGiOS-Ai-EU/UPDATED/releases/tag/v0.9.0-beta.4)**.
+Current public pre-release: **[UPDATED 0.9.0-beta.5](https://github.com/AGiOS-Ai-EU/UPDATED/releases/tag/v0.9.0-beta.5)**.
 
 Download the Windows installer from GitHub only:
 
-**[UPDATED-0.9.0-beta.4-setup.exe](https://github.com/AGiOS-Ai-EU/UPDATED/releases/download/v0.9.0-beta.4/UPDATED-0.9.0-beta.4-setup.exe)**
+**[UPDATED-0.9.0-beta.5-setup.exe](https://github.com/AGiOS-Ai-EU/UPDATED/releases/download/v0.9.0-beta.5/UPDATED-0.9.0-beta.5-setup.exe)**
 
-An `.msi` (`UPDATED-0.9.0-beta.4.msi`) is attached to the same release. Default Windows hotkey: **Right Alt**.
+An `.msi` (`UPDATED-0.9.0-beta.5.msi`) is attached to the same release. Default Windows hotkey: **Right Alt**.
 
 > [!WARNING]
 > This beta installer is **unsigned** unless CI signing secrets were set for that run (see [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md)). **Windows SmartScreen** may warn on first open: **More info → Run anyway**. Verify the file comes from `AGiOS-Ai-EU/UPDATED` on GitHub.
 
 ### Windows
 
-1. Download `UPDATED-0.9.0-beta.4-setup.exe` from the release asset URL above.
+1. Download `UPDATED-0.9.0-beta.5-setup.exe` from the release asset URL above.
 2. If SmartScreen appears, choose **More info**, then **Run anyway**.
 3. Launch UPDATED and allow microphone access.
 
@@ -65,7 +65,7 @@ An `.msi` (`UPDATED-0.9.0-beta.4.msi`) is attached to the same release. Default 
 
 The GitHub pre-release also attaches macOS `.dmg` / `.zip` and Linux `.AppImage` / `.deb`. Those are **untested CI artifacts**. Do not treat them as a supported or smoke-tested product for this beta.
 
-## First run (0.9.0-beta.4)
+## First run (0.9.0-beta.5)
 
 1. **SmartScreen** — unsigned setup.exe; **More info → Run anyway** if Windows warns.
 2. Launch UPDATED. Allow microphone access. Hold **Right Alt** and speak.
@@ -76,7 +76,7 @@ Sign in opens [agicy.ai/updated/my_device](https://agicy.ai/updated/my_device): 
 
 Until sign-in completes, the floating companion stays hidden. After sign-in the companion stays **off by default** (Settings → Widget). Prefer the instrument panel over the sprite for beta.
 
-## How voice works in 0.9.0-beta.4 (canonical)
+## How voice works in 0.9.0-beta.5 (canonical)
 
 Full diagram: [docs/VOICE-DATA-FLOW.md](docs/VOICE-DATA-FLOW.md). Privacy notice draft: [PRIVACY.md](PRIVACY.md).
 
@@ -96,11 +96,11 @@ Mic → UPDATED app → https://agicy.ai/api/stt/transcribe → Deepgram EU → 
 
 Without a Brave Search API key, mock providers demonstrate the CONTESTED interface locally.
 
-**Not in this installer:** on-device (whisper.cpp) STT. That path is an open PR, not the default in 0.9.0-beta.4.
+**Not in this installer:** on-device (whisper.cpp) STT. That path is an open PR, not the default in 0.9.0-beta.5.
 
 ## Shipping now vs next
 
-| In the **0.9.0-beta.4** Windows installer | Not in this installer (open work) |
+| In the **0.9.0-beta.5** Windows installer | Not in this installer (open work) |
 | --- | --- |
 | Windows voice-first search instrument; GitHub `setup.exe`; Sign in opens `https://agicy.ai/updated/my_device?user_code=?` | On-device whisper.cpp STT; telemetry opt-in / EU PostHog |
 | Unsigned Windows `setup.exe` (SmartScreen may warn) | Local whisper default / runtime — [UPDATED PR #11](https://github.com/AGiOS-Ai-EU/UPDATED/pull/11) |
@@ -117,7 +117,7 @@ This beta is **not** local-first for voice. Audio leaves the device.
 | **Brave Search** (optional) | Live web search | Search query text + your API key (key stored encrypted locally) |
 | **PostHog US** (`us.i.posthog.com`) | Anonymous product analytics in this build | Usage events unless you turn telemetry off in settings (`telemetry_enabled`) |
 
-In **0.9.0-beta.4**, analytics default **on** for the packaged app (opt-out via settings), and the bundled host is **US** PostHog. EU hosting, default-off, and consent after first dictation are **not** in this installer.
+In **0.9.0-beta.5**, analytics default **on** for the packaged app (opt-out via settings), and the bundled host is **US** PostHog. EU hosting, default-off, and consent after first dictation are **not** in this installer.
 
 Controller: AGICY.Ai (EU). Draft product privacy: [PRIVACY.md](PRIVACY.md). Canonical web notice (when published): [agicy.ai/legal/privacy](https://agicy.ai/legal/privacy). Data-subject requests: privacy@agicy.ai.
 
