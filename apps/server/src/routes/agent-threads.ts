@@ -1,42 +1,92 @@
 import { createAppLogger } from "@freestyle-voice/utils";
 import { Hono } from "hono";
+import { getAgicySessionToken } from "../lib/agicy-session.js";
 import { freestyleCloudUrl } from "../lib/freestyle-cloud.js";
 import { getSessionToken, invalidateSession } from "../lib/sessions.js";
 
 const log = createAppLogger("agent-threads");
 
+/** Empty local thread payloads for AGICY-only sessions (no Freestyle Cloud). */
+function agicyLocalEmpty(
+  kind: "list" | "latest" | "one" | "clear" | "delete",
+): { status: number; payload: unknown } {
+  if (kind === "list") {
+    return { status: 200, payload: { threads: [], nextCursor: null } };
+  }
+  if (kind === "clear" || kind === "delete") {
+    return { status: 200, payload: { ok: true } };
+  }
+  return { status: 200, payload: { thread: null } };
+}
+
 async function forward(
   path: string,
   init: RequestInit = {},
 ): Promise<{ status: number; payload: unknown }> {
-  const token = getSessionToken();
-  if (!token)
-    return {
-      status: 401,
-      payload: { ok: false, reason: "cloud_auth_required" },
-    };
-  try {
-    const upstream = await fetch(`${freestyleCloudUrl()}/v2/threads${path}`, {
-      ...init,
-      headers: {
-        ...(init.headers ?? {}),
-        Authorization: `Bearer ${token}`,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (upstream.status === 401) {
-      invalidateSession();
+  const freestyleToken = getSessionToken();
+  if (freestyleToken) {
+    try {
+      const upstream = await fetch(`${freestyleCloudUrl()}/v2/threads${path}`, {
+        ...init,
+        headers: {
+          ...(init.headers ?? {}),
+          Authorization: `Bearer ${freestyleToken}`,
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (upstream.status === 401) {
+        invalidateSession();
+        if (getAgicySessionToken()) {
+          const kind =
+            path === "/clear"
+              ? "clear"
+              : path === "/latest"
+                ? "latest"
+                : path.startsWith("/?") || path === "" || path.startsWith("?")
+                  ? "list"
+                  : path.length > 1
+                    ? init.method === "DELETE"
+                      ? "delete"
+                      : "one"
+                    : "list";
+          return agicyLocalEmpty(kind);
+        }
+        return {
+          status: 401,
+          payload: { ok: false, reason: "cloud_auth_required" },
+        };
+      }
+      return { status: upstream.status, payload: await upstream.json() };
+    } catch (err) {
+      log.debug(`Thread request ${path} failed: ${err}`);
       return {
-        status: 401,
-        payload: { ok: false, reason: "cloud_auth_required" },
+        status: 502,
+        payload: { ok: false, reason: "cloud-unreachable" },
       };
     }
-    return { status: upstream.status, payload: await upstream.json() };
-  } catch (err) {
-    log.debug(`Thread request ${path} failed: ${err}`);
-    return { status: 502, payload: { ok: false, reason: "cloud-unreachable" } };
   }
+
+  if (getAgicySessionToken()) {
+    const kind =
+      path === "/clear"
+        ? "clear"
+        : path === "/latest"
+          ? "latest"
+          : path.startsWith("/?") || path === "" || path.startsWith("?")
+            ? "list"
+            : path.length > 1
+              ? init.method === "DELETE"
+                ? "delete"
+                : "one"
+              : "list";
+    return agicyLocalEmpty(kind);
+  }
+
+  return {
+    status: 401,
+    payload: { ok: false, reason: "cloud_auth_required" },
+  };
 }
 
 const agentThreadsRoute = new Hono()
