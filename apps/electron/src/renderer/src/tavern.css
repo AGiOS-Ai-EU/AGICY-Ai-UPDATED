@@ -391,6 +391,72 @@
   font-size: 13px;
 }
 
+.tavern-auth-btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.tavern-gate-btn-secondary {
+  background: var(--tavern-card, #fff);
+  color: var(--tavern-ink);
+  border-color: var(--updated-accent-strong, #b87333);
+}
+
+.tavern-gate-btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fff;
+  color: #1f1f1f;
+  border-color: #dadce0;
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--tavern-ink) 35%, transparent);
+}
+
+.tavern-auth-soon {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed color-mix(in srgb, var(--tavern-ink) 18%, transparent);
+}
+
+.tavern-auth-soon-label {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tavern-mute, #6b6358);
+}
+
+.tavern-auth-soon-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tavern-auth-soon-btn {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tavern-ink) 18%, transparent);
+  background: color-mix(in srgb, var(--tavern-card, #fff) 70%, transparent);
+  color: var(--tavern-mute, #6b6358);
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.tavern-auth-soon-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--tavern-mute, #6b6358);
+}
+
 .tavern-soft-auth-code {
   margin: 0;
   font-size: 12px;

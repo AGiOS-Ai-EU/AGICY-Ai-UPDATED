@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import type { CloudUser } from "../../../shared/cloud-user";
-import { agicyDeviceSignInUrl } from "./agicy-device-url";
+import { type AgicySignInVia, agicyDeviceSignInUrl } from "./agicy-device-url";
 import { getClient, initApiBase, refreshApiBase } from "./api";
 import { resetBrainCache } from "./brain-fs";
 import { queryKeys } from "./query";
@@ -48,7 +48,8 @@ export interface UseCloudAuth {
   error: string | null;
   sessionExpired: boolean;
   refresh: () => Promise<CloudUser | null>;
-  signIn: () => Promise<CloudUser | null>;
+  /** Start AGICY device pairing. `via` picks membership / OAuth branding on the web page. */
+  signIn: (via?: AgicySignInVia) => Promise<CloudUser | null>;
   /** Re-focus / reopen the auth BrowserWindow with the current code. */
   continueInBrowser: () => Promise<void>;
   /** Abort an in-flight sign-in (driven from the pending modal). */
@@ -72,6 +73,7 @@ function useCloudAuthState(): UseCloudAuth {
   const cancelledRef = useRef(false);
   const signInPromiseRef = useRef<Promise<CloudUser | null> | null>(null);
   const signInAttemptRef = useRef(0);
+  const signInViaRef = useRef<AgicySignInVia>("agicy");
   // Collapses concurrent status checks into one in-flight request. On a fresh
   // window the mount retry-loop and the `focus` listener (fired the moment the
   // just-shown window focuses) both call refreshInternal within the same tick —
@@ -150,98 +152,106 @@ function useCloudAuthState(): UseCloudAuth {
     };
   }, [refreshInternal]);
 
-  const signIn = useCallback(async (): Promise<CloudUser | null> => {
-    if (signInPromiseRef.current) return signInPromiseRef.current;
+  const signIn = useCallback(
+    async (via: AgicySignInVia = "agicy"): Promise<CloudUser | null> => {
+      if (signInPromiseRef.current) return signInPromiseRef.current;
 
-    cancelledRef.current = false;
-    const attempt = ++signInAttemptRef.current;
-    setSigningIn(true);
-    setApproved(false);
-    setError(null);
-    setUserCode(null);
+      cancelledRef.current = false;
+      const attempt = ++signInAttemptRef.current;
+      signInViaRef.current = via;
+      setSigningIn(true);
+      setApproved(false);
+      setError(null);
+      setUserCode(null);
 
-    const run = async (): Promise<CloudUser | null> => {
-      await initApiBase();
-      const healthy = await refreshApiBase();
-      if (!healthy) {
-        throw new Error(
-          "Could not reach the local UPDATED service. Quit UPDATED completely from the tray, reopen it, and try Sign in again.",
-        );
-      }
-      const codeRes = await getClient().api.auth.agicy.device.code.$post();
-      if (!codeRes.ok)
-        throw new Error(`Could not start sign-in (${codeRes.status})`);
-      const code = await codeRes.json();
-      setUserCode(code.user_code);
-      const opened = await window.api.openExternal(
-        agicyDeviceSignInUrl(code.user_code),
-      );
-      if (!opened) {
-        throw new Error(
-          `Could not open the sign-in page. Open https://agicy.ai/updated/my_device and enter ${code.user_code}.`,
-        );
-      }
-
-      const deadline = Date.now() + code.expires_in * 1000;
-      let intervalMs = Math.max(1, code.interval) * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, intervalMs));
-        if (cancelledRef.current) return null;
-        if (attempt !== signInAttemptRef.current) return null;
-        const tokenRes = await getClient().api.auth.agicy.device.token.$post({
-          json: { device_code: code.device_code },
-        });
-        if (tokenRes.status === 202) continue;
-        if (tokenRes.status === 429) {
-          intervalMs += 5000;
-          continue;
+      const run = async (): Promise<CloudUser | null> => {
+        await initApiBase();
+        const healthy = await refreshApiBase();
+        if (!healthy) {
+          throw new Error(
+            "Could not reach the local UPDATED service. Quit UPDATED completely from the tray, reopen it, and try Sign in again.",
+          );
         }
-        if (!tokenRes.ok) {
-          const body = (await tokenRes.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          throw new Error(body?.error ?? `Sign-in failed (${tokenRes.status})`);
+        const codeRes = await getClient().api.auth.agicy.device.code.$post();
+        if (!codeRes.ok)
+          throw new Error(`Could not start sign-in (${codeRes.status})`);
+        const code = await codeRes.json();
+        setUserCode(code.user_code);
+        const opened = await window.api.openExternal(
+          agicyDeviceSignInUrl(code.user_code, signInViaRef.current),
+        );
+        if (!opened) {
+          throw new Error(
+            `Could not open the sign-in page. Open https://agicy.ai/updated/my_device and enter ${code.user_code}.`,
+          );
         }
-        const data = await tokenRes.json();
-        if (attempt !== signInAttemptRef.current) return null;
-        resetAccountCaches(queryClient);
-        wasSignedInRef.current = true;
-        setSessionExpired(false);
-        setUser(data.user);
-        setApproved(true);
-        void window.api.closeAuthWindow();
-        await new Promise((resolve) => setTimeout(resolve, APPROVED_HOLD_MS));
-        if (cancelledRef.current || attempt !== signInAttemptRef.current) {
+
+        const deadline = Date.now() + code.expires_in * 1000;
+        let intervalMs = Math.max(1, code.interval) * 1000;
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, intervalMs));
+          if (cancelledRef.current) return null;
+          if (attempt !== signInAttemptRef.current) return null;
+          const tokenRes = await getClient().api.auth.agicy.device.token.$post({
+            json: { device_code: code.device_code },
+          });
+          if (tokenRes.status === 202) continue;
+          if (tokenRes.status === 429) {
+            intervalMs += 5000;
+            continue;
+          }
+          if (!tokenRes.ok) {
+            const body = (await tokenRes.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(
+              body?.error ?? `Sign-in failed (${tokenRes.status})`,
+            );
+          }
+          const data = await tokenRes.json();
+          if (attempt !== signInAttemptRef.current) return null;
+          resetAccountCaches(queryClient);
+          wasSignedInRef.current = true;
+          setSessionExpired(false);
+          setUser(data.user);
+          setApproved(true);
+          void window.api.closeAuthWindow();
+          await new Promise((resolve) => setTimeout(resolve, APPROVED_HOLD_MS));
+          if (cancelledRef.current || attempt !== signInAttemptRef.current) {
+            return data.user;
+          }
           return data.user;
         }
-        return data.user;
-      }
-      throw new Error("Sign-in timed out. Please try again.");
-    };
+        throw new Error("Sign-in timed out. Please try again.");
+      };
 
-    signInPromiseRef.current = run()
-      .catch((err) => {
-        if (!cancelledRef.current) {
-          setError(formatSignInError(err));
-        }
-        return null;
-      })
-      .finally(() => {
-        if (attempt === signInAttemptRef.current) {
-          signInPromiseRef.current = null;
-          setSigningIn(false);
-          setApproved(false);
-          setUserCode(null);
-          void window.api.closeAuthWindow();
-        }
-      });
+      signInPromiseRef.current = run()
+        .catch((err) => {
+          if (!cancelledRef.current) {
+            setError(formatSignInError(err));
+          }
+          return null;
+        })
+        .finally(() => {
+          if (attempt === signInAttemptRef.current) {
+            signInPromiseRef.current = null;
+            setSigningIn(false);
+            setApproved(false);
+            setUserCode(null);
+            void window.api.closeAuthWindow();
+          }
+        });
 
-    return signInPromiseRef.current;
-  }, [queryClient]);
+      return signInPromiseRef.current;
+    },
+    [queryClient],
+  );
 
   const continueInBrowser = useCallback(async (): Promise<void> => {
     if (!userCode) return;
-    await window.api.openExternal(agicyDeviceSignInUrl(userCode));
+    await window.api.openExternal(
+      agicyDeviceSignInUrl(userCode, signInViaRef.current),
+    );
   }, [userCode]);
 
   const cancelSignIn = useCallback((): void => {

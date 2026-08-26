@@ -96,6 +96,12 @@ function createFocusedBrowserWindow(opts: {
 
   win.webContents.on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
     if (!isMainFrame || win.isDestroyed()) return;
+    if (opts.slot === "auth") {
+      void shell.openExternal(url).finally(() => {
+        if (!win.isDestroyed()) win.close();
+      });
+      return;
+    }
     const safe = url.replace(/[<>&]/g, "");
     void win.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(
